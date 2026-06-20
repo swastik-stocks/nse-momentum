@@ -1,0 +1,8 @@
+
+.env
+.env.*
+recipients.txt
+scan_debug.txt
+__pycache__/
+*.pyc
+data/*.db
