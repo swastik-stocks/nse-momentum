@@ -1,0 +1,1355 @@
+2026-06-15 12:45:28,351 [WARNING] Market context fetch error: float() argument must be a string or a real number, not 'Series'
+2026-06-15 12:46:54,237 [INFO] ============================================================
+2026-06-15 12:46:54,238 [INFO]   NSE MOMENTUM SCANNER v4.3
+2026-06-15 12:46:54,238 [INFO]   15 Jun 2026  12:46
+2026-06-15 12:46:54,238 [INFO] ============================================================
+2026-06-15 12:46:54,244 [INFO] 
+[0/6] Universe: 382 stocks
+2026-06-15 12:46:54,244 [INFO]       Nifty 500 Large-Cap      130 stocks | gate≥78 | rrr≥1.5x | adt≥Rs.50.0Cr
+2026-06-15 12:46:54,244 [INFO]       Midcap 150               147 stocks | gate≥80 | rrr≥2.0x | adt≥Rs.10.0Cr
+2026-06-15 12:46:54,244 [INFO]       Smallcap 250             105 stocks | gate≥82 | rrr≥2.5x | adt≥Rs.3.0Cr
+2026-06-15 12:46:54,245 [INFO] 
+[1/6] Fetching market context (Nifty / BankNifty / VIX)...
+2026-06-15 12:46:56,149 [WARNING] Market context fetch error: float() argument must be a string or a real number, not 'Series'
+2026-06-15 12:46:56,150 [INFO]       VIX: 15.0
+2026-06-15 12:46:56,152 [INFO] 
+[2/6] Fetching NSE Bhavcopy (delivery %)...
+2026-06-15 12:46:57,231 [INFO]       3245 symbols loaded
+2026-06-15 12:46:57,231 [INFO] 
+[3/6] Fetching / loading OHLCV (2yr history)...
+2026-06-15 12:46:57,928 [INFO]   Fetching 382 tickers from Yahoo Finance...
+2026-06-15 12:47:00,857 [ERROR] HTTP Error 404: {"quoteSummary":{"result":null,"error":{"code":"Not Found","description":"Quote not found for symbol: LTIM.NS"}}}
+2026-06-15 12:47:01,422 [ERROR] $LTIM.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 12:47:06,295 [ERROR] $HEXAWARE.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 12:47:06,301 [ERROR] 
+2 Failed downloads:
+2026-06-15 12:47:06,302 [ERROR] ['LTIM.NS', 'HEXAWARE.NS']: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 12:47:09,962 [ERROR] $MCDOWELL-N.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 12:47:10,950 [ERROR] $TVSMOTORS.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 12:47:12,493 [ERROR] $TATAMOTORS.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 12:47:16,118 [ERROR] 
+3 Failed downloads:
+2026-06-15 12:47:16,119 [ERROR] ['MCDOWELL-N.NS', 'TVSMOTORS.NS', 'TATAMOTORS.NS']: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 12:47:21,870 [ERROR] $VSTMIND.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 12:47:26,452 [ERROR] $PEL.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 12:47:27,754 [ERROR] $DALMIACMT.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 12:47:28,312 [ERROR] $ZOMATO.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 12:47:28,453 [ERROR] 
+4 Failed downloads:
+2026-06-15 12:47:28,454 [ERROR] ['VSTMIND.NS', 'PEL.NS', 'DALMIACMT.NS', 'ZOMATO.NS']: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 12:47:36,982 [ERROR] $CITYUNIONB.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 12:47:39,057 [ERROR] $BDHIIND.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 12:47:39,060 [ERROR] $IIFLWAM.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 12:47:39,429 [ERROR] 
+3 Failed downloads:
+2026-06-15 12:47:39,429 [ERROR] ['CITYUNIONB.NS', 'BDHIIND.NS', 'IIFLWAM.NS']: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 12:47:46,342 [ERROR] $VIP.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 12:47:50,117 [ERROR] 
+1 Failed download:
+2026-06-15 12:47:50,117 [ERROR] ['VIP.NS']: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 12:47:57,753 [ERROR] $SUVENPHAR.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 12:47:59,005 [ERROR] $JANA.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 12:47:59,653 [ERROR] $SEQUENT.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 12:48:01,444 [ERROR] $ORIENTREN.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 12:48:03,234 [ERROR] $RESTAURANT.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 12:48:03,240 [ERROR] $NETSOL.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 12:48:03,997 [ERROR] $NORTHEAST.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 12:48:05,491 [ERROR] $ANUPAM.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 12:48:07,186 [ERROR] $OCCL.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 12:48:07,691 [ERROR] $REPCO.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 12:48:07,697 [ERROR] 
+10 Failed downloads:
+2026-06-15 12:48:07,698 [ERROR] ['SUVENPHAR.NS', 'JANA.NS', 'SEQUENT.NS', 'ORIENTREN.NS', 'RESTAURANT.NS', 'NETSOL.NS', 'NORTHEAST.NS', 'ANUPAM.NS', 'OCCL.NS', 'REPCO.NS']: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 12:48:14,152 [ERROR] $HAPPIEST.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 12:48:14,160 [ERROR] $ZENTALIS.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 12:48:15,657 [ERROR] $INDSHIBANK.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 12:48:15,793 [ERROR] $DIVI.NS: possibly delisted; no price data found  (period=2y)
+2026-06-15 12:48:16,223 [ERROR] $KILPEST.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 12:48:18,413 [ERROR] $KROMARETAIL.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 12:48:18,816 [ERROR] $BIRLATYRES.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 12:48:19,739 [ERROR] $BFINANCE.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 12:48:21,022 [ERROR] $MTAR.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 12:48:22,248 [ERROR] 
+9 Failed downloads:
+2026-06-15 12:48:22,248 [ERROR] ['HAPPIEST.NS', 'ZENTALIS.NS', 'INDSHIBANK.NS', 'KILPEST.NS', 'KROMARETAIL.NS', 'BIRLATYRES.NS', 'BFINANCE.NS', 'MTAR.NS']: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 12:48:22,250 [ERROR] ['DIVI.NS']: possibly delisted; no price data found  (period=2y)
+2026-06-15 12:48:28,263 [ERROR] $TIPS.NS: possibly delisted; no price data found  (period=2y)
+2026-06-15 12:48:28,910 [ERROR] $TITANBIO.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 12:48:29,635 [ERROR] $TATAMETALI.NS: possibly delisted; no price data found  (period=2y)
+2026-06-15 12:48:29,786 [ERROR] $TINPLATE.NS: possibly delisted; no price data found  (period=2y)
+2026-06-15 12:48:30,829 [ERROR] $AEGISCHEM.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 12:48:31,911 [ERROR] $SAPPHIREMF.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 12:48:32,486 [ERROR] $RAMKRISHNA.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 12:48:34,366 [ERROR] $DHAMPUR.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 12:48:34,376 [ERROR] 
+8 Failed downloads:
+2026-06-15 12:48:34,376 [ERROR] ['TIPS.NS', 'TATAMETALI.NS', 'TINPLATE.NS']: possibly delisted; no price data found  (period=2y)
+2026-06-15 12:48:34,377 [ERROR] ['TITANBIO.NS', 'AEGISCHEM.NS', 'SAPPHIREMF.NS', 'RAMKRISHNA.NS', 'DHAMPUR.NS']: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 12:48:37,469 [INFO]       342/382 tickers loaded
+2026-06-15 12:48:37,469 [INFO] 
+[4/6] Running agent pipeline (single pass)...
+2026-06-15 12:56:53,683 [INFO] ============================================================
+2026-06-15 12:56:53,683 [INFO]   NSE MOMENTUM SCANNER v4.3
+2026-06-15 12:56:53,684 [INFO]   15 Jun 2026  12:56
+2026-06-15 12:56:53,684 [INFO] ============================================================
+2026-06-15 12:56:53,693 [INFO] 
+[0/6] Universe: 382 stocks
+2026-06-15 12:56:53,693 [INFO]       Nifty 500 Large-Cap      130 stocks | gate≥78 | rrr≥1.5x | adt≥Rs.50.0Cr
+2026-06-15 12:56:53,694 [INFO]       Midcap 150               147 stocks | gate≥80 | rrr≥2.0x | adt≥Rs.10.0Cr
+2026-06-15 12:56:53,694 [INFO]       Smallcap 250             105 stocks | gate≥82 | rrr≥2.5x | adt≥Rs.3.0Cr
+2026-06-15 12:56:53,694 [INFO] 
+[1/6] Fetching market context (Nifty / BankNifty / VIX)...
+2026-06-15 12:56:55,131 [WARNING] Market context fetch error: float() argument must be a string or a real number, not 'Series'
+2026-06-15 12:56:55,131 [INFO]       VIX: 15.0
+2026-06-15 12:56:55,131 [INFO] 
+[2/6] Fetching NSE Bhavcopy (delivery %)...
+2026-06-15 12:56:55,472 [INFO]       3245 symbols loaded
+2026-06-15 12:56:55,473 [INFO] 
+[3/6] Fetching / loading OHLCV (2yr history)...
+2026-06-15 12:56:56,953 [INFO]   Fetching 41 tickers from Yahoo Finance...
+2026-06-15 12:56:58,534 [ERROR] HTTP Error 404: {"quoteSummary":{"result":null,"error":{"code":"Not Found","description":"Quote not found for symbol: RAMKRISHNA.NS"}}}
+2026-06-15 12:56:58,538 [ERROR] $REPCO.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 12:56:58,543 [ERROR] $MCDOWELL-N.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 12:56:58,691 [ERROR] HTTP Error 404: {"quoteSummary":{"result":null,"error":{"code":"Not Found","description":"Quote not found for symbol: TVSMOTORS.NS"}}}
+2026-06-15 12:56:59,579 [ERROR] $DHAMPUR.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 12:56:59,590 [ERROR] $RAMKRISHNA.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 12:56:59,954 [ERROR] $VSTMIND.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 12:57:00,439 [ERROR] $TVSMOTORS.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 12:57:01,029 [ERROR] $DIVI.NS: possibly delisted; no price data found  (period=2y)
+2026-06-15 12:57:01,103 [ERROR] $HAPPIEST.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 12:57:01,470 [ERROR] $BDHIIND.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 12:57:01,932 [ERROR] $RESTAURANT.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 12:57:02,264 [ERROR] $HEXAWARE.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 12:57:02,509 [ERROR] $VIP.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 12:57:03,321 [ERROR] $SUVENPHAR.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 12:57:04,115 [ERROR] $DALMIACMT.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 12:57:04,380 [ERROR] $TATAMOTORS.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 12:57:04,742 [ERROR] $NETSOL.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 12:57:04,777 [ERROR] $TATAMETALI.NS: possibly delisted; no price data found  (period=2y)
+2026-06-15 12:57:05,101 [ERROR] $OCCL.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 12:57:05,705 [ERROR] $LTIM.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 12:57:05,979 [ERROR] $JANA.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 12:57:06,089 [ERROR] $AEGISCHEM.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 12:57:06,116 [ERROR] $CITYUNIONB.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 12:57:07,005 [ERROR] $MTAR.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 12:57:07,013 [ERROR] $ORIENTREN.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 12:57:07,632 [ERROR] $SAPPHIREMF.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 12:57:08,394 [ERROR] $KILPEST.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 12:57:08,819 [ERROR] $ZENTALIS.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 12:57:08,832 [ERROR] $IIFLWAM.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 12:57:08,878 [ERROR] $TIPS.NS: possibly delisted; no price data found  (period=2y)
+2026-06-15 12:57:08,878 [ERROR] $TINPLATE.NS: possibly delisted; no price data found  (period=2y)
+2026-06-15 12:57:09,794 [ERROR] $KROMARETAIL.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 12:57:09,800 [ERROR] $TITANBIO.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 12:57:09,805 [ERROR] $SEQUENT.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 12:57:09,810 [ERROR] $ZOMATO.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 12:57:11,172 [ERROR] $PEL.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 12:57:11,183 [ERROR] $INDSHIBANK.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 12:57:11,189 [ERROR] $BFINANCE.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 12:57:11,560 [ERROR] $ANUPAM.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 12:57:12,937 [ERROR] $BIRLATYRES.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 12:57:13,388 [ERROR] $NORTHEAST.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 12:57:13,391 [ERROR] 
+40 Failed downloads:
+2026-06-15 12:57:13,392 [ERROR] ['REPCO.NS', 'MCDOWELL-N.NS', 'DHAMPUR.NS', 'RAMKRISHNA.NS', 'VSTMIND.NS', 'TVSMOTORS.NS', 'HAPPIEST.NS', 'BDHIIND.NS', 'RESTAURANT.NS', 'HEXAWARE.NS', 'VIP.NS', 'SUVENPHAR.NS', 'DALMIACMT.NS', 'TATAMOTORS.NS', 'NETSOL.NS', 'OCCL.NS', 'LTIM.NS', 'JANA.NS', 'AEGISCHEM.NS', 'CITYUNIONB.NS', 'MTAR.NS', 'ORIENTREN.NS', 'SAPPHIREMF.NS', 'KILPEST.NS', 'ZENTALIS.NS', 'IIFLWAM.NS', 'KROMARETAIL.NS', 'TITANBIO.NS', 'SEQUENT.NS', 'ZOMATO.NS', 'PEL.NS', 'INDSHIBANK.NS', 'BFINANCE.NS', 'ANUPAM.NS', 'BIRLATYRES.NS', 'NORTHEAST.NS']: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 12:57:13,396 [ERROR] ['DIVI.NS', 'TATAMETALI.NS', 'TIPS.NS', 'TINPLATE.NS']: possibly delisted; no price data found  (period=2y)
+2026-06-15 12:57:13,551 [INFO]       342/382 tickers loaded
+2026-06-15 12:57:13,552 [INFO] 
+[4/6] Running agent pipeline (single pass)...
+2026-06-15 12:57:58,210 [INFO] ============================================================
+2026-06-15 12:57:58,210 [INFO]   NSE MOMENTUM SCANNER v4.3
+2026-06-15 12:57:58,211 [INFO]   15 Jun 2026  12:57
+2026-06-15 12:57:58,212 [INFO] ============================================================
+2026-06-15 12:57:58,221 [INFO] 
+[0/6] Universe: 382 stocks
+2026-06-15 12:57:58,221 [INFO]       Nifty 500 Large-Cap      130 stocks | gate≥78 | rrr≥1.5x | adt≥Rs.50.0Cr
+2026-06-15 12:57:58,222 [INFO]       Midcap 150               147 stocks | gate≥80 | rrr≥2.0x | adt≥Rs.10.0Cr
+2026-06-15 12:57:58,222 [INFO]       Smallcap 250             105 stocks | gate≥82 | rrr≥2.5x | adt≥Rs.3.0Cr
+2026-06-15 12:57:58,223 [INFO] 
+[1/6] Fetching market context (Nifty / BankNifty / VIX)...
+2026-06-15 12:58:00,027 [WARNING] Market context fetch error: float() argument must be a string or a real number, not 'Series'
+2026-06-15 12:58:00,028 [INFO]       VIX: 15.0
+2026-06-15 12:58:00,031 [INFO] 
+[2/6] Fetching NSE Bhavcopy (delivery %)...
+2026-06-15 12:58:00,553 [INFO]       3245 symbols loaded
+2026-06-15 12:58:00,554 [INFO] 
+[3/6] Fetching / loading OHLCV (2yr history)...
+2026-06-15 12:58:02,085 [INFO]   Fetching 41 tickers from Yahoo Finance...
+2026-06-15 12:58:02,978 [ERROR] HTTP Error 404: {"quoteSummary":{"result":null,"error":{"code":"Not Found","description":"Quote not found for symbol: ORIENTREN.NS"}}}
+2026-06-15 12:58:03,093 [ERROR] $KROMARETAIL.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 12:58:03,123 [ERROR] HTTP Error 404: {"quoteSummary":{"result":null,"error":{"code":"Not Found","description":"Quote not found for symbol: VSTMIND.NS"}}}
+2026-06-15 12:58:03,425 [ERROR] $SEQUENT.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 12:58:04,133 [ERROR] $ORIENTREN.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 12:58:04,832 [ERROR] $VSTMIND.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 12:58:04,952 [ERROR] $LTIM.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 12:58:05,388 [ERROR] $VIP.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 12:58:05,986 [ERROR] $TITANBIO.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 12:58:06,451 [ERROR] $HAPPIEST.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 12:58:06,459 [ERROR] $SUVENPHAR.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 12:58:07,242 [ERROR] $AEGISCHEM.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 12:58:07,246 [ERROR] $OCCL.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 12:58:08,311 [ERROR] $KILPEST.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 12:58:08,621 [ERROR] $INDSHIBANK.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 12:58:08,925 [ERROR] $MCDOWELL-N.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 12:58:09,061 [ERROR] $TIPS.NS: possibly delisted; no price data found  (period=2y)
+2026-06-15 12:58:09,312 [ERROR] $BFINANCE.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 12:58:09,420 [ERROR] $MTAR.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 12:58:09,937 [ERROR] $TATAMOTORS.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 12:58:10,089 [ERROR] $DIVI.NS: possibly delisted; no price data found  (period=2y)
+2026-06-15 12:58:10,435 [ERROR] $CITYUNIONB.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 12:58:10,831 [ERROR] $DHAMPUR.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 12:58:10,929 [ERROR] $RAMKRISHNA.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 12:58:11,226 [ERROR] $NETSOL.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 12:58:11,641 [ERROR] $ANUPAM.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 12:58:11,997 [ERROR] $TVSMOTORS.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 12:58:11,998 [ERROR] $SAPPHIREMF.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 12:58:12,364 [ERROR] $ZENTALIS.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 12:58:12,872 [ERROR] $HEXAWARE.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 12:58:13,441 [ERROR] $IIFLWAM.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 12:58:13,545 [ERROR] $JANA.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 12:58:13,783 [ERROR] $NORTHEAST.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 12:58:14,275 [ERROR] $RESTAURANT.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 12:58:14,316 [ERROR] $TINPLATE.NS: possibly delisted; no price data found  (period=2y)
+2026-06-15 12:58:14,439 [ERROR] $TATAMETALI.NS: possibly delisted; no price data found  (period=2y)
+2026-06-15 12:58:14,733 [ERROR] $BDHIIND.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 12:58:14,744 [ERROR] $REPCO.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 12:58:15,861 [ERROR] $BIRLATYRES.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 12:58:15,869 [ERROR] $PEL.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 12:58:17,017 [ERROR] $ZOMATO.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 12:58:17,025 [ERROR] $DALMIACMT.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 12:58:17,032 [ERROR] 
+40 Failed downloads:
+2026-06-15 12:58:17,032 [ERROR] ['KROMARETAIL.NS', 'SEQUENT.NS', 'ORIENTREN.NS', 'VSTMIND.NS', 'LTIM.NS', 'VIP.NS', 'TITANBIO.NS', 'HAPPIEST.NS', 'SUVENPHAR.NS', 'AEGISCHEM.NS', 'OCCL.NS', 'KILPEST.NS', 'INDSHIBANK.NS', 'MCDOWELL-N.NS', 'BFINANCE.NS', 'MTAR.NS', 'TATAMOTORS.NS', 'CITYUNIONB.NS', 'DHAMPUR.NS', 'RAMKRISHNA.NS', 'NETSOL.NS', 'ANUPAM.NS', 'TVSMOTORS.NS', 'SAPPHIREMF.NS', 'ZENTALIS.NS', 'HEXAWARE.NS', 'IIFLWAM.NS', 'JANA.NS', 'NORTHEAST.NS', 'RESTAURANT.NS', 'BDHIIND.NS', 'REPCO.NS', 'BIRLATYRES.NS', 'PEL.NS', 'ZOMATO.NS', 'DALMIACMT.NS']: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 12:58:17,033 [ERROR] ['TIPS.NS', 'DIVI.NS', 'TINPLATE.NS', 'TATAMETALI.NS']: possibly delisted; no price data found  (period=2y)
+2026-06-15 12:58:17,175 [INFO]       342/382 tickers loaded
+2026-06-15 12:58:17,175 [INFO] 
+[4/6] Running agent pipeline (single pass)...
+2026-06-15 13:03:22,081 [INFO] ============================================================
+2026-06-15 13:03:22,081 [INFO]   NSE MOMENTUM SCANNER v4.3
+2026-06-15 13:03:22,082 [INFO]   15 Jun 2026  13:03
+2026-06-15 13:03:22,082 [INFO] ============================================================
+2026-06-15 13:03:22,088 [INFO] 
+[0/6] Universe: 382 stocks
+2026-06-15 13:03:22,088 [INFO]       Nifty 500 Large-Cap      130 stocks | gate≥78 | rrr≥1.5x | adt≥Rs.50.0Cr
+2026-06-15 13:03:22,088 [INFO]       Midcap 150               147 stocks | gate≥80 | rrr≥2.0x | adt≥Rs.10.0Cr
+2026-06-15 13:03:22,088 [INFO]       Smallcap 250             105 stocks | gate≥82 | rrr≥2.5x | adt≥Rs.3.0Cr
+2026-06-15 13:03:22,088 [INFO] 
+[1/6] Fetching market context (Nifty / BankNifty / VIX)...
+2026-06-15 13:03:23,809 [WARNING] Market context fetch error: float() argument must be a string or a real number, not 'Series'
+2026-06-15 13:03:23,810 [INFO]       VIX: 15.0
+2026-06-15 13:03:23,810 [INFO] 
+[2/6] Fetching NSE Bhavcopy (delivery %)...
+2026-06-15 13:03:24,327 [INFO]       3245 symbols loaded
+2026-06-15 13:03:24,328 [INFO] 
+[3/6] Fetching / loading OHLCV (2yr history)...
+2026-06-15 13:03:25,762 [INFO]   Fetching 41 tickers from Yahoo Finance...
+2026-06-15 13:03:25,879 [ERROR] $TATAMETALI.NS: possibly delisted; no price data found  (period=2y)
+2026-06-15 13:03:25,906 [ERROR] $TIPS.NS: possibly delisted; no price data found  (period=2y)
+2026-06-15 13:03:26,316 [ERROR] $TINPLATE.NS: possibly delisted; no price data found  (period=2y)
+2026-06-15 13:03:26,670 [ERROR] HTTP Error 404: {"quoteSummary":{"result":null,"error":{"code":"Not Found","description":"Quote not found for symbol: BIRLATYRES.NS"}}}
+2026-06-15 13:03:27,236 [ERROR] $TVSMOTORS.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 13:03:27,295 [ERROR] HTTP Error 404: {"quoteSummary":{"result":null,"error":{"code":"Not Found","description":"Quote not found for symbol: VSTMIND.NS"}}}
+2026-06-15 13:03:27,967 [ERROR] $CITYUNIONB.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 13:03:28,085 [ERROR] $BIRLATYRES.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 13:03:28,411 [ERROR] $MCDOWELL-N.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 13:03:28,521 [ERROR] $VSTMIND.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 13:03:29,429 [ERROR] $TITANBIO.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 13:03:29,939 [ERROR] $DALMIACMT.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 13:03:30,656 [ERROR] $SUVENPHAR.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 13:03:31,032 [ERROR] $IIFLWAM.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 13:03:31,156 [ERROR] $ZENTALIS.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 13:03:32,162 [ERROR] $ANUPAM.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 13:03:32,734 [ERROR] $SAPPHIREMF.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 13:03:32,741 [ERROR] $REPCO.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 13:03:33,809 [ERROR] $PEL.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 13:03:33,818 [ERROR] $ZOMATO.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 13:03:34,486 [ERROR] $DHAMPUR.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 13:03:34,492 [ERROR] $BDHIIND.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 13:03:35,571 [ERROR] $SEQUENT.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 13:03:35,572 [ERROR] $NORTHEAST.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 13:03:35,584 [ERROR] $BFINANCE.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 13:03:35,682 [ERROR] $LTIM.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 13:03:36,864 [ERROR] $KILPEST.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 13:03:36,865 [ERROR] $VIP.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 13:03:36,874 [ERROR] $RAMKRISHNA.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 13:03:36,992 [ERROR] $INDSHIBANK.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 13:03:38,331 [ERROR] $MTAR.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 13:03:38,337 [ERROR] $TATAMOTORS.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 13:03:38,339 [ERROR] $HAPPIEST.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 13:03:38,686 [ERROR] $HEXAWARE.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 13:03:38,723 [ERROR] $DIVI.NS: possibly delisted; no price data found  (period=2y)
+2026-06-15 13:03:40,097 [ERROR] $AEGISCHEM.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 13:03:40,102 [ERROR] $RESTAURANT.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 13:03:40,104 [ERROR] $JANA.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 13:03:40,710 [ERROR] $ORIENTREN.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 13:03:41,409 [ERROR] $OCCL.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 13:03:41,411 [ERROR] $NETSOL.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 13:03:41,417 [ERROR] $KROMARETAIL.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 13:03:41,420 [ERROR] 
+40 Failed downloads:
+2026-06-15 13:03:41,421 [ERROR] ['TATAMETALI.NS', 'TIPS.NS', 'TINPLATE.NS', 'DIVI.NS']: possibly delisted; no price data found  (period=2y)
+2026-06-15 13:03:41,422 [ERROR] ['TVSMOTORS.NS', 'CITYUNIONB.NS', 'BIRLATYRES.NS', 'MCDOWELL-N.NS', 'VSTMIND.NS', 'TITANBIO.NS', 'DALMIACMT.NS', 'SUVENPHAR.NS', 'IIFLWAM.NS', 'ZENTALIS.NS', 'ANUPAM.NS', 'SAPPHIREMF.NS', 'REPCO.NS', 'PEL.NS', 'ZOMATO.NS', 'DHAMPUR.NS', 'BDHIIND.NS', 'SEQUENT.NS', 'NORTHEAST.NS', 'BFINANCE.NS', 'LTIM.NS', 'KILPEST.NS', 'VIP.NS', 'RAMKRISHNA.NS', 'INDSHIBANK.NS', 'MTAR.NS', 'TATAMOTORS.NS', 'HAPPIEST.NS', 'HEXAWARE.NS', 'AEGISCHEM.NS', 'RESTAURANT.NS', 'JANA.NS', 'ORIENTREN.NS', 'OCCL.NS', 'NETSOL.NS', 'KROMARETAIL.NS']: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 13:03:41,602 [INFO]       342/382 tickers loaded
+2026-06-15 13:03:41,602 [INFO] 
+[4/6] Running agent pipeline (single pass)...
+2026-06-15 13:03:41,781 [INFO] Regime: D (Correction) | Breadth: 7/10 | Penalty: -12
+2026-06-15 13:03:41,782 [INFO]       Regime: D (Correction) | Breadth: 7/10
+2026-06-15 13:03:49,374 [INFO] 
+[5/6] Scoring complete:
+2026-06-15 13:03:49,374 [INFO]       Tier 1 (Top Picks):   0
+2026-06-15 13:03:49,375 [INFO]       Tier 2 (Aggressive):  0
+2026-06-15 13:03:49,378 [INFO]       Tier 3 (Watchlist):   0
+2026-06-15 13:03:49,378 [INFO]       Rejected/below gate:  382
+2026-06-15 13:03:49,382 [INFO] 
+[6/6] Sending email report...
+2026-06-15 13:03:51,502 [ERROR] Email send failed: (535, b'5.7.8 Username and Password not accepted. For more information, go to\n5.7.8  https://support.google.com/mail/?p=BadCredentials d2e1a72fcca58-8434accbec5sm9053458b3a.16 - gsmtp')
+2026-06-15 13:03:51,503 [ERROR]       Email failed: (535, b'5.7.8 Username and Password not accepted. For more information, go to\n5.7.8  https://support.google.com/mail/?p=BadCredentials d2e1a72fcca58-8434accbec5sm9053458b3a.16 - gsmtp')
+2026-06-15 13:03:51,506 [INFO] 
+============================================================
+2026-06-15 13:03:51,509 [INFO]   Scan complete.
+2026-06-15 13:03:51,511 [INFO] ============================================================
+
+2026-06-15 13:16:58,318 [INFO] ============================================================
+2026-06-15 13:16:58,318 [INFO]   NSE MOMENTUM SCANNER v4.3
+2026-06-15 13:16:58,319 [INFO]   15 Jun 2026  13:16
+2026-06-15 13:16:58,319 [INFO] ============================================================
+2026-06-15 13:16:58,323 [INFO] 
+[0/6] Universe: 381 stocks
+2026-06-15 13:16:58,323 [INFO]       Nifty 500 Large-Cap      129 stocks | gate≥78 | rrr≥1.5x | adt≥Rs.50.0Cr
+2026-06-15 13:16:58,324 [INFO]       Midcap 150               147 stocks | gate≥80 | rrr≥2.0x | adt≥Rs.10.0Cr
+2026-06-15 13:16:58,324 [INFO]       Smallcap 250             105 stocks | gate≥82 | rrr≥2.5x | adt≥Rs.3.0Cr
+2026-06-15 13:16:58,324 [INFO] 
+[1/6] Fetching market context (Nifty / BankNifty / VIX)...
+2026-06-15 13:17:00,376 [WARNING] Market context fetch error: float() argument must be a string or a real number, not 'Series'
+2026-06-15 13:17:00,376 [INFO]       VIX: 15.0
+2026-06-15 13:17:00,377 [INFO] 
+[2/6] Fetching NSE Bhavcopy (delivery %)...
+2026-06-15 13:17:00,918 [INFO]       3245 symbols loaded
+2026-06-15 13:17:00,919 [INFO] 
+[3/6] Fetching / loading OHLCV (2yr history)...
+2026-06-15 13:17:02,500 [INFO]   Fetching 40 tickers from Yahoo Finance...
+2026-06-15 13:17:03,495 [ERROR] HTTP Error 404: {"quoteSummary":{"result":null,"error":{"code":"Not Found","description":"Quote not found for symbol: ORIENTREN.NS"}}}
+2026-06-15 13:17:03,501 [ERROR] HTTP Error 404: {"quoteSummary":{"result":null,"error":{"code":"Not Found","description":"Quote not found for symbol: RESTAURANT.NS"}}}
+2026-06-15 13:17:04,048 [ERROR] $OCCL.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 13:17:04,662 [ERROR] $NETSOL.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 13:17:05,477 [ERROR] $ORIENTREN.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 13:17:05,586 [ERROR] $RESTAURANT.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 13:17:05,958 [ERROR] $DHAMPUR.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 13:17:07,770 [ERROR] $TINPLATE.NS: possibly delisted; no price data found  (period=2y)
+2026-06-15 13:17:07,945 [ERROR] $HAPPIEST.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 13:17:08,122 [ERROR] $TITANBIO.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 13:17:08,662 [ERROR] $SEQUENT.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 13:17:09,379 [ERROR] $MCDOWELL-N.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 13:17:10,027 [ERROR] $VSTMIND.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 13:17:10,033 [ERROR] $BIRLATYRES.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 13:17:11,400 [ERROR] $LTIM.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 13:17:11,415 [ERROR] $ZENTALIS.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 13:17:11,513 [ERROR] $REPCO.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 13:17:11,530 [ERROR] $KILPEST.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 13:17:11,800 [ERROR] $TIPS.NS: possibly delisted; no price data found  (period=2y)
+2026-06-15 13:17:12,668 [ERROR] $JANA.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 13:17:12,676 [ERROR] $KROMARETAIL.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 13:17:13,173 [ERROR] $PEL.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 13:17:13,643 [ERROR] $SUVENPHAR.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 13:17:13,744 [ERROR] $NORTHEAST.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 13:17:13,792 [ERROR] $TATAMETALI.NS: possibly delisted; no price data found  (period=2y)
+2026-06-15 13:17:14,589 [ERROR] $BFINANCE.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 13:17:15,522 [ERROR] $SAPPHIREMF.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 13:17:15,979 [ERROR] $BDHIIND.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 13:17:15,985 [ERROR] $AEGISCHEM.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 13:17:17,485 [ERROR] $DALMIACMT.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 13:17:17,588 [ERROR] $CITYUNIONBANK.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 13:17:18,063 [ERROR] $VIP.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 13:17:18,066 [ERROR] $IIFLWAM.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 13:17:18,071 [ERROR] 
+31 Failed downloads:
+2026-06-15 13:17:18,071 [ERROR] ['OCCL.NS', 'NETSOL.NS', 'ORIENTREN.NS', 'RESTAURANT.NS', 'DHAMPUR.NS', 'HAPPIEST.NS', 'TITANBIO.NS', 'SEQUENT.NS', 'MCDOWELL-N.NS', 'VSTMIND.NS', 'BIRLATYRES.NS', 'LTIM.NS', 'ZENTALIS.NS', 'REPCO.NS', 'KILPEST.NS', 'JANA.NS', 'KROMARETAIL.NS', 'PEL.NS', 'SUVENPHAR.NS', 'NORTHEAST.NS', 'BFINANCE.NS', 'SAPPHIREMF.NS', 'BDHIIND.NS', 'AEGISCHEM.NS', 'DALMIACMT.NS', 'CITYUNIONBANK.NS', 'VIP.NS', 'IIFLWAM.NS']: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 13:17:18,072 [ERROR] ['TINPLATE.NS', 'TIPS.NS', 'TATAMETALI.NS']: possibly delisted; no price data found  (period=2y)
+2026-06-15 13:17:19,152 [INFO]       350/381 tickers loaded
+2026-06-15 13:17:19,152 [INFO] 
+[4/6] Running agent pipeline (single pass)...
+2026-06-15 13:17:19,359 [INFO] Regime: D (Correction) | Breadth: 7/10 | Penalty: -12
+2026-06-15 13:17:19,359 [INFO]       Regime: D (Correction) | Breadth: 7/10
+2026-06-15 13:17:27,211 [INFO] 
+[5/6] Scoring complete:
+2026-06-15 13:17:27,212 [INFO]       Tier 1 (Top Picks):   0
+2026-06-15 13:17:27,212 [INFO]       Tier 2 (Aggressive):  0
+2026-06-15 13:17:27,216 [INFO]       Tier 3 (Watchlist):   0
+2026-06-15 13:17:27,217 [INFO]       Rejected/below gate:  381
+2026-06-15 13:17:27,227 [INFO] 
+[6/6] Sending email report...
+2026-06-15 13:17:30,996 [INFO] Email sent to 1 recipient(s)
+2026-06-15 13:17:30,997 [INFO]       Email sent successfully.
+2026-06-15 13:17:31,000 [INFO] 
+============================================================
+2026-06-15 13:17:31,004 [INFO]   Scan complete.
+2026-06-15 13:17:31,005 [INFO] ============================================================
+
+2026-06-15 13:39:46,295 [INFO] ============================================================
+2026-06-15 13:39:46,295 [INFO]   NSE MOMENTUM SCANNER v4.3
+2026-06-15 13:39:46,297 [INFO]   15 Jun 2026  13:39
+2026-06-15 13:39:46,300 [INFO] ============================================================
+2026-06-15 13:39:46,309 [INFO] 
+[0/6] Universe: 381 stocks
+2026-06-15 13:39:46,309 [INFO]       Nifty 500 Large-Cap      129 stocks | gate≥72 | rrr≥1.5x | adt≥Rs.50.0Cr
+2026-06-15 13:39:46,310 [INFO]       Midcap 150               147 stocks | gate≥74 | rrr≥2.0x | adt≥Rs.10.0Cr
+2026-06-15 13:39:46,311 [INFO]       Smallcap 250             105 stocks | gate≥76 | rrr≥2.5x | adt≥Rs.3.0Cr
+2026-06-15 13:39:46,316 [INFO] 
+[1/6] Fetching market context (Nifty / BankNifty / VIX)...
+2026-06-15 13:39:47,900 [INFO]       VIX: 14.3
+2026-06-15 13:39:47,901 [INFO] 
+[2/6] Fetching NSE Bhavcopy (delivery %)...
+2026-06-15 13:39:48,377 [INFO]       3245 symbols loaded
+2026-06-15 13:39:48,377 [INFO] 
+[3/6] Fetching / loading OHLCV (2yr history)...
+2026-06-15 13:39:50,014 [INFO]   Fetching 32 tickers from Yahoo Finance...
+2026-06-15 13:39:51,081 [ERROR] $OCCL.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 13:39:51,086 [ERROR] $SAPPHIREMF.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 13:39:51,093 [ERROR] HTTP Error 404: {"quoteSummary":{"result":null,"error":{"code":"Not Found","description":"Quote not found for symbol: NORTHEAST.NS"}}}
+2026-06-15 13:39:51,096 [ERROR] HTTP Error 404: {"quoteSummary":{"result":null,"error":{"code":"Not Found","description":"Quote not found for symbol: VIP.NS"}}}
+2026-06-15 13:39:52,552 [ERROR] $CITYUNIONBANK.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 13:39:52,564 [ERROR] $VIP.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 13:39:53,101 [ERROR] $NORTHEAST.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 13:39:53,121 [ERROR] $HAPPIEST.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 13:39:54,296 [ERROR] $SUVENPHAR.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 13:39:54,305 [ERROR] $KROMARETAIL.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 13:39:54,410 [ERROR] $NETSOL.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 13:39:55,162 [ERROR] $KILPEST.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 13:39:55,745 [ERROR] $BDHIIND.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 13:39:55,749 [ERROR] $BFINANCE.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 13:39:56,264 [ERROR] $TITANBIO.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 13:39:56,637 [ERROR] $MCDOWELL-N.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 13:39:56,669 [ERROR] $VSTMIND.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 13:39:56,991 [ERROR] $ORIENTREN.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 13:39:57,138 [ERROR] $TIPS.NS: possibly delisted; no price data found  (period=2y)
+2026-06-15 13:39:57,391 [ERROR] $LTIM.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 13:39:57,505 [ERROR] $RESTAURANT.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 13:39:57,535 [ERROR] $TATAMETALI.NS: possibly delisted; no price data found  (period=2y)
+2026-06-15 13:39:57,865 [ERROR] $IIFLWAM.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 13:39:58,264 [ERROR] $SEQUENT.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 13:39:58,812 [ERROR] $BIRLATYRES.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 13:39:58,818 [ERROR] $DALMIACMT.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 13:39:59,353 [ERROR] $REPCO.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 13:39:59,463 [ERROR] $PEL.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 13:39:59,476 [ERROR] $TINPLATE.NS: possibly delisted; no price data found  (period=2y)
+2026-06-15 13:39:59,994 [ERROR] $JANA.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 13:40:00,974 [ERROR] $AEGISCHEM.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 13:40:00,981 [ERROR] $ZENTALIS.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 13:40:00,989 [ERROR] $DHAMPUR.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 13:40:00,992 [ERROR] 
+31 Failed downloads:
+2026-06-15 13:40:00,993 [ERROR] ['OCCL.NS', 'SAPPHIREMF.NS', 'CITYUNIONBANK.NS', 'VIP.NS', 'NORTHEAST.NS', 'HAPPIEST.NS', 'SUVENPHAR.NS', 'KROMARETAIL.NS', 'NETSOL.NS', 'KILPEST.NS', 'BDHIIND.NS', 'BFINANCE.NS', 'TITANBIO.NS', 'MCDOWELL-N.NS', 'VSTMIND.NS', 'ORIENTREN.NS', 'LTIM.NS', 'RESTAURANT.NS', 'IIFLWAM.NS', 'SEQUENT.NS', 'BIRLATYRES.NS', 'DALMIACMT.NS', 'REPCO.NS', 'PEL.NS', 'JANA.NS', 'AEGISCHEM.NS', 'ZENTALIS.NS', 'DHAMPUR.NS']: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 13:40:00,994 [ERROR] ['TIPS.NS', 'TATAMETALI.NS', 'TINPLATE.NS']: possibly delisted; no price data found  (period=2y)
+2026-06-15 13:40:01,100 [INFO]       350/381 tickers loaded
+2026-06-15 13:40:01,100 [INFO] 
+[4/6] Running agent pipeline (single pass)...
+2026-06-15 13:40:01,283 [INFO] Regime: D (Correction) | Breadth: 7/10 | Penalty: -12
+2026-06-15 13:40:01,284 [INFO]       Regime: D (Correction) | Breadth: 7/10
+2026-06-15 13:40:09,474 [INFO] 
+[5/6] Scoring complete:
+2026-06-15 13:40:09,474 [INFO]       Tier 1 (Top Picks):   0
+2026-06-15 13:40:09,475 [INFO]       Tier 2 (Aggressive):  0
+2026-06-15 13:40:09,475 [INFO]       Tier 3 (Watchlist):   0
+2026-06-15 13:40:09,475 [INFO]       Rejected/below gate:  381
+2026-06-15 13:40:09,477 [INFO] 
+[6/6] Sending email report...
+2026-06-15 13:40:12,315 [INFO] Email sent to 1 recipient(s)
+2026-06-15 13:40:12,316 [INFO]       Email sent successfully.
+2026-06-15 13:40:12,317 [INFO] 
+============================================================
+2026-06-15 13:40:12,318 [INFO]   Scan complete.
+2026-06-15 13:40:12,319 [INFO] ============================================================
+
+2026-06-15 13:46:39,531 [INFO] ============================================================
+2026-06-15 13:46:39,531 [INFO]   NSE MOMENTUM SCANNER v4.3
+2026-06-15 13:46:39,532 [INFO]   15 Jun 2026  13:46
+2026-06-15 13:46:39,533 [INFO] ============================================================
+2026-06-15 13:46:39,547 [INFO] 
+[0/6] Universe: 381 stocks
+2026-06-15 13:46:39,548 [INFO]       Nifty 500 Large-Cap      129 stocks | gate≥72 | rrr≥1.5x | adt≥Rs.50.0Cr
+2026-06-15 13:46:39,549 [INFO]       Midcap 150               147 stocks | gate≥74 | rrr≥2.0x | adt≥Rs.10.0Cr
+2026-06-15 13:46:39,549 [INFO]       Smallcap 250             105 stocks | gate≥76 | rrr≥2.5x | adt≥Rs.3.0Cr
+2026-06-15 13:46:39,550 [INFO] 
+[1/6] Fetching market context (Nifty / BankNifty / VIX)...
+2026-06-15 13:46:41,426 [INFO]       VIX: 14.2
+2026-06-15 13:46:41,426 [INFO] 
+[2/6] Fetching NSE Bhavcopy (delivery %)...
+2026-06-15 13:46:41,973 [INFO]       3245 symbols loaded
+2026-06-15 13:46:41,974 [INFO] 
+[3/6] Fetching / loading OHLCV (2yr history)...
+2026-06-15 13:46:43,626 [INFO]   Fetching 32 tickers from Yahoo Finance...
+2026-06-15 13:46:44,927 [ERROR] HTTP Error 404: {"quoteSummary":{"result":null,"error":{"code":"Not Found","description":"Quote not found for symbol: BDHIIND.NS"}}}
+2026-06-15 13:46:45,171 [ERROR] $HAPPIEST.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 13:46:45,276 [ERROR] $ZENTALIS.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 13:46:45,673 [ERROR] $AEGISCHEM.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 13:46:45,946 [ERROR] $BDHIIND.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 13:46:46,377 [ERROR] $RESTAURANT.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 13:46:46,529 [ERROR] $MCDOWELL-N.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 13:46:46,865 [ERROR] $SAPPHIREMF.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 13:46:46,903 [ERROR] $TIPS.NS: possibly delisted; no price data found  (period=2y)
+2026-06-15 13:46:47,522 [ERROR] $VIP.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 13:46:47,818 [ERROR] $LTIM.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 13:46:47,967 [ERROR] $SEQUENT.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 13:46:48,084 [ERROR] $BIRLATYRES.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 13:46:48,864 [ERROR] $OCCL.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 13:46:49,512 [ERROR] $NORTHEAST.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 13:46:49,535 [ERROR] $SUVENPHAR.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 13:46:49,718 [ERROR] $VSTMIND.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 13:46:50,020 [ERROR] $DALMIACMT.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 13:46:50,884 [ERROR] $NETSOL.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 13:46:50,957 [ERROR] $JANA.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 13:46:51,372 [ERROR] $ORIENTREN.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 13:46:51,401 [ERROR] $BFINANCE.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 13:46:51,409 [ERROR] $TATAMETALI.NS: possibly delisted; no price data found  (period=2y)
+2026-06-15 13:46:52,850 [ERROR] $DHAMPUR.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 13:46:52,973 [ERROR] $IIFLWAM.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 13:46:53,447 [ERROR] $CITYUNIONBANK.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 13:46:53,454 [ERROR] $TITANBIO.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 13:46:54,256 [ERROR] $REPCO.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 13:46:54,403 [ERROR] $TINPLATE.NS: possibly delisted; no price data found  (period=2y)
+2026-06-15 13:46:54,688 [ERROR] $KROMARETAIL.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 13:46:54,851 [ERROR] $KILPEST.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 13:46:54,955 [ERROR] $PEL.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 13:46:54,963 [ERROR] 
+31 Failed downloads:
+2026-06-15 13:46:54,964 [ERROR] ['HAPPIEST.NS', 'ZENTALIS.NS', 'AEGISCHEM.NS', 'BDHIIND.NS', 'RESTAURANT.NS', 'MCDOWELL-N.NS', 'SAPPHIREMF.NS', 'VIP.NS', 'LTIM.NS', 'SEQUENT.NS', 'BIRLATYRES.NS', 'OCCL.NS', 'NORTHEAST.NS', 'SUVENPHAR.NS', 'VSTMIND.NS', 'DALMIACMT.NS', 'NETSOL.NS', 'JANA.NS', 'ORIENTREN.NS', 'BFINANCE.NS', 'DHAMPUR.NS', 'IIFLWAM.NS', 'CITYUNIONBANK.NS', 'TITANBIO.NS', 'REPCO.NS', 'KROMARETAIL.NS', 'KILPEST.NS', 'PEL.NS']: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 13:46:54,966 [ERROR] ['TIPS.NS', 'TATAMETALI.NS', 'TINPLATE.NS']: possibly delisted; no price data found  (period=2y)
+2026-06-15 13:46:55,083 [INFO]       350/381 tickers loaded
+2026-06-15 13:46:55,083 [INFO] 
+[4/6] Running agent pipeline (single pass)...
+2026-06-15 13:46:55,271 [INFO] Regime: D (Correction) | Breadth: 7/10 | Penalty: -12
+2026-06-15 13:46:55,271 [INFO]       Regime: D (Correction) | Breadth: 7/10
+2026-06-15 13:47:02,815 [INFO] 
+[5/6] Scoring complete:
+2026-06-15 13:47:02,815 [INFO]       Tier 1 (Top Picks):   0
+2026-06-15 13:47:02,816 [INFO]       Tier 2 (Aggressive):  0
+2026-06-15 13:47:02,820 [INFO]       Tier 3 (Watchlist):   0
+2026-06-15 13:47:02,820 [INFO]       Rejected/below gate:  381
+2026-06-15 13:47:02,826 [INFO] 
+[6/6] Sending email report...
+2026-06-15 13:47:06,179 [INFO] Email sent to 1 recipient(s)
+2026-06-15 13:47:06,180 [INFO]       Email sent successfully.
+2026-06-15 13:47:06,183 [INFO] 
+============================================================
+2026-06-15 13:47:06,187 [INFO]   Scan complete.
+2026-06-15 13:47:06,188 [INFO] ============================================================
+
+2026-06-15 13:55:04,983 [INFO] ============================================================
+2026-06-15 13:55:04,983 [INFO]   NSE MOMENTUM SCANNER v4.3
+2026-06-15 13:55:04,983 [INFO]   15 Jun 2026  13:55
+2026-06-15 13:55:04,983 [INFO] ============================================================
+2026-06-15 13:55:04,987 [INFO] 
+[0/6] Universe: 369 stocks
+2026-06-15 13:55:04,988 [INFO]       Nifty 500 Large-Cap      129 stocks | gate≥72 | rrr≥1.5x | adt≥Rs.50.0Cr
+2026-06-15 13:55:04,988 [INFO]       Midcap 150               144 stocks | gate≥74 | rrr≥2.0x | adt≥Rs.10.0Cr
+2026-06-15 13:55:04,988 [INFO]       Smallcap 250              96 stocks | gate≥76 | rrr≥2.5x | adt≥Rs.3.0Cr
+2026-06-15 13:55:04,988 [INFO] 
+[1/6] Fetching market context (Nifty / BankNifty / VIX)...
+2026-06-15 13:55:06,936 [INFO]       VIX: 14.3
+2026-06-15 13:55:06,937 [INFO] 
+[2/6] Fetching NSE Bhavcopy (delivery %)...
+2026-06-15 13:55:07,467 [INFO]       3245 symbols loaded
+2026-06-15 13:55:07,467 [INFO] 
+[3/6] Fetching / loading OHLCV (2yr history)...
+2026-06-15 13:55:08,962 [INFO]   Fetching 20 tickers from Yahoo Finance...
+2026-06-15 13:55:10,174 [ERROR] HTTP Error 404: {"quoteSummary":{"result":null,"error":{"code":"Not Found","description":"Quote not found for symbol: RESTAURANT.NS"}}}
+2026-06-15 13:55:10,836 [ERROR] $JANABANK.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 13:55:10,944 [ERROR] $ZOMATO.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 13:55:11,593 [ERROR] $LTIM.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 13:55:12,328 [ERROR] $RESTAURANT.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 13:55:12,341 [ERROR] $ORIENTGREEN.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 13:55:13,390 [ERROR] $TIPSINDLTD.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 13:55:13,518 [ERROR] $DHAMPURE.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 13:55:14,870 [ERROR] $SEQUENTSC.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 13:55:15,220 [ERROR] $NESFB.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 13:55:15,347 [ERROR] $DALMIACEM.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 13:55:16,941 [ERROR] $PIRAMALENT.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 13:55:16,947 [ERROR] 
+11 Failed downloads:
+2026-06-15 13:55:16,947 [ERROR] ['JANABANK.NS', 'ZOMATO.NS', 'LTIM.NS', 'RESTAURANT.NS', 'ORIENTGREEN.NS', 'TIPSINDLTD.NS', 'DHAMPURE.NS', 'SEQUENTSC.NS', 'NESFB.NS', 'DALMIACEM.NS', 'PIRAMALENT.NS']: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 13:55:17,867 [INFO]       358/369 tickers loaded
+2026-06-15 13:55:17,867 [INFO] 
+[4/6] Running agent pipeline (single pass)...
+2026-06-15 13:55:18,111 [INFO] Regime: A (Strong Bull) | Breadth: 7/10 | Penalty: 0
+2026-06-15 13:55:18,112 [INFO]       Regime: A (Strong Bull) | Breadth: 7/10
+2026-06-15 13:55:36,396 [INFO]   Rejection breakdown:
+2026-06-15 13:55:36,396 [INFO]      43 × No pattern detected
+2026-06-15 13:55:36,397 [INFO]      26 × Participation 30% below min 35.0%
+2026-06-15 13:55:36,397 [INFO]      24 × Participation 35% below min 40.0%
+2026-06-15 13:55:36,397 [INFO]      23 × Participation 30% below min 40.0%
+2026-06-15 13:55:36,397 [INFO]      15 × Participation 25% below min 35.0%
+2026-06-15 13:55:36,397 [INFO]      14 × Participation 25% below min 40.0%
+2026-06-15 13:55:36,398 [INFO]      10 × Participation 25% below min 30.0%
+2026-06-15 13:55:36,398 [INFO]       9 × Participation 20% below min 35.0%
+2026-06-15 13:55:36,399 [INFO] 
+[5/6] Scoring complete:
+2026-06-15 13:55:36,399 [INFO]       Tier 1 (Top Picks):   0
+2026-06-15 13:55:36,399 [INFO]       Tier 2 (Aggressive):  0
+2026-06-15 13:55:36,400 [INFO]       Tier 3 (Watchlist):   0
+2026-06-15 13:55:36,400 [INFO]       Rejected/below gate:  369
+2026-06-15 13:55:36,405 [INFO] 
+[6/6] Sending email report...
+2026-06-15 13:55:39,438 [INFO] Email sent to 1 recipient(s)
+2026-06-15 13:55:39,439 [INFO]       Email sent successfully.
+2026-06-15 13:55:39,443 [INFO] 
+============================================================
+2026-06-15 13:55:39,446 [INFO]   Scan complete.
+2026-06-15 13:55:39,448 [INFO] ============================================================
+
+2026-06-15 14:31:08,155 [INFO] ============================================================
+2026-06-15 14:31:08,155 [INFO]   NSE MOMENTUM SCANNER v4.3
+2026-06-15 14:31:08,156 [INFO]   15 Jun 2026  14:31
+2026-06-15 14:31:08,159 [INFO] ============================================================
+2026-06-15 14:31:08,164 [INFO] 
+[0/6] Universe: 369 stocks
+2026-06-15 14:31:08,164 [INFO]       Nifty 500 Large-Cap      129 stocks | gate≥72 | rrr≥1.5x | adt≥Rs.50.0Cr
+2026-06-15 14:31:08,165 [INFO]       Midcap 150               144 stocks | gate≥74 | rrr≥2.0x | adt≥Rs.10.0Cr
+2026-06-15 14:31:08,165 [INFO]       Smallcap 250              96 stocks | gate≥76 | rrr≥2.5x | adt≥Rs.3.0Cr
+2026-06-15 14:31:08,166 [INFO] 
+[1/6] Fetching market context (Nifty / BankNifty / VIX)...
+2026-06-15 14:31:09,712 [INFO]       VIX: 14.2
+2026-06-15 14:31:09,713 [INFO] 
+[2/6] Fetching NSE Bhavcopy (delivery %)...
+2026-06-15 14:31:10,097 [INFO]       3245 symbols loaded
+2026-06-15 14:31:10,098 [INFO] 
+[3/6] Fetching / loading OHLCV (2yr history)...
+2026-06-15 14:31:11,616 [INFO]   Fetching 13 tickers from Yahoo Finance...
+2026-06-15 14:31:12,979 [ERROR] $ORIENTGREEN.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 14:31:13,130 [ERROR] HTTP Error 404: {"quoteSummary":{"result":null,"error":{"code":"Not Found","description":"Quote not found for symbol: RESTAURANT.NS"}}}
+2026-06-15 14:31:13,764 [ERROR] $LTIM.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 14:31:13,990 [ERROR] $DHAMPURE.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 14:31:14,144 [ERROR] $TIPSINDLTD.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 14:31:14,987 [ERROR] $RESTAURANT.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 14:31:15,675 [ERROR] $SEQUENTSC.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 14:31:15,682 [ERROR] $JANABANK.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 14:31:16,509 [ERROR] $PIRAMALENT.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 14:31:16,517 [ERROR] $ZOMATO.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 14:31:17,120 [ERROR] $DALMIACEM.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 14:31:17,745 [ERROR] $NESFB.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 14:31:17,749 [ERROR] 
+11 Failed downloads:
+2026-06-15 14:31:17,750 [ERROR] ['ORIENTGREEN.NS', 'LTIM.NS', 'DHAMPURE.NS', 'TIPSINDLTD.NS', 'RESTAURANT.NS', 'SEQUENTSC.NS', 'JANABANK.NS', 'PIRAMALENT.NS', 'ZOMATO.NS', 'DALMIACEM.NS', 'NESFB.NS']: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 14:31:17,847 [INFO]       358/369 tickers loaded
+2026-06-15 14:31:17,847 [INFO] 
+[4/6] Running agent pipeline (single pass)...
+2026-06-15 14:31:18,030 [INFO] Regime: A (Strong Bull) | Breadth: 7/10 | Penalty: 0
+2026-06-15 14:31:18,030 [INFO]       Regime: A (Strong Bull) | Breadth: 7/10
+2026-06-15 14:32:16,462 [INFO]   Rejection breakdown:
+2026-06-15 14:32:16,462 [INFO]      43 × No pattern detected
+2026-06-15 14:32:16,464 [INFO]      26 × Participation 30% below min 35.0%
+2026-06-15 14:32:16,467 [INFO]      24 × Participation 35% below min 40.0%
+2026-06-15 14:32:16,468 [INFO]      23 × Participation 30% below min 40.0%
+2026-06-15 14:32:16,468 [INFO]      15 × Participation 25% below min 35.0%
+2026-06-15 14:32:16,469 [INFO]      14 × Participation 25% below min 40.0%
+2026-06-15 14:32:16,469 [INFO]      10 × Participation 25% below min 30.0%
+2026-06-15 14:32:16,470 [INFO]       9 × Participation 20% below min 35.0%
+2026-06-15 14:32:16,470 [INFO] 
+[5/6] Scoring complete:
+2026-06-15 14:32:16,470 [INFO]       Tier 1 (Top Picks):   0
+2026-06-15 14:32:16,471 [INFO]       Tier 2 (Aggressive):  0
+2026-06-15 14:32:16,471 [INFO]       Tier 3 (Watchlist):   0
+2026-06-15 14:32:16,472 [INFO]       Rejected/below gate:  369
+2026-06-15 14:32:16,474 [INFO] 
+[6/6] Sending email report...
+2026-06-15 14:32:19,578 [INFO] Email sent to 1 recipient(s)
+2026-06-15 14:32:19,579 [INFO]       Email sent successfully.
+2026-06-15 14:32:19,582 [INFO] 
+============================================================
+2026-06-15 14:32:19,586 [INFO]   Scan complete.
+2026-06-15 14:32:19,587 [INFO] ============================================================
+
+2026-06-15 14:40:56,492 [INFO] ============================================================
+2026-06-15 14:40:56,493 [INFO]   NSE MOMENTUM SCANNER v4.3
+2026-06-15 14:40:56,494 [INFO]   15 Jun 2026  14:40
+2026-06-15 14:40:56,494 [INFO] ============================================================
+2026-06-15 14:40:56,504 [INFO] 
+[0/6] Universe: 361 stocks
+2026-06-15 14:40:56,504 [INFO]       Nifty 500 Large-Cap      129 stocks | gate≥72 | rrr≥1.5x | adt≥Rs.50.0Cr
+2026-06-15 14:40:56,505 [INFO]       Midcap 150               144 stocks | gate≥74 | rrr≥2.0x | adt≥Rs.10.0Cr
+2026-06-15 14:40:56,505 [INFO]       Smallcap 250              88 stocks | gate≥76 | rrr≥2.5x | adt≥Rs.3.0Cr
+2026-06-15 14:40:56,506 [INFO] 
+[1/6] Fetching market context (Nifty / BankNifty / VIX)...
+2026-06-15 14:40:58,212 [INFO]       VIX: 14.3
+2026-06-15 14:40:58,213 [INFO] 
+[2/6] Fetching NSE Bhavcopy (delivery %)...
+2026-06-15 14:40:58,689 [INFO]       3245 symbols loaded
+2026-06-15 14:40:58,689 [INFO] 
+[3/6] Fetching / loading OHLCV (2yr history)...
+2026-06-15 14:41:00,273 [INFO]   Fetching 5 tickers from Yahoo Finance...
+2026-06-15 14:41:01,688 [ERROR] HTTP Error 404: {"quoteSummary":{"result":null,"error":{"code":"Not Found","description":"Quote not found for symbol: LTIMINDTREE.NS"}}}
+2026-06-15 14:41:02,542 [ERROR] $LTIMINDTREE.NS: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 14:41:02,548 [ERROR] 
+1 Failed download:
+2026-06-15 14:41:02,549 [ERROR] ['LTIMINDTREE.NS']: possibly delisted; no price data found  (period=2y) (Yahoo error = "No data found, symbol may be delisted")
+2026-06-15 14:41:02,827 [INFO]       360/361 tickers loaded
+2026-06-15 14:41:02,827 [INFO] 
+[4/6] Running agent pipeline (single pass)...
+2026-06-15 14:41:03,026 [INFO] Regime: A (Strong Bull) | Breadth: 7/10 | Penalty: 0
+2026-06-15 14:41:03,026 [INFO]       Regime: A (Strong Bull) | Breadth: 7/10
+2026-06-15 14:42:11,302 [INFO]   Rejection breakdown:
+2026-06-15 14:57:23,698 [INFO]      89 × No pattern detected
+2026-06-15 14:57:23,703 [INFO]       4 × RS Percentile 49 < 50
+2026-06-15 14:57:23,703 [INFO]       4 × RS Percentile 31 < 50
+2026-06-15 14:57:23,703 [INFO]       4 × RS Percentile 39 < 50
+2026-06-15 14:57:23,703 [INFO]       3 × RS Percentile 45 < 50
+2026-06-15 14:57:23,704 [INFO]       3 × RS Percentile 42 < 50
+2026-06-15 14:57:23,704 [INFO]       3 × RS Percentile 44 < 50
+2026-06-15 14:57:23,704 [INFO]       3 × RS Percentile 36 < 50
+2026-06-15 14:57:23,704 [INFO] 
+[5/6] Scoring complete:
+2026-06-15 14:57:23,705 [INFO]       Tier 1 (Top Picks):   0
+2026-06-15 14:57:23,705 [INFO]       Tier 2 (Aggressive):  0
+2026-06-15 14:57:23,705 [INFO]       Tier 3 (Watchlist):   0
+2026-06-15 14:57:23,705 [INFO]       Rejected/below gate:  361
+2026-06-15 14:57:23,709 [INFO] 
+[6/6] Sending email report...
+2026-06-15 14:57:26,583 [INFO] Email sent to 1 recipient(s)
+2026-06-15 14:57:26,583 [INFO]       Email sent successfully.
+2026-06-15 14:57:26,589 [INFO] 
+============================================================
+2026-06-15 14:57:26,592 [INFO]   Scan complete.
+2026-06-15 14:57:26,594 [INFO] ============================================================
+
+2026-06-15 15:48:18,776 [INFO] ============================================================
+2026-06-15 15:48:18,777 [INFO]   NSE MOMENTUM SCANNER v4.3
+2026-06-15 15:48:18,777 [INFO]   15 Jun 2026  15:48
+2026-06-15 15:48:18,777 [INFO] ============================================================
+2026-06-15 15:48:18,782 [INFO] 
+[0/6] Universe: 401 stocks
+2026-06-15 15:48:18,782 [INFO]       Nifty 500 Large-Cap      112 stocks | gate≥72 | rrr≥1.5x | adt≥Rs.50.0Cr
+2026-06-15 15:48:18,783 [INFO]       Midcap 150               289 stocks | gate≥74 | rrr≥2.0x | adt≥Rs.10.0Cr
+2026-06-15 15:48:18,783 [INFO]       Smallcap 250               0 stocks | gate≥76 | rrr≥2.5x | adt≥Rs.3.0Cr
+2026-06-15 15:48:18,783 [INFO] 
+[1/6] Fetching market context (Nifty / BankNifty / VIX)...
+2026-06-15 15:48:20,251 [INFO]       VIX: 14.4
+2026-06-15 15:48:20,251 [INFO] 
+[2/6] Fetching NSE Bhavcopy (delivery %)...
+2026-06-15 15:48:21,131 [INFO]       3245 symbols loaded
+2026-06-15 15:48:21,131 [INFO] 
+[3/6] Fetching / loading OHLCV (2yr history)...
+2026-06-15 15:48:22,868 [INFO]   Fetching 1 tickers from Yahoo Finance...
+2026-06-15 15:48:23,045 [INFO]       400/401 tickers loaded
+2026-06-15 15:48:23,045 [INFO] 
+[4/6] Running agent pipeline (single pass)...
+2026-06-15 15:48:23,253 [INFO] Regime: A (Strong Bull) | Breadth: 7/10 | Penalty: 0
+2026-06-15 15:48:23,253 [INFO]       Regime: A (Strong Bull) | Breadth: 7/10
+2026-06-15 15:50:19,157 [INFO]   Rejection breakdown:
+2026-06-15 15:50:19,158 [INFO]      87 × No pattern detected
+2026-06-15 15:50:19,159 [INFO]      21 × ADT below minimum
+2026-06-15 15:50:19,160 [INFO]       5 × RS Percentile 40 < 50
+2026-06-15 15:50:19,160 [INFO]       5 × RS Percentile 32 < 50
+2026-06-15 15:50:19,161 [INFO]       4 × RS Percentile 46 < 50
+2026-06-15 15:50:19,162 [INFO]       4 × RS Percentile 28 < 50
+2026-06-15 15:50:19,162 [INFO]       4 × RS Percentile 44 < 50
+2026-06-15 15:50:19,163 [INFO]       4 × RS Percentile 42 < 50
+2026-06-15 15:50:19,163 [INFO]       4 × RS Percentile 34 < 50
+2026-06-15 15:50:19,164 [INFO]       4 × RS Percentile 22 < 50
+2026-06-15 15:50:19,164 [INFO] 
+[5/6] Scoring complete:
+2026-06-15 15:50:19,165 [INFO]       Tier 1 (Top Picks):   0
+2026-06-15 15:50:19,165 [INFO]       Tier 2 (Aggressive):  0
+2026-06-15 15:50:19,166 [INFO]       Tier 3 (Watchlist):   0
+2026-06-15 15:50:19,166 [INFO]       Rejected/below gate:  401
+2026-06-15 15:50:19,176 [INFO] 
+[6/6] Sending email report...
+2026-06-15 15:50:22,233 [INFO] Email sent to 1 recipient(s)
+2026-06-15 15:50:22,233 [INFO]       Email sent successfully.
+2026-06-15 15:50:22,236 [INFO] 
+============================================================
+2026-06-15 15:50:22,239 [INFO]   Scan complete.
+2026-06-15 15:50:22,239 [INFO] ============================================================
+
+2026-06-15 18:41:20,288 [INFO] ============================================================
+2026-06-15 18:41:20,288 [INFO]   NSE MOMENTUM SCANNER v4.3
+2026-06-15 18:41:20,289 [INFO]   15 Jun 2026  18:41
+2026-06-15 18:41:20,289 [INFO] ============================================================
+2026-06-15 18:41:20,295 [INFO] 
+[0/6] Universe: 401 stocks
+2026-06-15 18:41:20,295 [INFO]       Nifty 500 Large-Cap      112 stocks | gate≥72 | rrr≥1.5x | adt≥Rs.50.0Cr
+2026-06-15 18:41:20,295 [INFO]       Midcap 150               289 stocks | gate≥74 | rrr≥2.0x | adt≥Rs.10.0Cr
+2026-06-15 18:41:20,296 [INFO]       Smallcap 250               0 stocks | gate≥76 | rrr≥2.5x | adt≥Rs.3.0Cr
+2026-06-15 18:41:20,298 [INFO] 
+[1/6] Fetching market context (Nifty / BankNifty / VIX)...
+2026-06-15 18:41:21,778 [INFO]       VIX: 14.4
+2026-06-15 18:41:21,779 [INFO] 
+[2/6] Fetching NSE Bhavcopy (delivery %)...
+2026-06-15 18:41:22,416 [INFO]       3287 symbols loaded
+2026-06-15 18:41:22,417 [INFO] 
+[3/6] Fetching / loading OHLCV (2yr history)...
+2026-06-15 18:41:25,662 [INFO]   Fetching 1 tickers from Yahoo Finance...
+2026-06-15 18:41:25,821 [INFO]       400/401 tickers loaded
+2026-06-15 18:41:25,821 [INFO] 
+[4/6] Running agent pipeline (single pass)...
+2026-06-15 18:41:26,036 [INFO] Regime: A (Strong Bull) | Breadth: 7/10 | Penalty: 0
+2026-06-15 18:41:26,036 [INFO]       Regime: A (Strong Bull) | Breadth: 7/10
+2026-06-15 18:43:34,582 [INFO]   Rejection breakdown:
+2026-06-15 18:43:34,583 [INFO]      57 × No pattern detected
+2026-06-15 18:43:34,584 [INFO]      21 × ADT below minimum
+2026-06-15 18:43:34,584 [INFO]       5 × RS Percentile 46 < 50
+2026-06-15 18:43:34,585 [INFO]       5 × RS Percentile 40 < 50
+2026-06-15 18:43:34,585 [INFO]       5 × RS Percentile 32 < 50
+2026-06-15 18:43:34,585 [INFO]       4 × RS Percentile 28 < 50
+2026-06-15 18:43:34,586 [INFO]       4 × RS Percentile 44 < 50
+2026-06-15 18:43:34,586 [INFO]       4 × RS Percentile 42 < 50
+2026-06-15 18:43:34,586 [INFO]       4 × RS Percentile 34 < 50
+2026-06-15 18:43:34,587 [INFO]       4 × RS Percentile 22 < 50
+2026-06-15 18:43:34,587 [INFO] 
+[5/6] Scoring complete:
+2026-06-15 18:43:34,588 [INFO]       Tier 1 (Top Picks):   0
+2026-06-15 18:43:34,588 [INFO]       Tier 2 (Aggressive):  0
+2026-06-15 18:43:34,589 [INFO]       Tier 3 (Watchlist):   0
+2026-06-15 18:43:34,589 [INFO]       Rejected/below gate:  401
+2026-06-15 18:43:34,602 [INFO] 
+[6/6] Sending email report...
+2026-06-15 18:43:37,632 [INFO] Email sent to 1 recipient(s)
+2026-06-15 18:43:37,632 [INFO]       Email sent successfully.
+2026-06-15 18:43:37,633 [INFO] 
+============================================================
+2026-06-15 18:43:37,633 [INFO]   Scan complete.
+2026-06-15 18:43:37,637 [INFO] ============================================================
+
+2026-06-15 18:58:55,750 [INFO] ============================================================
+2026-06-15 18:58:55,750 [INFO]   NSE MOMENTUM SCANNER v4.3
+2026-06-15 18:58:55,751 [INFO]   15 Jun 2026  18:58
+2026-06-15 18:58:55,751 [INFO] ============================================================
+2026-06-15 18:58:55,759 [INFO] 
+[0/6] Universe: 401 stocks
+2026-06-15 18:58:55,759 [INFO]       Nifty 500 Large-Cap      112 stocks | gate≥62 | rrr≥1.5x | adt≥Rs.50.0Cr
+2026-06-15 18:58:55,760 [INFO]       Midcap 150               289 stocks | gate≥64 | rrr≥2.0x | adt≥Rs.10.0Cr
+2026-06-15 18:58:55,760 [INFO]       Smallcap 250               0 stocks | gate≥66 | rrr≥2.5x | adt≥Rs.3.0Cr
+2026-06-15 18:58:55,761 [INFO] 
+[1/6] Fetching market context (Nifty / BankNifty / VIX)...
+2026-06-15 18:58:57,312 [INFO]       VIX: 14.4
+2026-06-15 18:58:57,313 [INFO] 
+[2/6] Fetching NSE Bhavcopy (delivery %)...
+2026-06-15 18:58:57,336 [INFO]       3287 symbols loaded
+2026-06-15 18:58:57,337 [INFO] 
+[3/6] Fetching / loading OHLCV (2yr history)...
+2026-06-15 18:58:59,018 [INFO]   Fetching 1 tickers from Yahoo Finance...
+2026-06-15 18:58:59,191 [INFO]       400/401 tickers loaded
+2026-06-15 18:58:59,191 [INFO] 
+[4/6] Running agent pipeline (single pass)...
+2026-06-15 18:58:59,425 [INFO] Regime: A (Strong Bull) | Breadth: 7/10 | Penalty: 0
+2026-06-15 18:58:59,426 [INFO]       Regime: A (Strong Bull) | Breadth: 7/10
+2026-06-15 19:00:59,678 [INFO]   Rejection breakdown:
+2026-06-15 19:00:59,679 [INFO]      57 × No pattern detected
+2026-06-15 19:00:59,680 [INFO]      21 × ADT below minimum
+2026-06-15 19:00:59,681 [INFO]       5 × RS Percentile 46 < 50
+2026-06-15 19:00:59,682 [INFO]       5 × RS Percentile 40 < 50
+2026-06-15 19:00:59,683 [INFO]       5 × RS Percentile 32 < 50
+2026-06-15 19:00:59,684 [INFO]       4 × RS Percentile 28 < 50
+2026-06-15 19:00:59,685 [INFO]       4 × RS Percentile 44 < 50
+2026-06-15 19:00:59,686 [INFO]       4 × RS Percentile 42 < 50
+2026-06-15 19:00:59,687 [INFO]       4 × RS Percentile 34 < 50
+2026-06-15 19:00:59,688 [INFO]       4 × RS Percentile 22 < 50
+2026-06-15 19:00:59,690 [INFO] 
+[5/6] Scoring complete:
+2026-06-15 19:00:59,691 [INFO]       Tier 1 (Top Picks):   0
+2026-06-15 19:00:59,692 [INFO]       Tier 2 (Aggressive):  0
+2026-06-15 19:00:59,692 [INFO]       Tier 3 (Watchlist):   0
+2026-06-15 19:00:59,693 [INFO]       Rejected/below gate:  401
+2026-06-15 19:00:59,704 [INFO] 
+[6/6] Sending email report...
+2026-06-15 19:01:03,116 [INFO] Email sent to 1 recipient(s)
+2026-06-15 19:01:03,117 [INFO]       Email sent successfully.
+2026-06-15 19:01:03,120 [INFO] 
+============================================================
+2026-06-15 19:01:03,124 [INFO]   Scan complete.
+2026-06-15 19:01:03,125 [INFO] ============================================================
+
+2026-06-15 19:26:31,146 [INFO] ============================================================
+2026-06-15 19:26:31,146 [INFO]   NSE MOMENTUM SCANNER v4.3
+2026-06-15 19:26:31,146 [INFO]   15 Jun 2026  19:26
+2026-06-15 19:26:31,146 [INFO] ============================================================
+2026-06-15 19:26:31,156 [INFO] 
+[0/6] Universe: 401 stocks
+2026-06-15 19:26:31,157 [INFO]       Nifty 500 Large-Cap      112 stocks | gate≥62 | rrr≥1.5x | adt≥Rs.50.0Cr
+2026-06-15 19:26:31,228 [INFO]       Midcap 150               289 stocks | gate≥64 | rrr≥2.0x | adt≥Rs.10.0Cr
+2026-06-15 19:26:31,230 [INFO]       Smallcap 250               0 stocks | gate≥66 | rrr≥2.5x | adt≥Rs.3.0Cr
+2026-06-15 19:26:31,232 [INFO] 
+[1/6] Fetching market context (Nifty / BankNifty / VIX)...
+2026-06-15 19:26:33,128 [INFO]       VIX: 14.4
+2026-06-15 19:26:33,129 [INFO] 
+[2/6] Fetching NSE Bhavcopy (delivery %)...
+2026-06-15 19:26:33,173 [INFO]       3287 symbols loaded
+2026-06-15 19:26:33,174 [INFO] 
+[3/6] Fetching / loading OHLCV (2yr history)...
+2026-06-15 19:26:35,011 [INFO]   Fetching 1 tickers from Yahoo Finance...
+2026-06-15 19:26:35,197 [INFO]       400/401 tickers loaded
+2026-06-15 19:26:35,198 [INFO] 
+[4/6] Running agent pipeline (single pass)...
+2026-06-15 19:26:35,459 [INFO] Regime: A (Strong Bull) | Breadth: 7/10 | Penalty: 0
+2026-06-15 19:26:35,459 [INFO]       Regime: A (Strong Bull) | Breadth: 7/10
+2026-06-15 19:28:43,614 [INFO]   Rejection breakdown:
+2026-06-15 19:28:43,615 [INFO]      57 × No pattern detected
+2026-06-15 19:28:43,615 [INFO]      21 × ADT below minimum
+2026-06-15 19:28:43,615 [INFO]       5 × RS Percentile 46 < 50
+2026-06-15 19:28:43,616 [INFO]       5 × RS Percentile 40 < 50
+2026-06-15 19:28:43,616 [INFO]       5 × RS Percentile 32 < 50
+2026-06-15 19:28:43,616 [INFO]       4 × RS Percentile 28 < 50
+2026-06-15 19:28:43,616 [INFO]       4 × RS Percentile 44 < 50
+2026-06-15 19:28:43,617 [INFO]       4 × RS Percentile 42 < 50
+2026-06-15 19:28:43,617 [INFO]       4 × RS Percentile 34 < 50
+2026-06-15 19:28:43,617 [INFO]       4 × RS Percentile 22 < 50
+2026-06-15 19:28:43,618 [INFO] 
+[5/6] Scoring complete:
+2026-06-15 19:28:43,618 [INFO]       Tier 1 (Top Picks):   0
+2026-06-15 19:28:43,618 [INFO]       Tier 2 (Aggressive):  0
+2026-06-15 19:28:43,619 [INFO]       Tier 3 (Watchlist):   0
+2026-06-15 19:28:43,619 [INFO]       Rejected/below gate:  401
+2026-06-15 19:31:27,066 [INFO] ============================================================
+2026-06-15 19:31:27,067 [INFO]   NSE MOMENTUM SCANNER v4.3
+2026-06-15 19:31:27,068 [INFO]   15 Jun 2026  19:31
+2026-06-15 19:31:27,068 [INFO] ============================================================
+2026-06-15 19:31:27,081 [INFO] 
+[0/6] Universe: 401 stocks
+2026-06-15 19:31:27,081 [INFO]       Nifty 500 Large-Cap      112 stocks | gate>=62 | rrr>=1.5x | adt>=Rs.50.0Cr
+2026-06-15 19:31:27,082 [INFO]       Midcap 150               289 stocks | gate>=64 | rrr>=2.0x | adt>=Rs.10.0Cr
+2026-06-15 19:31:27,082 [INFO]       Smallcap 250               0 stocks | gate>=66 | rrr>=2.5x | adt>=Rs.3.0Cr
+2026-06-15 19:31:27,083 [INFO] 
+[1/6] Fetching market context (Nifty / BankNifty / VIX)...
+2026-06-15 19:31:29,183 [INFO]       VIX: 14.4
+2026-06-15 19:31:29,183 [INFO] 
+[2/6] Fetching NSE Bhavcopy (delivery %)...
+2026-06-15 19:31:29,238 [INFO]       3287 symbols loaded
+2026-06-15 19:31:29,238 [INFO] 
+[3/6] Fetching / loading OHLCV (2yr history)...
+2026-06-15 19:31:31,054 [INFO]   Fetching 1 tickers from Yahoo Finance...
+2026-06-15 19:31:31,306 [INFO]       400/401 tickers loaded
+2026-06-15 19:31:31,307 [INFO] 
+[4/6] Running agent pipeline (single pass)...
+2026-06-15 19:31:31,536 [INFO] Regime: A (Strong Bull) | Breadth: 7/10 | Penalty: 0
+2026-06-15 19:31:31,536 [INFO]       Regime: A (Strong Bull) | Breadth: 7/10
+2026-06-15 19:35:25,372 [INFO]   Rejection breakdown:
+2026-06-15 19:35:25,373 [INFO]      57 x No pattern detected
+2026-06-15 19:35:25,374 [INFO]      21 x ADT below minimum
+2026-06-15 19:35:25,374 [INFO]       7 x Score below T3 threshold (42)
+2026-06-15 19:35:25,375 [INFO]       5 x RS Percentile 32 < 40
+2026-06-15 19:35:25,375 [INFO]       4 x RS Percentile 28 < 40
+2026-06-15 19:35:25,376 [INFO]       4 x RS Percentile 34 < 40
+2026-06-15 19:35:25,376 [INFO]       4 x RS Percentile 22 < 40
+2026-06-15 19:35:25,377 [INFO]       4 x RS Percentile 10 < 40
+2026-06-15 19:35:25,377 [INFO]       4 x RS Percentile 36 < 40
+2026-06-15 19:35:25,378 [INFO]       4 x RS Percentile 26 < 40
+2026-06-15 19:35:25,378 [INFO] 
+[5/6] Scoring complete:
+2026-06-15 19:35:25,379 [INFO]       Tier 1 (Top Picks):   0
+2026-06-15 19:35:25,380 [INFO]       Tier 2 (Aggressive):  0
+2026-06-15 19:35:25,381 [INFO]       Tier 3 (Watchlist):   0
+2026-06-15 19:35:25,383 [INFO]       Rejected/below gate:  401
+2026-06-15 19:35:25,406 [INFO] 
+[6/6] Sending email report...
+2026-06-15 19:35:28,609 [INFO] Email sent to 1 recipient(s)
+2026-06-15 19:35:28,610 [INFO]       Email sent successfully.
+2026-06-15 19:35:28,612 [INFO] 
+============================================================
+2026-06-15 19:35:28,615 [INFO]   Scan complete.
+2026-06-15 19:35:28,616 [INFO] ============================================================
+
+2026-06-15 19:38:24,231 [INFO] ============================================================
+2026-06-15 19:38:24,231 [INFO]   NSE MOMENTUM SCANNER v4.3
+2026-06-15 19:38:24,231 [INFO]   15 Jun 2026  19:38
+2026-06-15 19:38:24,231 [INFO] ============================================================
+2026-06-15 19:38:24,235 [INFO] 
+[0/6] Universe: 401 stocks
+2026-06-15 19:38:24,235 [INFO]       Nifty 500 Large-Cap      112 stocks | gate>=62 | rrr>=1.5x | adt>=Rs.50.0Cr
+2026-06-15 19:38:24,235 [INFO]       Midcap 150               289 stocks | gate>=64 | rrr>=2.0x | adt>=Rs.10.0Cr
+2026-06-15 19:38:24,236 [INFO]       Smallcap 250               0 stocks | gate>=66 | rrr>=2.5x | adt>=Rs.3.0Cr
+2026-06-15 19:38:24,236 [INFO] 
+[1/6] Fetching market context (Nifty / BankNifty / VIX)...
+2026-06-15 19:38:25,853 [INFO]       VIX: 14.4
+2026-06-15 19:38:25,853 [INFO] 
+[2/6] Fetching NSE Bhavcopy (delivery %)...
+2026-06-15 19:38:25,883 [INFO]       3287 symbols loaded
+2026-06-15 19:38:25,883 [INFO] 
+[3/6] Fetching / loading OHLCV (2yr history)...
+2026-06-15 19:38:28,097 [INFO]   Fetching 1 tickers from Yahoo Finance...
+2026-06-15 19:38:28,253 [INFO]       400/401 tickers loaded
+2026-06-15 19:38:28,253 [INFO] 
+[4/6] Running agent pipeline (single pass)...
+2026-06-15 19:38:28,540 [INFO] Regime: A (Strong Bull) | Breadth: 7/10 | Penalty: 0
+2026-06-15 19:38:28,540 [INFO]       Regime: A (Strong Bull) | Breadth: 7/10
+2026-06-15 19:40:53,877 [INFO]   Rejection breakdown:
+2026-06-15 19:40:53,877 [INFO]      57 x No pattern detected
+2026-06-15 19:40:53,878 [INFO]      21 x ADT below minimum
+2026-06-15 19:40:53,878 [INFO]       7 x Score below T3 threshold (42)
+2026-06-15 19:40:53,878 [INFO]       5 x RS Percentile 32 < 40
+2026-06-15 19:40:53,879 [INFO]       4 x RS Percentile 28 < 40
+2026-06-15 19:40:53,879 [INFO]       4 x RS Percentile 34 < 40
+2026-06-15 19:40:53,879 [INFO]       4 x RS Percentile 22 < 40
+2026-06-15 19:40:53,879 [INFO]       4 x RS Percentile 10 < 40
+2026-06-15 19:40:53,880 [INFO]       4 x RS Percentile 36 < 40
+2026-06-15 19:40:53,880 [INFO]       4 x RS Percentile 26 < 40
+2026-06-15 19:40:53,881 [INFO] 
+[5/6] Scoring complete:
+2026-06-15 19:40:53,881 [INFO]       Tier 1 (Top Picks):   0
+2026-06-15 19:40:53,881 [INFO]       Tier 2 (Aggressive):  0
+2026-06-15 19:40:53,882 [INFO]       Tier 3 (Watchlist):   0
+2026-06-15 19:40:53,882 [INFO]       Rejected/below gate:  401
+2026-06-15 19:40:53,882 [INFO] 
+[6/6] Sending email report...
+2026-06-15 19:40:56,714 [INFO] Email sent to 1 recipient(s)
+2026-06-15 19:40:56,714 [INFO]       Email sent successfully.
+2026-06-15 19:40:56,714 [INFO] 
+============================================================
+2026-06-15 19:40:56,714 [INFO]   Scan complete.
+2026-06-15 19:40:56,715 [INFO] ============================================================
+
+2026-06-15 19:45:09,765 [INFO] ============================================================
+2026-06-15 19:45:09,765 [INFO]   NSE MOMENTUM SCANNER v4.3
+2026-06-15 19:45:09,765 [INFO]   15 Jun 2026  19:45
+2026-06-15 19:45:09,765 [INFO] ============================================================
+2026-06-15 19:45:09,770 [INFO] 
+[0/6] Universe: 401 stocks
+2026-06-15 19:45:09,770 [INFO]       Nifty 500 Large-Cap      112 stocks | gate>=62 | rrr>=1.5x | adt>=Rs.50.0Cr
+2026-06-15 19:45:09,770 [INFO]       Midcap 150               289 stocks | gate>=64 | rrr>=2.0x | adt>=Rs.10.0Cr
+2026-06-15 19:45:09,770 [INFO]       Smallcap 250               0 stocks | gate>=66 | rrr>=2.5x | adt>=Rs.3.0Cr
+2026-06-15 19:45:09,770 [INFO] 
+[1/6] Fetching market context (Nifty / BankNifty / VIX)...
+2026-06-15 19:45:11,405 [INFO]       VIX: 14.4
+2026-06-15 19:45:11,405 [INFO] 
+[2/6] Fetching NSE Bhavcopy (delivery %)...
+2026-06-15 19:45:11,421 [INFO]       3287 symbols loaded
+2026-06-15 19:45:11,421 [INFO] 
+[3/6] Fetching / loading OHLCV (2yr history)...
+2026-06-15 19:45:13,256 [INFO]   Fetching 1 tickers from Yahoo Finance...
+2026-06-15 19:45:13,617 [INFO]       400/401 tickers loaded
+2026-06-15 19:45:13,617 [INFO] 
+[4/6] Running agent pipeline (single pass)...
+2026-06-15 19:45:13,902 [INFO] Regime: A (Strong Bull) | Breadth: 7/10 | Penalty: 0
+2026-06-15 19:45:13,902 [INFO]       Regime: A (Strong Bull) | Breadth: 7/10
+2026-06-15 19:45:14,674 [WARNING] ABCAPITAL.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:45:15,234 [WARNING] ADANIENT.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:45:15,947 [WARNING] ADANIGREEN.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:45:16,730 [WARNING] ADANIPORTS.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:45:17,373 [WARNING] ADANIPOWER.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:45:18,112 [WARNING] AEGISLOG.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:45:18,823 [WARNING] APOLLOHOSP.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:45:19,606 [WARNING] ASIANPAINT.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:45:20,310 [WARNING] ATGL.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:45:20,938 [WARNING] AUROPHARMA.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:45:21,618 [WARNING] AXISBANK.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:45:22,365 [WARNING] BAJAJ-AUTO.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:45:23,005 [WARNING] BAJFINANCE.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:45:23,663 [WARNING] BANDHANBNK.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:45:24,490 [WARNING] BANKBARODA.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:45:25,201 [WARNING] BIOCON.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:45:25,986 [WARNING] BPCL.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:45:26,680 [WARNING] BSE.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:45:27,358 [WARNING] CANBK.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:45:27,994 [WARNING] CHOLAFIN.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:45:28,777 [WARNING] CIPLA.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:45:30,338 [WARNING] COLPAL.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:45:30,970 [WARNING] DELHIVERY.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:45:31,579 [WARNING] DIVISLAB.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:45:32,223 [WARNING] DIXON.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:45:32,875 [WARNING] DLF.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:45:33,624 [WARNING] EICHERMOT.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:45:34,324 [WARNING] GAIL.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:45:35,035 [WARNING] GODREJPROP.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:45:35,793 [WARNING] GRASIM.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:45:37,198 [WARNING] HDFCAMC.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:45:37,924 [WARNING] HINDALCO.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:45:38,619 [WARNING] ICICIBANK.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:45:39,340 [WARNING] IDFCFIRSTB.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:45:40,234 [WARNING] INDIGO.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:45:40,865 [WARNING] INDUSINDBK.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:45:41,601 [WARNING] JSWSTEEL.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:45:42,309 [WARNING] KOTAKBANK.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:45:43,004 [WARNING] LT.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:45:43,765 [WARNING] LUPIN.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:45:44,482 [WARNING] MANKIND.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:45:45,063 [WARNING] MARICO.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:45:45,895 [WARNING] MARUTI.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:45:46,657 [WARNING] NESTLEIND.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:45:47,560 [WARNING] NMDC.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:45:48,244 [WARNING] OFSS.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:45:48,991 [WARNING] PFC.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:45:49,694 [WARNING] PIDILITIND.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:45:50,523 [WARNING] PNB.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:45:51,174 [WARNING] POLYCAB.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:45:51,871 [WARNING] RECLTD.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:45:52,643 [WARNING] SBIN.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:45:53,376 [WARNING] SHREECEM.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:45:54,170 [WARNING] SHRIRAMFIN.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:45:54,981 [WARNING] SIEMENS.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:45:55,827 [WARNING] TMPV.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:45:56,561 [WARNING] TATASTEEL.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:45:57,412 [WARNING] TITAN.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:45:58,067 [WARNING] TORNTPHARM.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:45:58,837 [WARNING] TRENT.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:45:59,708 [WARNING] ULTRACEMCO.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:46:00,482 [WARNING] VBL.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:46:01,232 [WARNING] IDEA.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:46:01,982 [WARNING] 360ONE.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:46:02,765 [WARNING] AARTIIND.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:46:03,547 [WARNING] AAVAS.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:46:04,237 [WARNING] ABB.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:46:04,972 [WARNING] ACE.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:46:05,763 [WARNING] ADANIENSOL.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:46:06,537 [WARNING] AETHER.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:46:07,244 [WARNING] AFFLE.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:46:07,986 [WARNING] AIAENG.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:46:08,801 [WARNING] ALKYLAMINE.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:46:09,684 [WARNING] AMBER.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:46:10,626 [WARNING] ANANDRATHI.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:46:11,561 [WARNING] ANGELONE.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:46:12,360 [WARNING] APARINDS.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:46:13,136 [WARNING] APTUS.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:46:14,549 [WARNING] ASAHIINDIA.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:46:15,307 [WARNING] ASTERDM.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:46:16,080 [WARNING] ASTRAL.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:46:16,750 [WARNING] ATUL.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:46:17,448 [WARNING] AUBANK.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:46:18,203 [WARNING] BALAMINES.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:46:18,914 [WARNING] BALRAMCHIN.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:46:19,742 [WARNING] BEML.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:46:20,513 [WARNING] BERGEPAINT.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:46:21,265 [WARNING] BHARATFORG.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:46:22,023 [WARNING] BHEL.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:46:22,679 [WARNING] BIKAJI.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:46:23,380 [WARNING] BORORENEW.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:46:24,136 [WARNING] BOSCHLTD.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:46:25,517 [WARNING] CAMS.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:46:26,319 [WARNING] CANFINHOME.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:46:26,936 [WARNING] CAPLIPOINT.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:46:27,714 [WARNING] CARBORUNIV.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:46:28,531 [WARNING] CASTROLIND.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:46:29,288 [WARNING] CCL.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:46:30,967 [WARNING] CGCL.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:46:31,748 [WARNING] CGPOWER.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:46:32,477 [WARNING] CHAMBLFERT.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:46:33,102 [WARNING] CHENNPETRO.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:46:33,900 [WARNING] CIEINDIA.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:46:34,627 [WARNING] CLEAN.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:46:35,351 [WARNING] CONCORDBIO.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:46:36,180 [WARNING] CRAFTSMAN.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:46:36,852 [WARNING] CREDITACC.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:46:37,532 [WARNING] CUB.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:46:38,279 [WARNING] CUMMINSIND.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:46:39,033 [WARNING] DATAPATTNS.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:46:39,830 [WARNING] DEEPAKFERT.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:46:40,582 [WARNING] DEEPAKNTR.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:46:41,442 [WARNING] EASEMYTRIP.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:46:42,314 [WARNING] ELECON.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:46:42,960 [WARNING] ELGIEQUIP.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:46:43,673 [WARNING] ENDURANCE.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:46:44,315 [WARNING] ENGINERSIN.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:46:44,992 [WARNING] EPL.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:46:45,597 [WARNING] EQUITASBNK.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:46:46,390 [WARNING] ERIS.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:46:47,035 [WARNING] EXIDEIND.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:46:47,741 [WARNING] FACT.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:46:48,528 [WARNING] FEDERALBNK.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:46:49,162 [WARNING] FINCABLES.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:46:50,457 [WARNING] FIVESTAR.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:46:51,230 [WARNING] FLUOROCHEM.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:46:52,024 [WARNING] FORTIS.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:46:52,800 [WARNING] GAEL.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:46:53,675 [WARNING] GICRE.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:46:54,525 [WARNING] GLAND.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:46:55,293 [WARNING] GNFC.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:46:56,118 [WARNING] GPIL.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:46:56,751 [WARNING] GRANULES.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:46:57,413 [WARNING] GRINDWELL.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:46:57,972 [WARNING] GROWW.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:46:58,594 [WARNING] GRSE.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:46:59,183 [WARNING] GUJGASLTD.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:46:59,900 [WARNING] HAPPYFORGE.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:47:00,734 [WARNING] HBLENGINE.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:47:01,696 [WARNING] HFCL.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:47:02,466 [WARNING] HINDPETRO.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:47:03,378 [WARNING] HOMEFIRST.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:47:04,315 [WARNING] HONASA.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:47:05,219 [WARNING] HONAUT.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:47:06,079 [WARNING] HSCL.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:47:06,797 [WARNING] HUDCO.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:47:07,608 [WARNING] IFCI.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:47:08,381 [WARNING] IGL.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:47:08,983 [WARNING] IIFL.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:47:09,755 [WARNING] INDHOTEL.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:47:10,678 [WARNING] INDIGOPNTS.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:47:11,704 [WARNING] INTELLECT.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:47:12,488 [WARNING] IPCALAB.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:47:13,288 [WARNING] IRB.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:47:14,294 [WARNING] ITI.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:47:15,093 [WARNING] J&KBANK.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:47:15,859 [WARNING] JBCHEPHARM.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:47:16,687 [WARNING] JBMA.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:47:17,662 [WARNING] JINDALSAW.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:47:18,533 [WARNING] JSWENERGY.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:47:19,333 [WARNING] JSWINFRA.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:47:20,189 [WARNING] JUBLPHARMA.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:47:21,108 [WARNING] KAJARIACER.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:47:21,971 [WARNING] KARURVYSYA.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:47:22,849 [WARNING] KEI.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:47:23,679 [WARNING] KIMS.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:47:24,614 [WARNING] KPIL.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:47:25,481 [WARNING] KPRMILL.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:47:26,244 [WARNING] KRBL.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:47:26,879 [WARNING] KSB.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:47:27,612 [WARNING] LALPATHLAB.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:47:28,240 [WARNING] LAURUSLABS.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:47:28,912 [WARNING] LICHSGFIN.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:47:29,589 [WARNING] LLOYDSME.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:47:30,414 [WARNING] LODHA.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:47:31,413 [WARNING] LTF.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:47:32,801 [WARNING] MAHABANK.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:47:33,695 [WARNING] MANAPPURAM.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:47:34,528 [WARNING] MEDANTA.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:47:35,393 [WARNING] MEDPLUS.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:47:36,191 [WARNING] MGL.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:47:37,007 [WARNING] MINDACORP.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:47:37,707 [WARNING] MMTC.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:47:38,524 [WARNING] MOTILALOFS.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:47:39,228 [WARNING] MPHASIS.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:47:40,021 [WARNING] MRPL.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:47:40,863 [WARNING] MTARTECH.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:47:41,847 [WARNING] NAM-INDIA.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:47:42,689 [WARNING] NAVINFLUOR.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:47:43,341 [WARNING] NBCC.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:47:44,353 [WARNING] NH.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:47:45,269 [WARNING] NLCINDIA.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:47:46,126 [WARNING] NSLNISP.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:47:46,890 [WARNING] NYKAA.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:47:47,678 [WARNING] PETRONET.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:47:48,431 [WARNING] PNBHOUSING.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:47:49,138 [WARNING] POWERINDIA.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:47:49,912 [WARNING] PRESTIGE.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:47:50,746 [WARNING] RATEGAIN.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:47:51,381 [WARNING] RCF.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:47:52,057 [WARNING] RKFORGE.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:47:53,457 [WARNING] SONACOMS.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:47:54,180 [WARNING] STAR.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:47:54,899 [WARNING] SUVEN.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:47:55,536 [WARNING] SUZLON.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:47:56,135 [WARNING] TATACOMM.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:47:56,844 [WARNING] TIINDIA.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:47:57,607 [WARNING] VIPIND.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:47:58,308 [WARNING] YESBANK.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:47:58,975 [WARNING] ZEEL.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:47:59,746 [WARNING] ZENTEC.NS CRASH: AttributeError: 'StockResult' object has no attribute 'regime'
+2026-06-15 19:47:59,747 [INFO]   Rejection breakdown:
+2026-06-15 19:47:59,747 [INFO]     211 x Exception: AttributeError
+2026-06-15 19:47:59,748 [INFO]      57 x No pattern detected
+2026-06-15 19:47:59,748 [INFO]      21 x ADT below minimum
+2026-06-15 19:47:59,749 [INFO]       7 x Score below T3 threshold (42)
+2026-06-15 19:47:59,749 [INFO]       5 x RS Percentile 32 < 40
+2026-06-15 19:47:59,750 [INFO]       4 x RS Percentile 28 < 40
+2026-06-15 19:47:59,750 [INFO]       4 x RS Percentile 34 < 40
+2026-06-15 19:47:59,751 [INFO]       4 x RS Percentile 22 < 40
+2026-06-15 19:47:59,751 [INFO]       4 x RS Percentile 10 < 40
+2026-06-15 19:47:59,751 [INFO]       4 x RS Percentile 36 < 40
+2026-06-15 19:47:59,752 [INFO] 
+[5/6] Scoring complete:
+2026-06-15 19:47:59,752 [INFO]       Tier 1 (Top Picks):   0
+2026-06-15 19:47:59,752 [INFO]       Tier 2 (Aggressive):  0
+2026-06-15 19:47:59,753 [INFO]       Tier 3 (Watchlist):   0
+2026-06-15 19:47:59,753 [INFO]       Rejected/below gate:  401
+2026-06-15 19:47:59,754 [INFO] 
+[6/6] Sending email report...
+2026-06-15 19:48:02,679 [INFO] Email sent to 1 recipient(s)
+2026-06-15 19:48:02,679 [INFO]       Email sent successfully.
+2026-06-15 19:48:02,680 [INFO] 
+============================================================
+2026-06-15 19:48:02,680 [INFO]   Scan complete.
+2026-06-15 19:48:02,680 [INFO] ============================================================
+
+2026-06-15 20:01:59,651 [INFO] ============================================================
+2026-06-15 20:01:59,652 [INFO]   NSE MOMENTUM SCANNER v4.3
+2026-06-15 20:01:59,652 [INFO]   15 Jun 2026  20:01
+2026-06-15 20:01:59,652 [INFO] ============================================================
+2026-06-15 20:01:59,657 [INFO] 
+[0/6] Universe: 401 stocks
+2026-06-15 20:01:59,657 [INFO]       Nifty 500 Large-Cap      112 stocks | gate>=62 | rrr>=1.5x | adt>=Rs.50.0Cr
+2026-06-15 20:01:59,657 [INFO]       Midcap 150               289 stocks | gate>=64 | rrr>=2.0x | adt>=Rs.10.0Cr
+2026-06-15 20:01:59,658 [INFO]       Smallcap 250               0 stocks | gate>=66 | rrr>=2.5x | adt>=Rs.3.0Cr
+2026-06-15 20:01:59,658 [INFO] 
+[1/6] Fetching market context (Nifty / BankNifty / VIX)...
+2026-06-15 20:02:01,688 [INFO]       VIX: 14.4
+2026-06-15 20:02:01,689 [INFO] 
+[2/6] Fetching NSE Bhavcopy (delivery %)...
+2026-06-15 20:02:01,724 [INFO]       3287 symbols loaded
+2026-06-15 20:02:01,725 [INFO] 
+[3/6] Fetching / loading OHLCV (2yr history)...
+2026-06-15 20:02:03,498 [INFO]   Fetching 1 tickers from Yahoo Finance...
+2026-06-15 20:02:03,706 [INFO]       400/401 tickers loaded
+2026-06-15 20:02:03,707 [INFO] 
+[4/6] Running agent pipeline (single pass)...
+2026-06-15 20:02:04,050 [INFO] Regime: A (Strong Bull) | Breadth: 7/10 | Penalty: 0
+2026-06-15 20:02:04,050 [INFO]       Regime: A (Strong Bull) | Breadth: 7/10
+2026-06-15 20:04:42,168 [INFO]   Rejection breakdown:
+2026-06-15 20:04:42,169 [INFO]      57 x No pattern detected
+2026-06-15 20:04:42,174 [INFO]      21 x ADT below minimum
+2026-06-15 20:04:42,175 [INFO]       7 x Score below T3 threshold (42)
+2026-06-15 20:04:42,175 [INFO]       5 x RS Percentile 32 < 40
+2026-06-15 20:04:42,176 [INFO]       4 x RS Percentile 28 < 40
+2026-06-15 20:04:42,176 [INFO]       4 x RS Percentile 34 < 40
+2026-06-15 20:04:42,177 [INFO]       4 x RS Percentile 22 < 40
+2026-06-15 20:04:42,177 [INFO]       4 x RS Percentile 10 < 40
+2026-06-15 20:04:42,178 [INFO]       4 x RS Percentile 36 < 40
+2026-06-15 20:04:42,179 [INFO]       4 x RS Percentile 26 < 40
+2026-06-15 20:04:42,180 [INFO] 
+[5/6] Scoring complete:
+2026-06-15 20:04:42,180 [INFO]       Tier 1 (Top Picks):   179
+2026-06-15 20:04:42,181 [INFO]       Tier 2 (Aggressive):  13
+2026-06-15 20:04:42,182 [INFO]       Tier 3 (Watchlist):   19
+2026-06-15 20:04:42,182 [INFO]       Rejected/below gate:  190
+2026-06-15 20:04:42,293 [INFO] 
+[6/6] Sending email report...
+2026-06-15 20:04:45,681 [INFO] Email sent to 1 recipient(s)
+2026-06-15 20:04:45,682 [INFO]       Email sent successfully.
+2026-06-15 20:04:45,683 [INFO] 
+============================================================
+2026-06-15 20:04:45,683 [INFO]   Scan complete.
+2026-06-15 20:04:45,684 [INFO] ============================================================
+
+2026-06-15 20:16:19,093 [INFO] ============================================================
+2026-06-15 20:16:19,093 [INFO]   NSE MOMENTUM SCANNER v4.3
+2026-06-15 20:16:19,094 [INFO]   15 Jun 2026  20:16
+2026-06-15 20:16:19,094 [INFO] ============================================================
+2026-06-15 20:16:19,098 [INFO] 
+[0/6] Universe: 401 stocks
+2026-06-15 20:16:19,099 [INFO]       Nifty 500 Large-Cap      112 stocks | gate>=62 | rrr>=1.5x | adt>=Rs.50.0Cr
+2026-06-15 20:16:19,099 [INFO]       Midcap 150               289 stocks | gate>=64 | rrr>=2.0x | adt>=Rs.10.0Cr
+2026-06-15 20:16:19,099 [INFO]       Smallcap 250               0 stocks | gate>=66 | rrr>=2.5x | adt>=Rs.3.0Cr
+2026-06-15 20:16:19,099 [INFO] 
+[1/6] Fetching market context (Nifty / BankNifty / VIX)...
+2026-06-15 20:16:20,843 [INFO]       VIX: 14.4
+2026-06-15 20:16:20,844 [INFO] 
+[2/6] Fetching NSE Bhavcopy (delivery %)...
+2026-06-15 20:16:20,872 [INFO]       3287 symbols loaded
+2026-06-15 20:16:20,872 [INFO] 
+[3/6] Fetching / loading OHLCV (2yr history)...
+2026-06-15 20:16:22,738 [INFO]   Fetching 1 tickers from Yahoo Finance...
+2026-06-15 20:16:22,913 [INFO]       400/401 tickers loaded
+2026-06-15 20:16:22,914 [INFO] 
+[4/6] Running agent pipeline (single pass)...
+2026-06-15 20:16:23,227 [INFO] Regime: A (Strong Bull) | Breadth: 7/10 | Penalty: 0
+2026-06-15 20:16:23,228 [INFO]       Regime: A (Strong Bull) | Breadth: 7/10
+2026-06-15 20:18:34,009 [INFO]   Rejection breakdown:
+2026-06-15 20:18:34,010 [INFO]      57 x No pattern detected
+2026-06-15 20:18:34,011 [INFO]      30 x R:R below minimum
+2026-06-15 20:18:34,012 [INFO]      21 x ADT below minimum
+2026-06-15 20:18:34,012 [INFO]       7 x Score below T3 threshold (42)
+2026-06-15 20:18:34,012 [INFO]       5 x RS Percentile 32 < 40
+2026-06-15 20:18:34,012 [INFO]       4 x RS Percentile 28 < 40
+2026-06-15 20:18:34,013 [INFO]       4 x RS Percentile 34 < 40
+2026-06-15 20:18:34,013 [INFO]       4 x RS Percentile 22 < 40
+2026-06-15 20:18:34,013 [INFO]       4 x RS Percentile 10 < 40
+2026-06-15 20:18:34,013 [INFO]       4 x RS Percentile 36 < 40
+2026-06-15 20:18:34,014 [INFO] 
+[5/6] Scoring complete:
+2026-06-15 20:18:34,014 [INFO]       Tier 1 (Top Picks):   152
+2026-06-15 20:18:34,015 [INFO]       Tier 2 (Aggressive):  13
+2026-06-15 20:18:34,015 [INFO]       Tier 3 (Watchlist):   19
+2026-06-15 20:18:34,015 [INFO]       Rejected/below gate:  217
+2026-06-15 20:18:34,052 [INFO] 
+[6/6] Sending email report...
+2026-06-15 20:18:37,373 [INFO] Email sent to 1 recipient(s)
+2026-06-15 20:18:37,374 [INFO]       Email sent successfully.
+2026-06-15 20:18:37,375 [INFO] 
+============================================================
+2026-06-15 20:18:37,375 [INFO]   Scan complete.
+2026-06-15 20:18:37,375 [INFO] ============================================================
+

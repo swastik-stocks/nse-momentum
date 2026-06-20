@@ -1,0 +1,16 @@
+{
+  "2026-08-06": {"risk": "HIGH_RISK", "note": "RBI MPC Decision"},
+  "2026-08-07": {"risk": "WATCH",     "note": "RBI MPC post-decision"},
+  "2026-10-07": {"risk": "HIGH_RISK", "note": "RBI MPC Decision"},
+  "2026-10-08": {"risk": "WATCH",     "note": "RBI MPC post-decision"},
+  "2026-12-04": {"risk": "HIGH_RISK", "note": "RBI MPC Decision"},
+  "2026-12-05": {"risk": "WATCH",     "note": "RBI MPC post-decision"},
+  "2027-02-05": {"risk": "HIGH_RISK", "note": "RBI MPC Decision"},
+  "2027-02-06": {"risk": "WATCH",     "note": "RBI MPC post-decision"},
+  "2026-07-31": {"risk": "WATCH",     "note": "Monthly F&O Expiry"},
+  "2026-08-27": {"risk": "WATCH",     "note": "Monthly F&O Expiry"},
+  "2026-09-24": {"risk": "WATCH",     "note": "Monthly F&O Expiry"},
+  "2026-10-29": {"risk": "WATCH",     "note": "Monthly F&O Expiry"},
+  "2026-11-26": {"risk": "WATCH",     "note": "Monthly F&O Expiry"},
+  "2026-12-31": {"risk": "WATCH",     "note": "Monthly F&O Expiry"}
+}

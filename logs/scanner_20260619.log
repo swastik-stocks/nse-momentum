@@ -1,0 +1,49 @@
+2026-06-19 22:21:55,351 [INFO] ============================================================
+2026-06-19 22:21:55,351 [INFO]   NSE MOMENTUM SCANNER v4.3
+2026-06-19 22:21:55,352 [INFO]   19 Jun 2026  22:21
+2026-06-19 22:21:55,352 [INFO] ============================================================
+2026-06-19 22:21:55,371 [INFO] 
+[0/6] Universe: 401 stocks
+2026-06-19 22:21:55,371 [INFO]       Nifty 500 Large-Cap      112 stocks | gate>=62 | rrr>=1.5x | adt>=Rs.50.0Cr
+2026-06-19 22:21:55,371 [INFO]       Midcap 150               289 stocks | gate>=64 | rrr>=2.0x | adt>=Rs.10.0Cr
+2026-06-19 22:21:55,372 [INFO]       Smallcap 250               0 stocks | gate>=66 | rrr>=2.5x | adt>=Rs.3.0Cr
+2026-06-19 22:21:55,372 [INFO] 
+[1/6] Fetching market context (Nifty / BankNifty / VIX)...
+2026-06-19 22:21:58,876 [INFO]       VIX: 13.0
+2026-06-19 22:21:58,877 [INFO] 
+[2/6] Fetching NSE Bhavcopy (delivery %)...
+2026-06-19 22:22:00,166 [INFO]       3247 symbols loaded
+2026-06-19 22:22:00,166 [INFO] 
+[3/6] Fetching / loading OHLCV (2yr history)...
+2026-06-19 22:22:02,729 [INFO]   Fetching 1 tickers from Yahoo Finance...
+2026-06-19 22:22:02,935 [INFO]       400/401 tickers loaded
+2026-06-19 22:22:02,935 [INFO] 
+[4/6] Running agent pipeline (single pass)...
+2026-06-19 22:22:03,171 [INFO] Regime: B (Bull) | Breadth: 4/10 | Penalty: 0
+2026-06-19 22:22:03,171 [INFO]       Regime: B (Bull) | Breadth: 4/10
+2026-06-19 22:23:51,409 [INFO]   Rejection breakdown:
+2026-06-19 22:23:51,409 [INFO]      80 x No pattern detected
+2026-06-19 22:23:51,411 [INFO]      28 x R:R below minimum
+2026-06-19 22:23:51,411 [INFO]      26 x ADT below minimum
+2026-06-19 22:23:51,411 [INFO]       5 x RS Percentile 32 < 40
+2026-06-19 22:23:51,411 [INFO]       4 x RS Percentile 34 < 40
+2026-06-19 22:23:51,412 [INFO]       4 x Score below T3 threshold (42)
+2026-06-19 22:23:51,412 [INFO]       4 x RS Percentile 28 < 40
+2026-06-19 22:23:51,412 [INFO]       4 x RS Percentile 30 < 40
+2026-06-19 22:23:51,412 [INFO]       4 x RS Percentile 38 < 40
+2026-06-19 22:23:51,412 [INFO]       3 x RS Percentile 18 < 40
+2026-06-19 22:23:51,413 [INFO] 
+[5/6] Scoring complete:
+2026-06-19 22:23:51,413 [INFO]       Tier 1 (Top Picks):   157
+2026-06-19 22:23:51,413 [INFO]       Tier 2 (Aggressive):  18
+2026-06-19 22:23:51,413 [INFO]       Tier 3 (Watchlist):   9
+2026-06-19 22:23:51,413 [INFO]       Rejected/below gate:  217
+2026-06-19 22:23:51,477 [INFO] 
+[6/6] Sending email report...
+2026-06-19 22:23:52,924 [ERROR] Email send failed: 'ascii' codec can't encode characters in position 9-10: ordinal not in range(128)
+2026-06-19 22:23:52,925 [ERROR]       Email failed: 'ascii' codec can't encode characters in position 9-10: ordinal not in range(128)
+2026-06-19 22:23:52,926 [INFO] 
+============================================================
+2026-06-19 22:23:52,926 [INFO]   Scan complete.
+2026-06-19 22:23:52,926 [INFO] ============================================================
+
