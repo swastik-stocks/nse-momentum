@@ -1,0 +1,925 @@
+2026-06-20 10:28:40,988 [INFO] ============================================================
+2026-06-20 10:28:40,989 [INFO]   NSE MOMENTUM SCANNER v4.3
+2026-06-20 10:28:40,990 [INFO]   20 Jun 2026  10:28
+2026-06-20 10:28:40,990 [INFO] ============================================================
+2026-06-20 10:28:41,008 [INFO] 
+[0/6] Universe: 401 stocks
+2026-06-20 10:28:41,008 [INFO]       Nifty 500 Large-Cap      112 stocks | gate>=62 | rrr>=1.5x | adt>=Rs.50.0Cr
+2026-06-20 10:28:41,008 [INFO]       Midcap 150               289 stocks | gate>=64 | rrr>=2.0x | adt>=Rs.10.0Cr
+2026-06-20 10:28:41,009 [INFO]       Smallcap 250               0 stocks | gate>=66 | rrr>=2.5x | adt>=Rs.3.0Cr
+2026-06-20 10:28:41,009 [INFO] 
+[1/6] Fetching market context (Nifty / BankNifty / VIX)...
+2026-06-20 10:28:44,377 [INFO]       VIX: 13.0
+2026-06-20 10:28:44,377 [INFO] 
+[2/6] Fetching NSE Bhavcopy (delivery %)...
+2026-06-20 10:28:44,413 [INFO]       3247 symbols loaded
+2026-06-20 10:28:44,413 [INFO] 
+[3/6] Fetching / loading OHLCV (2yr history)...
+2026-06-20 10:28:46,356 [INFO]   Fetching 1 tickers from Yahoo Finance...
+2026-06-20 10:28:46,543 [INFO]       400/401 tickers loaded
+2026-06-20 10:28:46,543 [INFO] 
+[4/6] Running agent pipeline (single pass)...
+2026-06-20 10:28:46,808 [INFO] Regime: B (Bull) | Breadth: 4/10 | Penalty: 0
+2026-06-20 10:28:46,808 [INFO]       Regime: B (Bull) | Breadth: 4/10
+2026-06-20 10:30:57,907 [INFO]   Rejection breakdown:
+2026-06-20 10:30:57,907 [INFO]      81 x No pattern detected
+2026-06-20 10:30:57,908 [INFO]      28 x R:R below minimum
+2026-06-20 10:30:57,908 [INFO]      26 x ADT below minimum
+2026-06-20 10:30:57,908 [INFO]       5 x RS Percentile 32 < 40
+2026-06-20 10:30:57,908 [INFO]       4 x RS Percentile 34 < 40
+2026-06-20 10:30:57,908 [INFO]       4 x Score below T3 threshold (42)
+2026-06-20 10:30:57,908 [INFO]       4 x RS Percentile 28 < 40
+2026-06-20 10:30:57,908 [INFO]       4 x RS Percentile 38 < 40
+2026-06-20 10:30:57,908 [INFO]       3 x RS Percentile 18 < 40
+2026-06-20 10:30:57,908 [INFO]       3 x RS Percentile 21 < 40
+2026-06-20 10:30:57,909 [INFO] 
+[5/6] Scoring complete:
+2026-06-20 10:30:57,909 [INFO]       Tier 1 (Top Picks):   157
+2026-06-20 10:30:57,909 [INFO]       Tier 2 (Aggressive):  18
+2026-06-20 10:30:57,909 [INFO]       Tier 3 (Watchlist):   9
+2026-06-20 10:30:57,909 [INFO]       Rejected/below gate:  217
+2026-06-20 10:30:57,972 [INFO] 
+[6/6] Sending email report...
+2026-06-20 10:30:59,533 [ERROR] Email send failed: 'ascii' codec can't encode characters in position 9-10: ordinal not in range(128)
+2026-06-20 10:30:59,533 [ERROR]       Email failed: 'ascii' codec can't encode characters in position 9-10: ordinal not in range(128)
+2026-06-20 10:30:59,535 [INFO] 
+============================================================
+2026-06-20 10:30:59,536 [INFO]   Scan complete.
+2026-06-20 10:30:59,536 [INFO] ============================================================
+
+2026-06-20 10:40:58,693 [INFO] ============================================================
+2026-06-20 10:40:58,694 [INFO]   NSE MOMENTUM SCANNER v4.3
+2026-06-20 10:40:58,695 [INFO]   20 Jun 2026  10:40
+2026-06-20 10:40:58,695 [INFO] ============================================================
+2026-06-20 10:40:58,704 [INFO] 
+[0/6] Universe: 401 stocks
+2026-06-20 10:40:58,704 [INFO]       Nifty 500 Large-Cap      112 stocks | gate>=62 | rrr>=1.5x | adt>=Rs.50.0Cr
+2026-06-20 10:40:58,705 [INFO]       Midcap 150               289 stocks | gate>=64 | rrr>=2.0x | adt>=Rs.10.0Cr
+2026-06-20 10:40:58,705 [INFO]       Smallcap 250               0 stocks | gate>=66 | rrr>=2.5x | adt>=Rs.3.0Cr
+2026-06-20 10:40:58,705 [INFO] 
+[1/6] Fetching market context (Nifty / BankNifty / VIX)...
+2026-06-20 10:41:03,624 [INFO]       VIX: 13.0
+2026-06-20 10:41:03,624 [INFO] 
+[2/6] Fetching NSE Bhavcopy (delivery %)...
+2026-06-20 10:41:03,661 [INFO]       3247 symbols loaded
+2026-06-20 10:41:03,662 [INFO] 
+[3/6] Fetching / loading OHLCV (2yr history)...
+2026-06-20 10:41:05,766 [INFO]   Fetching 1 tickers from Yahoo Finance...
+2026-06-20 10:41:06,087 [INFO]       400/401 tickers loaded
+2026-06-20 10:41:06,088 [INFO] 
+[4/6] Running agent pipeline (single pass)...
+2026-06-20 10:41:06,371 [INFO] Regime: B (Bull) | Breadth: 4/10 | Penalty: 0
+2026-06-20 10:41:06,371 [INFO]       Regime: B (Bull) | Breadth: 4/10
+2026-06-20 10:43:20,046 [INFO]   Rejection breakdown:
+2026-06-20 10:43:20,046 [INFO]      81 x No pattern detected
+2026-06-20 10:43:20,048 [INFO]      28 x R:R below minimum
+2026-06-20 10:43:20,049 [INFO]      26 x ADT below minimum
+2026-06-20 10:43:20,049 [INFO]       5 x RS Percentile 32 < 40
+2026-06-20 10:43:20,049 [INFO]       4 x RS Percentile 34 < 40
+2026-06-20 10:43:20,049 [INFO]       4 x Score below T3 threshold (42)
+2026-06-20 10:43:20,050 [INFO]       4 x RS Percentile 28 < 40
+2026-06-20 10:43:20,050 [INFO]       4 x RS Percentile 38 < 40
+2026-06-20 10:43:20,050 [INFO]       3 x RS Percentile 18 < 40
+2026-06-20 10:43:20,050 [INFO]       3 x RS Percentile 21 < 40
+2026-06-20 10:43:20,050 [INFO] 
+[5/6] Scoring complete:
+2026-06-20 10:43:20,051 [INFO]       Tier 1 (Top Picks):   157
+2026-06-20 10:43:20,051 [INFO]       Tier 2 (Aggressive):  18
+2026-06-20 10:43:20,051 [INFO]       Tier 3 (Watchlist):   9
+2026-06-20 10:43:20,051 [INFO]       Rejected/below gate:  217
+2026-06-20 10:43:20,123 [INFO] 
+[6/6] Sending email report...
+2026-06-20 10:43:21,547 [ERROR] Email send failed: 'ascii' codec can't encode characters in position 9-11: ordinal not in range(128)
+2026-06-20 10:43:21,547 [ERROR]       Email failed: 'ascii' codec can't encode characters in position 9-11: ordinal not in range(128)
+2026-06-20 10:43:21,551 [INFO] 
+============================================================
+2026-06-20 10:43:21,551 [INFO]   Scan complete.
+2026-06-20 10:43:21,551 [INFO] ============================================================
+
+2026-06-20 10:46:58,507 [INFO] ============================================================
+2026-06-20 10:46:58,507 [INFO]   NSE MOMENTUM SCANNER v4.3
+2026-06-20 10:46:58,508 [INFO]   20 Jun 2026  10:46
+2026-06-20 10:46:58,508 [INFO] ============================================================
+2026-06-20 10:46:58,516 [INFO] 
+[0/6] Universe: 401 stocks
+2026-06-20 10:46:58,517 [INFO]       Nifty 500 Large-Cap      112 stocks | gate>=62 | rrr>=1.5x | adt>=Rs.50.0Cr
+2026-06-20 10:46:58,517 [INFO]       Midcap 150               289 stocks | gate>=64 | rrr>=2.0x | adt>=Rs.10.0Cr
+2026-06-20 10:46:58,518 [INFO]       Smallcap 250               0 stocks | gate>=66 | rrr>=2.5x | adt>=Rs.3.0Cr
+2026-06-20 10:46:58,518 [INFO] 
+[1/6] Fetching market context (Nifty / BankNifty / VIX)...
+2026-06-20 10:46:59,987 [INFO]       VIX: 13.0
+2026-06-20 10:46:59,987 [INFO] 
+[2/6] Fetching NSE Bhavcopy (delivery %)...
+2026-06-20 10:47:00,014 [INFO]       3247 symbols loaded
+2026-06-20 10:47:00,014 [INFO] 
+[3/6] Fetching / loading OHLCV (2yr history)...
+2026-06-20 10:47:02,092 [INFO]   Fetching 1 tickers from Yahoo Finance...
+2026-06-20 10:47:02,361 [INFO]       400/401 tickers loaded
+2026-06-20 10:47:02,361 [INFO] 
+[4/6] Running agent pipeline (single pass)...
+2026-06-20 10:47:02,606 [INFO] Regime: B (Bull) | Breadth: 4/10 | Penalty: 0
+2026-06-20 10:47:02,606 [INFO]       Regime: B (Bull) | Breadth: 4/10
+2026-06-20 10:48:58,977 [INFO]   Rejection breakdown:
+2026-06-20 10:48:58,978 [INFO]      81 x No pattern detected
+2026-06-20 10:48:58,978 [INFO]      28 x R:R below minimum
+2026-06-20 10:48:58,978 [INFO]      26 x ADT below minimum
+2026-06-20 10:48:58,978 [INFO]       5 x RS Percentile 32 < 40
+2026-06-20 10:48:58,978 [INFO]       4 x RS Percentile 34 < 40
+2026-06-20 10:48:58,979 [INFO]       4 x Score below T3 threshold (42)
+2026-06-20 10:48:58,979 [INFO]       4 x RS Percentile 28 < 40
+2026-06-20 10:48:58,979 [INFO]       4 x RS Percentile 38 < 40
+2026-06-20 10:48:58,979 [INFO]       3 x RS Percentile 18 < 40
+2026-06-20 10:48:58,979 [INFO]       3 x RS Percentile 21 < 40
+2026-06-20 10:48:58,980 [INFO] 
+[5/6] Scoring complete:
+2026-06-20 10:48:58,980 [INFO]       Tier 1 (Top Picks):   157
+2026-06-20 10:48:58,980 [INFO]       Tier 2 (Aggressive):  18
+2026-06-20 10:48:58,980 [INFO]       Tier 3 (Watchlist):   9
+2026-06-20 10:48:58,981 [INFO]       Rejected/below gate:  217
+2026-06-20 10:48:59,062 [INFO] 
+[6/6] Sending email report...
+2026-06-20 10:49:04,425 [INFO] Email sent to 1 recipient(s)
+2026-06-20 10:49:04,426 [INFO]       Email sent successfully.
+2026-06-20 10:49:04,430 [INFO] 
+============================================================
+2026-06-20 10:49:04,430 [INFO]   Scan complete.
+2026-06-20 10:49:04,430 [INFO] ============================================================
+
+2026-06-20 13:30:09,830 [INFO] ============================================================
+2026-06-20 13:30:09,830 [INFO]   NSE MOMENTUM SCANNER v4.3
+2026-06-20 13:30:09,831 [INFO]   20 Jun 2026  13:30
+2026-06-20 13:30:09,831 [INFO] ============================================================
+2026-06-20 13:30:09,874 [INFO] 
+[0/6] Universe: 401 stocks
+2026-06-20 13:30:09,875 [INFO]       Nifty 500 Large-Cap      112 stocks | gate>=62 | rrr>=1.5x | adt>=Rs.50.0Cr
+2026-06-20 13:30:09,875 [INFO]       Midcap 150               289 stocks | gate>=64 | rrr>=2.0x | adt>=Rs.10.0Cr
+2026-06-20 13:30:09,875 [INFO]       Smallcap 250               0 stocks | gate>=66 | rrr>=2.5x | adt>=Rs.3.0Cr
+2026-06-20 13:30:09,875 [INFO] 
+[1/6] Fetching market context (Nifty / BankNifty / VIX)...
+2026-06-20 13:30:12,076 [INFO]       VIX: 13.0
+2026-06-20 13:30:12,076 [INFO] 
+[2/6] Fetching NSE Bhavcopy (delivery %)...
+2026-06-20 13:30:12,096 [INFO]       3247 symbols loaded
+2026-06-20 13:30:12,096 [INFO] 
+[3/6] Fetching / loading OHLCV (2yr history)...
+2026-06-20 13:30:14,680 [INFO]   Fetching 1 tickers from Yahoo Finance...
+2026-06-20 13:30:14,868 [INFO]       400/401 tickers loaded
+2026-06-20 13:30:14,868 [INFO] 
+[4/6] Running agent pipeline (single pass)...
+2026-06-20 13:30:15,101 [INFO] Regime: B (Bull) | Breadth: 4/10 | Penalty: 0
+2026-06-20 13:30:15,101 [INFO]       Regime: B (Bull) | Breadth: 4/10
+2026-06-20 13:30:17,173 [INFO]   Rejection breakdown:
+2026-06-20 13:30:17,173 [INFO]     181 x AsymmetryGate: stop > 2%
+2026-06-20 13:30:17,173 [INFO]      81 x No pattern detected
+2026-06-20 13:30:17,173 [INFO]      28 x R:R below minimum (RiskAgent)
+2026-06-20 13:30:17,173 [INFO]      26 x ADT below minimum
+2026-06-20 13:30:17,173 [INFO]       5 x RS Percentile 32 < 40
+2026-06-20 13:30:17,173 [INFO]       5 x VCPGate: W4 > 8% (too loose)
+2026-06-20 13:30:17,173 [INFO]       4 x RS Percentile 34 < 40
+2026-06-20 13:30:17,173 [INFO]       4 x RS Percentile 28 < 40
+2026-06-20 13:30:17,173 [INFO]       4 x RS Percentile 38 < 40
+2026-06-20 13:30:17,173 [INFO]       3 x RS Percentile 18 < 40
+2026-06-20 13:30:17,173 [INFO]       3 x RS Percentile 21 < 40
+2026-06-20 13:30:17,174 [INFO]       3 x RS Percentile 37 < 40
+2026-06-20 13:30:17,174 [INFO]   Tier 1 (Top Picks):  0
+2026-06-20 13:30:17,174 [INFO]   Tier 2 (Aggressive): 0
+2026-06-20 13:30:17,174 [INFO]   Tier 3 (Watchlist):  0
+2026-06-20 13:30:17,174 [INFO] 
+[5/6] Scoring complete:
+2026-06-20 13:30:17,174 [INFO]       Tier 1 (Top Picks):   0
+2026-06-20 13:30:17,174 [INFO]       Tier 2 (Aggressive):  0
+2026-06-20 13:30:17,174 [INFO]       Tier 3 (Watchlist):   0
+2026-06-20 13:30:17,174 [INFO]       Rejected/below gate:  401
+2026-06-20 13:30:17,174 [INFO] 
+[6/6] Sending email report...
+2026-06-20 13:30:20,421 [INFO] Email sent to 1 recipient(s)
+2026-06-20 13:30:20,426 [INFO]       Email sent successfully.
+2026-06-20 13:30:20,426 [INFO] 
+============================================================
+2026-06-20 13:30:20,426 [INFO]   Scan complete.
+2026-06-20 13:30:20,426 [INFO] ============================================================
+
+2026-06-20 13:32:35,513 [INFO] ============================================================
+2026-06-20 13:32:35,513 [INFO]   NSE MOMENTUM SCANNER v4.3
+2026-06-20 13:32:35,513 [INFO]   20 Jun 2026  13:32
+2026-06-20 13:32:35,513 [INFO] ============================================================
+2026-06-20 13:32:35,519 [INFO] 
+[0/6] Universe: 401 stocks
+2026-06-20 13:32:35,519 [INFO]       Nifty 500 Large-Cap      112 stocks | gate>=62 | rrr>=1.5x | adt>=Rs.50.0Cr
+2026-06-20 13:32:35,519 [INFO]       Midcap 150               289 stocks | gate>=64 | rrr>=2.0x | adt>=Rs.10.0Cr
+2026-06-20 13:32:35,519 [INFO]       Smallcap 250               0 stocks | gate>=66 | rrr>=2.5x | adt>=Rs.3.0Cr
+2026-06-20 13:32:35,519 [INFO] 
+[1/6] Fetching market context (Nifty / BankNifty / VIX)...
+2026-06-20 13:32:37,090 [INFO]       VIX: 13.0
+2026-06-20 13:32:37,090 [INFO] 
+[2/6] Fetching NSE Bhavcopy (delivery %)...
+2026-06-20 13:32:37,108 [INFO]       3247 symbols loaded
+2026-06-20 13:32:37,108 [INFO] 
+[3/6] Fetching / loading OHLCV (2yr history)...
+2026-06-20 13:32:38,994 [INFO]   Fetching 1 tickers from Yahoo Finance...
+2026-06-20 13:32:39,193 [INFO]       400/401 tickers loaded
+2026-06-20 13:32:39,193 [INFO] 
+[4/6] Running agent pipeline (single pass)...
+2026-06-20 13:32:39,431 [INFO] Regime: B (Bull) | Breadth: 4/10 | Penalty: 0
+2026-06-20 13:32:39,431 [INFO]       Regime: B (Bull) | Breadth: 4/10
+2026-06-20 13:32:41,561 [INFO]   Rejection breakdown:
+2026-06-20 13:32:41,562 [INFO]     181 x AsymmetryGate: stop > 2%
+2026-06-20 13:32:41,562 [INFO]      81 x No pattern detected
+2026-06-20 13:32:41,562 [INFO]      28 x R:R below minimum (RiskAgent)
+2026-06-20 13:32:41,562 [INFO]      26 x ADT below minimum
+2026-06-20 13:32:41,562 [INFO]       5 x RS Percentile 32 < 40
+2026-06-20 13:32:41,562 [INFO]       5 x VCPGate: W4 > 8% (too loose)
+2026-06-20 13:32:41,562 [INFO]       4 x RS Percentile 34 < 40
+2026-06-20 13:32:41,562 [INFO]       4 x RS Percentile 28 < 40
+2026-06-20 13:32:41,562 [INFO]       4 x RS Percentile 38 < 40
+2026-06-20 13:32:41,562 [INFO]       3 x RS Percentile 18 < 40
+2026-06-20 13:32:41,562 [INFO]       3 x RS Percentile 21 < 40
+2026-06-20 13:32:41,562 [INFO]       3 x RS Percentile 37 < 40
+2026-06-20 13:32:41,562 [INFO]   Tier 1 (Top Picks):  0
+2026-06-20 13:32:41,562 [INFO]   Tier 2 (Aggressive): 0
+2026-06-20 13:32:41,562 [INFO]   Tier 3 (Watchlist):  0
+2026-06-20 13:32:41,562 [INFO] 
+[5/6] Scoring complete:
+2026-06-20 13:32:41,562 [INFO]       Tier 1 (Top Picks):   0
+2026-06-20 13:32:41,563 [INFO]       Tier 2 (Aggressive):  0
+2026-06-20 13:32:41,563 [INFO]       Tier 3 (Watchlist):   0
+2026-06-20 13:32:41,563 [INFO]       Rejected/below gate:  401
+2026-06-20 13:32:41,563 [INFO] 
+[6/6] Sending email report...
+2026-06-20 13:32:44,414 [INFO] Email sent to 1 recipient(s)
+2026-06-20 13:32:44,414 [INFO]       Email sent successfully.
+2026-06-20 13:32:44,415 [INFO] 
+============================================================
+2026-06-20 13:32:44,415 [INFO]   Scan complete.
+2026-06-20 13:32:44,415 [INFO] ============================================================
+
+2026-06-20 13:42:04,593 [INFO] ============================================================
+2026-06-20 13:42:04,593 [INFO]   NSE MOMENTUM SCANNER v4.3
+2026-06-20 13:42:04,594 [INFO]   20 Jun 2026  13:42
+2026-06-20 13:42:04,594 [INFO] ============================================================
+2026-06-20 13:42:04,599 [INFO] 
+[0/6] Universe: 401 stocks
+2026-06-20 13:42:04,599 [INFO]       Nifty 500 Large-Cap      112 stocks | gate>=62 | rrr>=1.5x | adt>=Rs.50.0Cr
+2026-06-20 13:42:04,600 [INFO]       Midcap 150               289 stocks | gate>=64 | rrr>=2.0x | adt>=Rs.10.0Cr
+2026-06-20 13:42:04,600 [INFO]       Smallcap 250               0 stocks | gate>=66 | rrr>=2.5x | adt>=Rs.3.0Cr
+2026-06-20 13:42:04,600 [INFO] 
+[1/6] Fetching market context (Nifty / BankNifty / VIX)...
+2026-06-20 13:42:06,130 [INFO]       VIX: 13.0
+2026-06-20 13:42:06,130 [INFO] 
+[2/6] Fetching NSE Bhavcopy (delivery %)...
+2026-06-20 13:42:06,149 [INFO]       3247 symbols loaded
+2026-06-20 13:42:06,150 [INFO] 
+[3/6] Fetching / loading OHLCV (2yr history)...
+2026-06-20 13:42:07,935 [INFO]   Fetching 1 tickers from Yahoo Finance...
+2026-06-20 13:42:08,066 [INFO]       400/401 tickers loaded
+2026-06-20 13:42:08,066 [INFO] 
+[4/6] Running agent pipeline (single pass)...
+2026-06-20 13:42:08,295 [INFO] Regime: B (Bull) | Breadth: 4/10 | Penalty: 0
+2026-06-20 13:42:08,295 [INFO]       Regime: B (Bull) | Breadth: 4/10
+2026-06-20 13:42:10,343 [INFO]   Rejection breakdown:
+2026-06-20 13:42:10,343 [INFO]     109 x AsymmetryGate: stop > 2%
+2026-06-20 13:42:10,343 [INFO]     107 x R:R below minimum (RiskAgent)
+2026-06-20 13:42:10,343 [INFO]      81 x No pattern detected
+2026-06-20 13:42:10,343 [INFO]      26 x ADT below minimum
+2026-06-20 13:42:10,343 [INFO]       5 x RS Percentile 32 < 40
+2026-06-20 13:42:10,343 [INFO]       4 x RS Percentile 34 < 40
+2026-06-20 13:42:10,343 [INFO]       4 x RS Percentile 28 < 40
+2026-06-20 13:42:10,343 [INFO]       4 x RS Percentile 38 < 40
+2026-06-20 13:42:10,344 [INFO]       3 x RS Percentile 18 < 40
+2026-06-20 13:42:10,344 [INFO]       3 x RS Percentile 21 < 40
+2026-06-20 13:42:10,344 [INFO]       3 x RS Percentile 37 < 40
+2026-06-20 13:42:10,344 [INFO]       3 x RS Percentile 12 < 40
+2026-06-20 13:42:10,344 [INFO]   Tier 1 (Top Picks):  0
+2026-06-20 13:42:10,344 [INFO]   Tier 2 (Aggressive): 0
+2026-06-20 13:42:10,344 [INFO]   Tier 3 (Watchlist):  0
+2026-06-20 13:42:10,344 [INFO] 
+[5/6] Scoring complete:
+2026-06-20 13:42:10,344 [INFO]       Tier 1 (Top Picks):   0
+2026-06-20 13:42:10,345 [INFO]       Tier 2 (Aggressive):  0
+2026-06-20 13:42:10,345 [INFO]       Tier 3 (Watchlist):   0
+2026-06-20 13:42:10,345 [INFO]       Rejected/below gate:  401
+2026-06-20 13:42:10,345 [INFO] 
+[6/6] Sending email report...
+2026-06-20 13:42:13,482 [INFO] Email sent to 1 recipient(s)
+2026-06-20 13:42:13,483 [INFO]       Email sent successfully.
+2026-06-20 13:42:13,483 [INFO] 
+============================================================
+2026-06-20 13:42:13,484 [INFO]   Scan complete.
+2026-06-20 13:42:13,484 [INFO] ============================================================
+
+2026-06-20 14:01:01,526 [INFO] ============================================================
+2026-06-20 14:01:01,526 [INFO]   NSE MOMENTUM SCANNER v4.3
+2026-06-20 14:01:01,526 [INFO]   20 Jun 2026  14:01
+2026-06-20 14:01:01,526 [INFO] ============================================================
+2026-06-20 14:01:01,531 [INFO] 
+[0/6] Universe: 401 stocks
+2026-06-20 14:01:01,531 [INFO]       Nifty 500 Large-Cap      112 stocks | gate>=62 | rrr>=1.5x | adt>=Rs.50.0Cr
+2026-06-20 14:01:01,531 [INFO]       Midcap 150               289 stocks | gate>=64 | rrr>=2.0x | adt>=Rs.10.0Cr
+2026-06-20 14:01:01,531 [INFO]       Smallcap 250               0 stocks | gate>=66 | rrr>=2.5x | adt>=Rs.3.0Cr
+2026-06-20 14:01:01,532 [INFO] 
+[1/6] Fetching market context (Nifty / BankNifty / VIX)...
+2026-06-20 14:01:03,354 [INFO]       VIX: 13.0
+2026-06-20 14:01:03,354 [INFO] 
+[2/6] Fetching NSE Bhavcopy (delivery %)...
+2026-06-20 14:01:03,371 [INFO]       3247 symbols loaded
+2026-06-20 14:01:03,371 [INFO] 
+[3/6] Fetching / loading OHLCV (2yr history)...
+2026-06-20 14:01:05,170 [INFO]   Fetching 1 tickers from Yahoo Finance...
+2026-06-20 14:01:05,355 [INFO]       400/401 tickers loaded
+2026-06-20 14:01:05,355 [INFO] 
+[4/6] Running agent pipeline (single pass)...
+2026-06-20 14:01:05,581 [INFO] Regime: B (Bull) | Breadth: 4/10 | Penalty: 0
+2026-06-20 14:01:05,581 [INFO]       Regime: B (Bull) | Breadth: 4/10
+2026-06-20 14:01:07,679 [INFO]   Rejection breakdown:
+2026-06-20 14:01:07,679 [INFO]     109 x AsymmetryGate: stop > 2%
+2026-06-20 14:01:07,679 [INFO]     107 x R:R below minimum (RiskAgent)
+2026-06-20 14:01:07,679 [INFO]      81 x No pattern detected
+2026-06-20 14:01:07,680 [INFO]      26 x ADT below minimum
+2026-06-20 14:01:07,680 [INFO]       5 x RS Percentile 32 < 40
+2026-06-20 14:01:07,680 [INFO]       4 x RS Percentile 34 < 40
+2026-06-20 14:01:07,680 [INFO]       4 x RS Percentile 28 < 40
+2026-06-20 14:01:07,680 [INFO]       4 x RS Percentile 38 < 40
+2026-06-20 14:01:07,680 [INFO]       3 x RS Percentile 18 < 40
+2026-06-20 14:01:07,680 [INFO]       3 x RS Percentile 21 < 40
+2026-06-20 14:01:07,680 [INFO]       3 x RS Percentile 37 < 40
+2026-06-20 14:01:07,680 [INFO]       3 x RS Percentile 12 < 40
+2026-06-20 14:01:07,680 [INFO]   Tier 1 (Top Picks):  0
+2026-06-20 14:01:07,680 [INFO]   Tier 2 (Aggressive): 0
+2026-06-20 14:01:07,680 [INFO]   Tier 3 (Watchlist):  0
+2026-06-20 14:01:07,680 [INFO] 
+[5/6] Scoring complete:
+2026-06-20 14:01:07,680 [INFO]       Tier 1 (Top Picks):   0
+2026-06-20 14:01:07,680 [INFO]       Tier 2 (Aggressive):  0
+2026-06-20 14:01:07,680 [INFO]       Tier 3 (Watchlist):   0
+2026-06-20 14:01:07,681 [INFO]       Rejected/below gate:  401
+2026-06-20 14:01:07,681 [INFO] 
+[6/6] Sending email report...
+2026-06-20 14:01:10,728 [INFO] Email sent to 1 recipient(s)
+2026-06-20 14:01:10,728 [INFO]       Email sent successfully.
+2026-06-20 14:01:10,729 [INFO] 
+============================================================
+2026-06-20 14:01:10,729 [INFO]   Scan complete.
+2026-06-20 14:01:10,729 [INFO] ============================================================
+
+2026-06-20 14:10:12,071 [INFO] ============================================================
+2026-06-20 14:10:12,072 [INFO]   NSE MOMENTUM SCANNER v4.3
+2026-06-20 14:10:12,072 [INFO]   20 Jun 2026  14:10
+2026-06-20 14:10:12,072 [INFO] ============================================================
+2026-06-20 14:10:12,077 [INFO] 
+[0/6] Universe: 401 stocks
+2026-06-20 14:10:12,077 [INFO]       Nifty 500 Large-Cap      112 stocks | gate>=62 | rrr>=1.5x | adt>=Rs.50.0Cr
+2026-06-20 14:10:12,077 [INFO]       Midcap 150               289 stocks | gate>=64 | rrr>=2.0x | adt>=Rs.10.0Cr
+2026-06-20 14:10:12,077 [INFO]       Smallcap 250               0 stocks | gate>=66 | rrr>=2.5x | adt>=Rs.3.0Cr
+2026-06-20 14:10:12,077 [INFO] 
+[1/6] Fetching market context (Nifty / BankNifty / VIX)...
+2026-06-20 14:10:13,727 [INFO]       VIX: 13.0
+2026-06-20 14:10:13,727 [INFO] 
+[2/6] Fetching NSE Bhavcopy (delivery %)...
+2026-06-20 14:10:13,745 [INFO]       3247 symbols loaded
+2026-06-20 14:10:13,746 [INFO] 
+[3/6] Fetching / loading OHLCV (2yr history)...
+2026-06-20 14:10:15,509 [INFO]   Fetching 1 tickers from Yahoo Finance...
+2026-06-20 14:10:15,816 [INFO]       400/401 tickers loaded
+2026-06-20 14:10:15,816 [INFO] 
+[4/6] Running agent pipeline (single pass)...
+2026-06-20 14:10:16,035 [INFO] Regime: B (Bull) | Breadth: 4/10 | Penalty: 0
+2026-06-20 14:10:16,036 [INFO]       Regime: B (Bull) | Breadth: 4/10
+2026-06-20 14:10:18,194 [INFO]   Rejection breakdown:
+2026-06-20 14:10:18,194 [INFO]     109 x AsymmetryGate: stop > 2%
+2026-06-20 14:10:18,194 [INFO]     107 x R:R below minimum (RiskAgent)
+2026-06-20 14:10:18,195 [INFO]      81 x No pattern detected
+2026-06-20 14:10:18,195 [INFO]      26 x ADT below minimum
+2026-06-20 14:10:18,195 [INFO]       5 x RS Percentile 32 < 40
+2026-06-20 14:10:18,195 [INFO]       4 x RS Percentile 34 < 40
+2026-06-20 14:10:18,195 [INFO]       4 x RS Percentile 28 < 40
+2026-06-20 14:10:18,195 [INFO]       4 x RS Percentile 38 < 40
+2026-06-20 14:10:18,195 [INFO]       3 x RS Percentile 18 < 40
+2026-06-20 14:10:18,195 [INFO]       3 x RS Percentile 21 < 40
+2026-06-20 14:10:18,195 [INFO]       3 x RS Percentile 37 < 40
+2026-06-20 14:10:18,195 [INFO]       3 x RS Percentile 12 < 40
+2026-06-20 14:10:18,195 [INFO]   Tier 1 (Top Picks):  0
+2026-06-20 14:10:18,195 [INFO]   Tier 2 (Aggressive): 0
+2026-06-20 14:10:18,195 [INFO]   Tier 3 (Watchlist):  0
+2026-06-20 14:10:18,195 [INFO] 
+[5/6] Scoring complete:
+2026-06-20 14:10:18,195 [INFO]       Tier 1 (Top Picks):   0
+2026-06-20 14:10:18,195 [INFO]       Tier 2 (Aggressive):  0
+2026-06-20 14:10:18,195 [INFO]       Tier 3 (Watchlist):   0
+2026-06-20 14:10:18,196 [INFO]       Rejected/below gate:  401
+2026-06-20 14:10:18,196 [INFO] 
+[6/6] Sending email report...
+2026-06-20 14:10:21,157 [INFO] Email sent to 1 recipient(s)
+2026-06-20 14:10:21,157 [INFO]       Email sent successfully.
+2026-06-20 14:10:21,158 [INFO] 
+============================================================
+2026-06-20 14:10:21,158 [INFO]   Scan complete.
+2026-06-20 14:10:21,158 [INFO] ============================================================
+
+2026-06-20 15:22:38,641 [INFO] ============================================================
+2026-06-20 15:22:38,641 [INFO]   NSE MOMENTUM SCANNER v4.3
+2026-06-20 15:22:38,641 [INFO]   20 Jun 2026  15:22
+2026-06-20 15:22:38,642 [INFO] ============================================================
+2026-06-20 15:22:38,647 [INFO] 
+[0/6] Universe: 401 stocks
+2026-06-20 15:22:38,647 [INFO]       Nifty 500 Large-Cap      112 stocks | gate>=62 | rrr>=1.5x | adt>=Rs.50.0Cr
+2026-06-20 15:22:38,647 [INFO]       Midcap 150               289 stocks | gate>=64 | rrr>=2.0x | adt>=Rs.10.0Cr
+2026-06-20 15:22:38,647 [INFO]       Smallcap 250               0 stocks | gate>=66 | rrr>=2.5x | adt>=Rs.3.0Cr
+2026-06-20 15:22:38,647 [INFO] 
+[1/6] Fetching market context (Nifty / BankNifty / VIX)...
+2026-06-20 15:22:40,863 [INFO]       VIX: 13.0
+2026-06-20 15:22:40,863 [INFO] 
+[2/6] Fetching NSE Bhavcopy (delivery %)...
+2026-06-20 15:22:40,881 [INFO]       3247 symbols loaded
+2026-06-20 15:22:40,881 [INFO] 
+[3/6] Fetching / loading OHLCV (2yr history)...
+2026-06-20 15:22:42,665 [INFO]   Fetching 1 tickers from Yahoo Finance...
+2026-06-20 15:22:42,866 [INFO]       400/401 tickers loaded
+2026-06-20 15:22:42,866 [INFO] 
+[4/6] Running agent pipeline (single pass)...
+2026-06-20 15:22:43,087 [INFO] Regime: B (Bull) | Breadth: 4/10 | Penalty: 0
+2026-06-20 15:22:43,087 [INFO]       Regime: B (Bull) | Breadth: 4/10
+2026-06-20 15:22:45,290 [INFO]   Rejection breakdown:
+2026-06-20 15:22:45,290 [INFO]     163 x AsymmetryGate: stop too wide
+2026-06-20 15:22:45,290 [INFO]      81 x No pattern detected
+2026-06-20 15:22:45,291 [INFO]      28 x VCPGate: W4 too loose
+2026-06-20 15:22:45,291 [INFO]      26 x ADT below minimum
+2026-06-20 15:22:45,291 [INFO]      25 x R:R below minimum (RiskAgent)
+2026-06-20 15:22:45,291 [INFO]       5 x RS Percentile 32 < 40
+2026-06-20 15:22:45,291 [INFO]       4 x RS Percentile 34 < 40
+2026-06-20 15:22:45,291 [INFO]       4 x RS Percentile 28 < 40
+2026-06-20 15:22:45,291 [INFO]       4 x RS Percentile 38 < 40
+2026-06-20 15:22:45,291 [INFO]       3 x RS Percentile 18 < 40
+2026-06-20 15:22:45,292 [INFO]       3 x RS Percentile 21 < 40
+2026-06-20 15:22:45,292 [INFO]       3 x RS Percentile 37 < 40
+2026-06-20 15:22:45,292 [INFO]   Tier 1 (Top Picks):  0
+2026-06-20 15:22:45,292 [INFO]   Tier 2 (Aggressive): 0
+2026-06-20 15:22:45,292 [INFO]   Tier 3 (Watchlist):  0
+2026-06-20 15:22:46,063 [INFO]   Near-breakout watchlist: 10 stocks
+2026-06-20 15:22:46,063 [INFO] 
+[5/6] Scoring complete:
+2026-06-20 15:22:46,064 [INFO]       Tier 1 (Top Picks):   0
+2026-06-20 15:22:46,064 [INFO]       Tier 2 (Aggressive):  0
+2026-06-20 15:22:46,064 [INFO]       Tier 3 (Watchlist):   0
+2026-06-20 15:22:46,064 [INFO]       Rejected/below gate:  401
+2026-06-20 15:22:46,065 [INFO] 
+[6/6] Sending email report...
+2026-06-20 15:22:49,251 [INFO] Email sent to 1 recipient(s)
+2026-06-20 15:22:49,251 [INFO]       Email sent successfully.
+2026-06-20 15:22:49,252 [INFO] 
+============================================================
+2026-06-20 15:22:49,252 [INFO]   Scan complete.
+2026-06-20 15:22:49,252 [INFO] ============================================================
+
+2026-06-20 15:28:41,530 [INFO] ============================================================
+2026-06-20 15:28:41,530 [INFO]   NSE MOMENTUM SCANNER v4.3
+2026-06-20 15:28:41,530 [INFO]   20 Jun 2026  15:28
+2026-06-20 15:28:41,530 [INFO] ============================================================
+2026-06-20 15:28:41,535 [INFO] 
+[0/6] Universe: 401 stocks
+2026-06-20 15:28:41,536 [INFO]       Nifty 500 Large-Cap      112 stocks | gate>=62 | rrr>=1.5x | adt>=Rs.50.0Cr
+2026-06-20 15:28:41,536 [INFO]       Midcap 150               289 stocks | gate>=64 | rrr>=2.0x | adt>=Rs.10.0Cr
+2026-06-20 15:28:41,536 [INFO]       Smallcap 250               0 stocks | gate>=66 | rrr>=2.5x | adt>=Rs.3.0Cr
+2026-06-20 15:28:41,536 [INFO] 
+[1/6] Fetching market context (Nifty / BankNifty / VIX)...
+2026-06-20 15:28:43,387 [INFO]       VIX: 13.0
+2026-06-20 15:28:43,387 [INFO] 
+[2/6] Fetching NSE Bhavcopy (delivery %)...
+2026-06-20 15:28:43,405 [INFO]       3247 symbols loaded
+2026-06-20 15:28:43,405 [INFO] 
+[3/6] Fetching / loading OHLCV (2yr history)...
+2026-06-20 15:28:45,204 [INFO]   Fetching 1 tickers from Yahoo Finance...
+2026-06-20 15:28:45,414 [INFO]       400/401 tickers loaded
+2026-06-20 15:28:45,415 [INFO] 
+[4/6] Running agent pipeline (single pass)...
+2026-06-20 15:28:45,639 [INFO] Regime: B (Bull) | Breadth: 4/10 | Penalty: 0
+2026-06-20 15:28:45,639 [INFO]       Regime: B (Bull) | Breadth: 4/10
+2026-06-20 15:28:50,845 [INFO]   Rejection breakdown:
+2026-06-20 15:28:50,845 [INFO]      96 x AsymmetryGate: stop too wide
+2026-06-20 15:28:50,845 [INFO]      81 x No pattern detected
+2026-06-20 15:28:50,845 [INFO]      59 x VCPGate: W4 too loose
+2026-06-20 15:28:50,845 [INFO]      31 x AsymmetryGate: reward too small
+2026-06-20 15:28:50,845 [INFO]      26 x ADT below minimum
+2026-06-20 15:28:50,845 [INFO]      25 x R:R below minimum (RiskAgent)
+2026-06-20 15:28:50,845 [INFO]       5 x RS Percentile 32 < 40
+2026-06-20 15:28:50,845 [INFO]       4 x RS Percentile 34 < 40
+2026-06-20 15:28:50,845 [INFO]       4 x RS Percentile 28 < 40
+2026-06-20 15:28:50,845 [INFO]       4 x RS Percentile 38 < 40
+2026-06-20 15:28:50,846 [INFO]       3 x RS Percentile 18 < 40
+2026-06-20 15:28:50,846 [INFO]       3 x RS Percentile 21 < 40
+2026-06-20 15:28:50,846 [INFO]   Tier 1 (Top Picks):  4
+2026-06-20 15:28:50,846 [INFO]   Tier 2 (Aggressive): 1
+2026-06-20 15:28:50,846 [INFO]   Tier 3 (Watchlist):  0
+2026-06-20 15:28:50,870 [ERROR] auto_log_t1_picks DB error: no such column: scan_date
+2026-06-20 15:28:50,873 [WARNING]   Auto-log failed: no such column: scan_date
+2026-06-20 15:28:51,614 [INFO]   Near-breakout watchlist: 10 stocks
+2026-06-20 15:28:51,614 [INFO] 
+[5/6] Scoring complete:
+2026-06-20 15:28:51,614 [INFO]       Tier 1 (Top Picks):   4
+2026-06-20 15:28:51,614 [INFO]       Tier 2 (Aggressive):  1
+2026-06-20 15:28:51,614 [INFO]       Tier 3 (Watchlist):   0
+2026-06-20 15:28:51,614 [INFO]       Rejected/below gate:  396
+2026-06-20 15:29:56,583 [INFO] ============================================================
+2026-06-20 15:29:56,583 [INFO]   NSE MOMENTUM SCANNER v4.3
+2026-06-20 15:29:56,584 [INFO]   20 Jun 2026  15:29
+2026-06-20 15:29:56,584 [INFO] ============================================================
+2026-06-20 15:29:56,590 [INFO] 
+[0/6] Universe: 401 stocks
+2026-06-20 15:29:56,590 [INFO]       Nifty 500 Large-Cap      112 stocks | gate>=62 | rrr>=1.5x | adt>=Rs.50.0Cr
+2026-06-20 15:29:56,590 [INFO]       Midcap 150               289 stocks | gate>=64 | rrr>=2.0x | adt>=Rs.10.0Cr
+2026-06-20 15:29:56,590 [INFO]       Smallcap 250               0 stocks | gate>=66 | rrr>=2.5x | adt>=Rs.3.0Cr
+2026-06-20 15:29:56,590 [INFO] 
+[1/6] Fetching market context (Nifty / BankNifty / VIX)...
+2026-06-20 15:29:58,516 [INFO]       VIX: 13.0
+2026-06-20 15:29:58,516 [INFO] 
+[2/6] Fetching NSE Bhavcopy (delivery %)...
+2026-06-20 15:29:58,534 [INFO]       3247 symbols loaded
+2026-06-20 15:29:58,534 [INFO] 
+[3/6] Fetching / loading OHLCV (2yr history)...
+2026-06-20 15:30:00,264 [INFO]   Fetching 1 tickers from Yahoo Finance...
+2026-06-20 15:30:00,468 [INFO]       400/401 tickers loaded
+2026-06-20 15:30:00,469 [INFO] 
+[4/6] Running agent pipeline (single pass)...
+2026-06-20 15:30:00,697 [INFO] Regime: B (Bull) | Breadth: 4/10 | Penalty: 0
+2026-06-20 15:30:00,697 [INFO]       Regime: B (Bull) | Breadth: 4/10
+2026-06-20 15:30:07,103 [INFO]   Rejection breakdown:
+2026-06-20 15:30:07,103 [INFO]      96 x AsymmetryGate: stop too wide
+2026-06-20 15:30:07,103 [INFO]      81 x No pattern detected
+2026-06-20 15:30:07,103 [INFO]      59 x VCPGate: W4 too loose
+2026-06-20 15:30:07,103 [INFO]      31 x AsymmetryGate: reward too small
+2026-06-20 15:30:07,103 [INFO]      26 x ADT below minimum
+2026-06-20 15:30:07,103 [INFO]      25 x R:R below minimum (RiskAgent)
+2026-06-20 15:30:07,104 [INFO]       5 x RS Percentile 32 < 40
+2026-06-20 15:30:07,104 [INFO]       4 x RS Percentile 34 < 40
+2026-06-20 15:30:07,104 [INFO]       4 x RS Percentile 28 < 40
+2026-06-20 15:30:07,104 [INFO]       4 x RS Percentile 38 < 40
+2026-06-20 15:30:07,104 [INFO]       3 x RS Percentile 18 < 40
+2026-06-20 15:30:07,104 [INFO]       3 x RS Percentile 21 < 40
+2026-06-20 15:30:07,104 [INFO]   Tier 1 (Top Picks):  4
+2026-06-20 15:30:07,104 [INFO]   Tier 2 (Aggressive): 1
+2026-06-20 15:30:07,104 [INFO]   Tier 3 (Watchlist):  0
+2026-06-20 15:30:07,107 [ERROR] auto_log_t1_picks DB error: no such column: scan_date
+2026-06-20 15:30:07,107 [WARNING]   Auto-log failed: no such column: scan_date
+2026-06-20 15:30:07,975 [INFO]   Near-breakout watchlist: 10 stocks
+2026-06-20 15:30:07,975 [INFO] 
+[5/6] Scoring complete:
+2026-06-20 15:30:07,975 [INFO]       Tier 1 (Top Picks):   4
+2026-06-20 15:30:07,975 [INFO]       Tier 2 (Aggressive):  1
+2026-06-20 15:30:07,975 [INFO]       Tier 3 (Watchlist):   0
+2026-06-20 15:30:07,975 [INFO]       Rejected/below gate:  396
+2026-06-20 15:30:07,976 [INFO] 
+[6/6] Sending email report...
+2026-06-20 15:30:11,113 [INFO] Email sent to 1 recipient(s)
+2026-06-20 15:30:11,114 [INFO]       Email sent successfully.
+2026-06-20 15:30:11,114 [INFO] 
+============================================================
+2026-06-20 15:30:11,115 [INFO]   Scan complete.
+2026-06-20 15:30:11,115 [INFO] ============================================================
+
+2026-06-20 16:06:18,724 [INFO] ============================================================
+2026-06-20 16:06:18,725 [INFO]   NSE MOMENTUM SCANNER v4.3
+2026-06-20 16:06:18,725 [INFO]   20 Jun 2026  16:06
+2026-06-20 16:06:18,725 [INFO] ============================================================
+2026-06-20 16:06:18,730 [INFO] 
+[0/6] Universe: 401 stocks
+2026-06-20 16:06:18,731 [INFO]       Nifty 500 Large-Cap      112 stocks | gate>=62 | rrr>=1.5x | adt>=Rs.50.0Cr
+2026-06-20 16:06:18,731 [INFO]       Midcap 150               289 stocks | gate>=64 | rrr>=2.0x | adt>=Rs.10.0Cr
+2026-06-20 16:06:18,731 [INFO]       Smallcap 250               0 stocks | gate>=66 | rrr>=2.5x | adt>=Rs.3.0Cr
+2026-06-20 16:06:18,731 [INFO] 
+[1/6] Fetching market context (Nifty / BankNifty / VIX)...
+2026-06-20 16:06:21,141 [INFO]       VIX: 13.0
+2026-06-20 16:06:21,141 [INFO] 
+[2/6] Fetching NSE Bhavcopy (delivery %)...
+2026-06-20 16:06:21,159 [INFO]       3247 symbols loaded
+2026-06-20 16:06:21,160 [INFO] 
+[3/6] Fetching / loading OHLCV (2yr history)...
+2026-06-20 16:06:23,013 [INFO]   Fetching 1 tickers from Yahoo Finance...
+2026-06-20 16:06:23,393 [INFO]       400/401 tickers loaded
+2026-06-20 16:06:23,393 [INFO] 
+[4/6] Running agent pipeline (single pass)...
+2026-06-20 16:06:23,632 [INFO] Regime: B (Bull) | Breadth: 4/10 | Macro: MIXED | Event: NORMAL | T1 cap: 8
+2026-06-20 16:06:23,632 [INFO]       Regime: B (Bull) | Breadth: 4/10
+2026-06-20 16:06:31,425 [INFO]   Rejection breakdown:
+2026-06-20 16:06:31,425 [INFO]     111 x AsymmetryGate: stop too wide
+2026-06-20 16:06:31,425 [INFO]      81 x No pattern detected
+2026-06-20 16:06:31,425 [INFO]      62 x VCPGate: W4 too loose
+2026-06-20 16:06:31,425 [INFO]      39 x AsymmetryGate: reward too small
+2026-06-20 16:06:31,425 [INFO]      26 x ADT below minimum
+2026-06-20 16:06:31,425 [INFO]      25 x R:R below minimum (RiskAgent)
+2026-06-20 16:06:31,425 [INFO]       4 x AsymmetryGate: R:R below minimum
+2026-06-20 16:06:31,425 [INFO]       4 x RS Percentile 28 < 30
+2026-06-20 16:06:31,425 [INFO]       3 x RS Percentile 18 < 30
+2026-06-20 16:06:31,425 [INFO]       3 x RS Percentile 21 < 30
+2026-06-20 16:06:31,426 [INFO]       3 x RS Percentile 12 < 30
+2026-06-20 16:06:31,426 [INFO]       2 x RS Percentile 6 < 30
+2026-06-20 16:06:31,426 [INFO]   Tier 1 (Top Picks):  5 (cap=8)
+2026-06-20 16:06:31,426 [INFO]   Tier 2 (Aggressive): 0
+2026-06-20 16:06:31,426 [INFO]   Tier 3 (Watchlist):  0
+2026-06-20 16:06:31,426 [INFO]   Macro: MIXED | Event: NORMAL
+2026-06-20 16:06:31,428 [ERROR] auto_log_t1_picks DB error: no such column: scan_date
+2026-06-20 16:06:31,430 [WARNING]   Auto-log failed: no such column: scan_date
+2026-06-20 16:06:32,155 [INFO]   Near-breakout watchlist: 10 stocks
+2026-06-20 16:06:32,155 [INFO] 
+[5/6] Scoring complete:
+2026-06-20 16:06:32,155 [INFO]       Tier 1 (Top Picks):   5
+2026-06-20 16:06:32,155 [INFO]       Tier 2 (Aggressive):  0
+2026-06-20 16:06:32,155 [INFO]       Tier 3 (Watchlist):   0
+2026-06-20 16:06:32,155 [INFO]       Rejected/below gate:  396
+2026-06-20 16:06:32,156 [INFO] 
+[6/6] Sending email report...
+2026-06-20 16:06:35,445 [INFO] Email sent to 1 recipient(s)
+2026-06-20 16:06:35,446 [INFO]       Email sent successfully.
+2026-06-20 16:06:35,446 [INFO] 
+============================================================
+2026-06-20 16:06:35,446 [INFO]   Scan complete.
+2026-06-20 16:06:35,447 [INFO] ============================================================
+
+2026-06-20 16:17:52,051 [INFO] ============================================================
+2026-06-20 16:17:52,051 [INFO]   NSE MOMENTUM SCANNER v4.3
+2026-06-20 16:17:52,051 [INFO]   20 Jun 2026  16:17
+2026-06-20 16:17:52,051 [INFO] ============================================================
+2026-06-20 16:17:52,058 [INFO] 
+[0/6] Universe: 401 stocks
+2026-06-20 16:17:52,058 [INFO]       Nifty 500 Large-Cap      112 stocks | gate>=62 | rrr>=1.5x | adt>=Rs.50.0Cr
+2026-06-20 16:17:52,058 [INFO]       Midcap 150               289 stocks | gate>=64 | rrr>=2.0x | adt>=Rs.10.0Cr
+2026-06-20 16:17:52,058 [INFO]       Smallcap 250               0 stocks | gate>=66 | rrr>=2.5x | adt>=Rs.3.0Cr
+2026-06-20 16:17:52,058 [INFO] 
+[1/6] Fetching market context (Nifty / BankNifty / VIX)...
+2026-06-20 16:17:54,545 [INFO]       VIX: 13.0
+2026-06-20 16:17:54,545 [INFO] 
+[2/6] Fetching NSE Bhavcopy (delivery %)...
+2026-06-20 16:17:54,563 [INFO]       3247 symbols loaded
+2026-06-20 16:17:54,564 [INFO] 
+[3/6] Fetching / loading OHLCV (2yr history)...
+2026-06-20 16:17:56,487 [INFO]   Fetching 1 tickers from Yahoo Finance...
+2026-06-20 16:17:56,699 [INFO]       400/401 tickers loaded
+2026-06-20 16:17:56,700 [INFO] 
+[4/6] Running agent pipeline (single pass)...
+2026-06-20 16:17:56,943 [INFO] Regime: B (Bull) | Breadth: 4/10 | Macro: MIXED | Event: NORMAL | T1 cap: 8
+2026-06-20 16:17:56,943 [INFO]       Regime: B (Bull) | Breadth: 4/10
+2026-06-20 16:18:24,679 [INFO]   Rejection breakdown:
+2026-06-20 16:18:24,679 [INFO]     111 x AsymmetryGate: stop too wide
+2026-06-20 16:18:24,679 [INFO]      81 x No pattern detected
+2026-06-20 16:18:24,679 [INFO]      39 x AsymmetryGate: reward too small
+2026-06-20 16:18:24,679 [INFO]      31 x VCPGate: W4 too loose
+2026-06-20 16:18:24,679 [INFO]      26 x ADT below minimum
+2026-06-20 16:18:24,679 [INFO]      25 x R:R below minimum (RiskAgent)
+2026-06-20 16:18:24,679 [INFO]       4 x AsymmetryGate: R:R below minimum
+2026-06-20 16:18:24,679 [INFO]       4 x RS Percentile 28 < 30
+2026-06-20 16:18:24,679 [INFO]       3 x RS Percentile 18 < 30
+2026-06-20 16:18:24,679 [INFO]       3 x RS Percentile 21 < 30
+2026-06-20 16:18:24,679 [INFO]       3 x RS Percentile 12 < 30
+2026-06-20 16:18:24,680 [INFO]       2 x RS Percentile 6 < 30
+2026-06-20 16:18:24,680 [INFO]   Tier 1 (Top Picks):  8 (cap=8)
+2026-06-20 16:18:24,680 [INFO]   Tier 2 (Aggressive): 28
+2026-06-20 16:18:24,680 [INFO]   Tier 3 (Watchlist):  0
+2026-06-20 16:18:24,680 [INFO]   Macro: MIXED | Event: NORMAL
+2026-06-20 16:18:24,682 [ERROR] auto_log_t1_picks DB error: no such column: scan_date
+2026-06-20 16:18:24,683 [WARNING]   Auto-log failed: no such column: scan_date
+2026-06-20 16:18:25,361 [INFO]   Near-breakout watchlist: 10 stocks
+2026-06-20 16:18:25,361 [INFO] 
+[5/6] Scoring complete:
+2026-06-20 16:18:25,361 [INFO]       Tier 1 (Top Picks):   8
+2026-06-20 16:18:25,361 [INFO]       Tier 2 (Aggressive):  28
+2026-06-20 16:18:25,361 [INFO]       Tier 3 (Watchlist):   0
+2026-06-20 16:18:25,361 [INFO]       Rejected/below gate:  365
+2026-06-20 16:18:25,362 [INFO] 
+[6/6] Sending email report...
+2026-06-20 16:18:28,479 [INFO] Email sent to 1 recipient(s)
+2026-06-20 16:18:28,480 [INFO]       Email sent successfully.
+2026-06-20 16:18:28,480 [INFO] 
+============================================================
+2026-06-20 16:18:28,481 [INFO]   Scan complete.
+2026-06-20 16:18:28,481 [INFO] ============================================================
+
+2026-06-20 16:31:32,224 [INFO] ============================================================
+2026-06-20 16:31:32,225 [INFO]   NSE MOMENTUM SCANNER v4.3
+2026-06-20 16:31:32,225 [INFO]   20 Jun 2026  16:31
+2026-06-20 16:31:32,225 [INFO] ============================================================
+2026-06-20 16:31:32,230 [INFO] 
+[0/6] Universe: 401 stocks
+2026-06-20 16:31:32,231 [INFO]       Nifty 500 Large-Cap      112 stocks | gate>=62 | rrr>=1.5x | adt>=Rs.50.0Cr
+2026-06-20 16:31:32,231 [INFO]       Midcap 150               289 stocks | gate>=64 | rrr>=2.0x | adt>=Rs.10.0Cr
+2026-06-20 16:31:32,231 [INFO]       Smallcap 250               0 stocks | gate>=66 | rrr>=2.5x | adt>=Rs.3.0Cr
+2026-06-20 16:31:32,231 [INFO] 
+[1/6] Fetching market context (Nifty / BankNifty / VIX)...
+2026-06-20 16:31:34,345 [INFO]       VIX: 13.0
+2026-06-20 16:31:34,346 [INFO] 
+[2/6] Fetching NSE Bhavcopy (delivery %)...
+2026-06-20 16:31:34,364 [INFO]       3247 symbols loaded
+2026-06-20 16:31:34,364 [INFO] 
+[3/6] Fetching / loading OHLCV (2yr history)...
+2026-06-20 16:31:36,237 [INFO]   Fetching 1 tickers from Yahoo Finance...
+2026-06-20 16:31:36,436 [INFO]       400/401 tickers loaded
+2026-06-20 16:31:36,436 [INFO] 
+[4/6] Running agent pipeline (single pass)...
+2026-06-20 16:31:36,679 [INFO] Regime: B (Bull) | Breadth: 4/10 | Macro: MIXED | Event: NORMAL | T1 cap: 8
+2026-06-20 16:31:36,679 [INFO]       Regime: B (Bull) | Breadth: 4/10
+2026-06-20 16:32:03,835 [INFO]   Rejection breakdown:
+2026-06-20 16:32:03,835 [INFO]     111 x AsymmetryGate: stop too wide
+2026-06-20 16:32:03,835 [INFO]      81 x No pattern detected
+2026-06-20 16:32:03,835 [INFO]      39 x AsymmetryGate: reward too small
+2026-06-20 16:32:03,835 [INFO]      31 x VCPGate: W4 too loose
+2026-06-20 16:32:03,835 [INFO]      26 x ADT below minimum
+2026-06-20 16:32:03,835 [INFO]      25 x R:R below minimum (RiskAgent)
+2026-06-20 16:32:03,836 [INFO]       4 x AsymmetryGate: R:R below minimum
+2026-06-20 16:32:03,836 [INFO]       4 x RS Percentile 28 < 30
+2026-06-20 16:32:03,836 [INFO]       3 x RS Percentile 18 < 30
+2026-06-20 16:32:03,836 [INFO]       3 x RS Percentile 21 < 30
+2026-06-20 16:32:03,836 [INFO]       3 x RS Percentile 12 < 30
+2026-06-20 16:32:03,836 [INFO]       2 x RS Percentile 6 < 30
+2026-06-20 16:32:03,836 [INFO]   Tier 1 (Top Picks):  8 (cap=8)
+2026-06-20 16:32:03,836 [INFO]   Tier 2 (Aggressive): 28
+2026-06-20 16:32:03,836 [INFO]   Tier 3 (Watchlist):  0
+2026-06-20 16:32:03,836 [INFO]   Macro: MIXED | Event: NORMAL
+2026-06-20 16:32:03,839 [ERROR] auto_log_t1_picks DB error: table trades_v4 has no column named entry
+2026-06-20 16:32:03,840 [WARNING]   Auto-log failed: table trades_v4 has no column named entry
+2026-06-20 16:32:04,549 [INFO]   Near-breakout watchlist: 10 stocks
+2026-06-20 16:32:04,549 [INFO] 
+[5/6] Scoring complete:
+2026-06-20 16:32:04,549 [INFO]       Tier 1 (Top Picks):   8
+2026-06-20 16:32:04,550 [INFO]       Tier 2 (Aggressive):  28
+2026-06-20 16:32:04,550 [INFO]       Tier 3 (Watchlist):   0
+2026-06-20 16:32:04,550 [INFO]       Rejected/below gate:  365
+2026-06-20 16:32:04,550 [INFO] 
+[6/6] Sending email report...
+2026-06-20 16:32:08,072 [INFO] Email sent to 1 recipient(s)
+2026-06-20 16:32:08,072 [INFO]       Email sent successfully.
+2026-06-20 16:32:08,073 [INFO] 
+============================================================
+2026-06-20 16:32:08,073 [INFO]   Scan complete.
+2026-06-20 16:32:08,074 [INFO] ============================================================
+
+2026-06-20 16:42:25,132 [INFO] ============================================================
+2026-06-20 16:42:25,133 [INFO]   NSE MOMENTUM SCANNER v4.3
+2026-06-20 16:42:25,133 [INFO]   20 Jun 2026  16:42
+2026-06-20 16:42:25,133 [INFO] ============================================================
+2026-06-20 16:42:25,138 [INFO] 
+[0/6] Universe: 401 stocks
+2026-06-20 16:42:25,138 [INFO]       Nifty 500 Large-Cap      112 stocks | gate>=62 | rrr>=1.5x | adt>=Rs.50.0Cr
+2026-06-20 16:42:25,139 [INFO]       Midcap 150               289 stocks | gate>=64 | rrr>=2.0x | adt>=Rs.10.0Cr
+2026-06-20 16:42:25,139 [INFO]       Smallcap 250               0 stocks | gate>=66 | rrr>=2.5x | adt>=Rs.3.0Cr
+2026-06-20 16:42:25,139 [INFO] 
+[1/6] Fetching market context (Nifty / BankNifty / VIX)...
+2026-06-20 16:42:27,113 [INFO]       VIX: 13.0
+2026-06-20 16:42:27,113 [INFO] 
+[2/6] Fetching NSE Bhavcopy (delivery %)...
+2026-06-20 16:42:27,130 [INFO]       3247 symbols loaded
+2026-06-20 16:42:27,130 [INFO] 
+[3/6] Fetching / loading OHLCV (2yr history)...
+2026-06-20 16:42:28,941 [INFO]   Fetching 1 tickers from Yahoo Finance...
+2026-06-20 16:42:29,140 [INFO]       400/401 tickers loaded
+2026-06-20 16:42:29,140 [INFO] 
+[4/6] Running agent pipeline (single pass)...
+2026-06-20 16:42:29,383 [INFO] Regime: B (Bull) | Breadth: 4/10 | Macro: MIXED | Event: NORMAL | T1 cap: 8
+2026-06-20 16:42:29,383 [INFO]       Regime: B (Bull) | Breadth: 4/10
+2026-06-20 16:42:51,104 [INFO]   Rejection breakdown:
+2026-06-20 16:42:51,104 [INFO]     126 x AsymmetryGate: stop too wide
+2026-06-20 16:42:51,104 [INFO]      81 x No pattern detected
+2026-06-20 16:42:51,104 [INFO]      39 x AsymmetryGate: reward too small
+2026-06-20 16:42:51,104 [INFO]      39 x VCPGate: W4 too loose
+2026-06-20 16:42:51,105 [INFO]      26 x ADT below minimum
+2026-06-20 16:42:51,105 [INFO]       4 x AsymmetryGate: R:R below minimum
+2026-06-20 16:42:51,105 [INFO]       4 x RS Percentile 28 < 30
+2026-06-20 16:42:51,105 [INFO]       3 x RS Percentile 18 < 30
+2026-06-20 16:42:51,105 [INFO]       3 x RS Percentile 21 < 30
+2026-06-20 16:42:51,105 [INFO]       3 x RS Percentile 12 < 30
+2026-06-20 16:42:51,105 [INFO]       2 x RS Percentile 6 < 30
+2026-06-20 16:42:51,105 [INFO]       2 x RS Percentile 4 < 30
+2026-06-20 16:42:51,105 [INFO]   Tier 1 (Top Picks):  8 (cap=8)
+2026-06-20 16:42:51,105 [INFO]   Tier 2 (Aggressive): 29
+2026-06-20 16:42:51,106 [INFO]   Tier 3 (Watchlist):  0
+2026-06-20 16:42:51,106 [INFO]   Macro: MIXED | Event: NORMAL
+2026-06-20 16:42:51,107 [ERROR] auto_log_t1_picks DB error: table trades_v4 has no column named entry
+2026-06-20 16:42:51,108 [WARNING]   Auto-log failed: table trades_v4 has no column named entry
+2026-06-20 16:42:51,759 [INFO]   Near-breakout watchlist: 10 stocks
+2026-06-20 16:42:51,759 [INFO] 
+[5/6] Scoring complete:
+2026-06-20 16:42:51,759 [INFO]       Tier 1 (Top Picks):   8
+2026-06-20 16:42:51,759 [INFO]       Tier 2 (Aggressive):  29
+2026-06-20 16:42:51,759 [INFO]       Tier 3 (Watchlist):   0
+2026-06-20 16:42:51,760 [INFO]       Rejected/below gate:  364
+2026-06-20 16:42:51,760 [INFO] 
+[6/6] Sending email report...
+2026-06-20 16:42:54,886 [INFO] Email sent to 1 recipient(s)
+2026-06-20 16:42:54,887 [INFO]       Email sent successfully.
+2026-06-20 16:42:54,887 [INFO] 
+============================================================
+2026-06-20 16:42:54,888 [INFO]   Scan complete.
+2026-06-20 16:42:54,888 [INFO] ============================================================
+
+2026-06-20 16:57:23,827 [INFO] ============================================================
+2026-06-20 16:57:23,827 [INFO]   NSE MOMENTUM SCANNER v4.3
+2026-06-20 16:57:23,827 [INFO]   20 Jun 2026  16:57
+2026-06-20 16:57:23,827 [INFO] ============================================================
+2026-06-20 16:57:23,833 [INFO] 
+[0/6] Universe: 401 stocks
+2026-06-20 16:57:23,833 [INFO]       Nifty 500 Large-Cap      112 stocks | gate>=62 | rrr>=1.5x | adt>=Rs.50.0Cr
+2026-06-20 16:57:23,833 [INFO]       Midcap 150               289 stocks | gate>=64 | rrr>=2.0x | adt>=Rs.10.0Cr
+2026-06-20 16:57:23,833 [INFO]       Smallcap 250               0 stocks | gate>=66 | rrr>=2.5x | adt>=Rs.3.0Cr
+2026-06-20 16:57:23,833 [INFO] 
+[1/6] Fetching market context (Nifty / BankNifty / VIX)...
+2026-06-20 16:57:25,201 [INFO]       VIX: 13.0
+2026-06-20 16:57:25,201 [INFO] 
+[2/6] Fetching NSE Bhavcopy (delivery %)...
+2026-06-20 16:57:25,218 [INFO]       3247 symbols loaded
+2026-06-20 16:57:25,218 [INFO] 
+[3/6] Fetching / loading OHLCV (2yr history)...
+2026-06-20 16:57:26,995 [INFO]   Fetching 1 tickers from Yahoo Finance...
+2026-06-20 16:57:27,125 [INFO]       400/401 tickers loaded
+2026-06-20 16:57:27,125 [INFO] 
+[4/6] Running agent pipeline (single pass)...
+2026-06-20 16:57:27,357 [INFO] Regime: B (Bull) | Breadth: 4/10 | Macro: MIXED | Event: NORMAL | T1 cap: 8
+2026-06-20 16:57:27,357 [INFO]       Regime: B (Bull) | Breadth: 4/10
+2026-06-20 16:57:43,745 [INFO]   Rejection breakdown:
+2026-06-20 16:57:43,745 [INFO]     126 x AsymmetryGate: stop too wide
+2026-06-20 16:57:43,745 [INFO]      81 x No pattern detected
+2026-06-20 16:57:43,745 [INFO]      39 x AsymmetryGate: reward too small
+2026-06-20 16:57:43,745 [INFO]      39 x VCPGate: W4 too loose
+2026-06-20 16:57:43,745 [INFO]      26 x ADT below minimum
+2026-06-20 16:57:43,745 [INFO]       4 x AsymmetryGate: R:R below minimum
+2026-06-20 16:57:43,745 [INFO]       4 x RS Percentile 28 < 30
+2026-06-20 16:57:43,745 [INFO]       3 x RS Percentile 18 < 30
+2026-06-20 16:57:43,745 [INFO]       3 x RS Percentile 21 < 30
+2026-06-20 16:57:43,746 [INFO]       3 x RS Percentile 12 < 30
+2026-06-20 16:57:43,746 [INFO]       2 x RS Percentile 6 < 30
+2026-06-20 16:57:43,746 [INFO]       2 x RS Percentile 4 < 30
+2026-06-20 16:57:43,746 [INFO]   Tier 1 (Top Picks):  8 (cap=8)
+2026-06-20 16:57:43,746 [INFO]   Tier 2 (Aggressive): 29
+2026-06-20 16:57:43,746 [INFO]   Tier 3 (Watchlist):  0
+2026-06-20 16:57:43,746 [INFO]   Macro: MIXED | Event: NORMAL
+2026-06-20 16:57:43,755 [INFO] auto_log_t1_picks: logged 8 picks for 2026-06-20
+2026-06-20 16:57:43,755 [INFO]   Auto-logged 8 T1 picks to trades_v4
+2026-06-20 16:57:44,404 [INFO]   Near-breakout watchlist: 10 stocks
+2026-06-20 16:57:44,404 [INFO] 
+[5/6] Scoring complete:
+2026-06-20 16:57:44,404 [INFO]       Tier 1 (Top Picks):   8
+2026-06-20 16:57:44,404 [INFO]       Tier 2 (Aggressive):  29
+2026-06-20 16:57:44,404 [INFO]       Tier 3 (Watchlist):   0
+2026-06-20 16:57:44,404 [INFO]       Rejected/below gate:  364
+2026-06-20 16:57:44,405 [INFO] 
+[6/6] Sending email report...
+2026-06-20 16:57:47,637 [INFO] Email sent to 1 recipient(s)
+2026-06-20 16:57:47,637 [INFO]       Email sent successfully.
+2026-06-20 16:57:47,638 [INFO] 
+============================================================
+2026-06-20 16:57:47,638 [INFO]   Scan complete.
+2026-06-20 16:57:47,638 [INFO] ============================================================
+
+2026-06-20 17:04:01,469 [INFO] ============================================================
+2026-06-20 17:04:01,469 [INFO]   NSE MOMENTUM SCANNER v4.3
+2026-06-20 17:04:01,469 [INFO]   20 Jun 2026  17:04
+2026-06-20 17:04:01,469 [INFO] ============================================================
+2026-06-20 17:04:01,476 [INFO] 
+[0/6] Universe: 401 stocks
+2026-06-20 17:04:01,476 [INFO]       Nifty 500 Large-Cap      112 stocks | gate>=62 | rrr>=1.5x | adt>=Rs.50.0Cr
+2026-06-20 17:04:01,476 [INFO]       Midcap 150               289 stocks | gate>=64 | rrr>=2.0x | adt>=Rs.10.0Cr
+2026-06-20 17:04:01,476 [INFO]       Smallcap 250               0 stocks | gate>=66 | rrr>=2.5x | adt>=Rs.3.0Cr
+2026-06-20 17:04:01,476 [INFO] 
+[1/6] Fetching market context (Nifty / BankNifty / VIX)...
+2026-06-20 17:04:02,887 [INFO]       VIX: 13.0
+2026-06-20 17:04:02,887 [INFO] 
+[2/6] Fetching NSE Bhavcopy (delivery %)...
+2026-06-20 17:04:02,904 [INFO]       3247 symbols loaded
+2026-06-20 17:04:02,904 [INFO] 
+[3/6] Fetching / loading OHLCV (2yr history)...
+2026-06-20 17:04:04,644 [INFO]   Fetching 1 tickers from Yahoo Finance...
+2026-06-20 17:04:04,780 [INFO]       400/401 tickers loaded
+2026-06-20 17:04:04,781 [INFO] 
+[4/6] Running agent pipeline (single pass)...
+2026-06-20 17:04:05,098 [INFO] Regime: B (Bull) | Breadth: 4/10 | Macro: MIXED | Event: NORMAL | T1 cap: 8
+2026-06-20 17:04:05,098 [INFO]       Regime: B (Bull) | Breadth: 4/10
+2026-06-20 17:04:32,336 [INFO]   Rejection breakdown:
+2026-06-20 17:04:32,336 [INFO]     126 x AsymmetryGate: stop too wide
+2026-06-20 17:04:32,336 [INFO]      81 x No pattern detected
+2026-06-20 17:04:32,336 [INFO]      39 x AsymmetryGate: reward too small
+2026-06-20 17:04:32,336 [INFO]      39 x VCPGate: W4 too loose
+2026-06-20 17:04:32,336 [INFO]      26 x ADT below minimum
+2026-06-20 17:04:32,336 [INFO]       4 x AsymmetryGate: R:R below minimum
+2026-06-20 17:04:32,336 [INFO]       4 x RS Percentile 28 < 30
+2026-06-20 17:04:32,336 [INFO]       3 x RS Percentile 18 < 30
+2026-06-20 17:04:32,336 [INFO]       3 x RS Percentile 21 < 30
+2026-06-20 17:04:32,336 [INFO]       3 x RS Percentile 12 < 30
+2026-06-20 17:04:32,336 [INFO]       2 x RS Percentile 6 < 30
+2026-06-20 17:04:32,337 [INFO]       2 x RS Percentile 4 < 30
+2026-06-20 17:04:32,337 [INFO]   Tier 1 (Top Picks):  8 (cap=8)
+2026-06-20 17:04:32,337 [INFO]   Tier 2 (Aggressive): 29
+2026-06-20 17:04:32,337 [INFO]   Tier 3 (Watchlist):  0
+2026-06-20 17:04:32,337 [INFO]   Macro: MIXED | Event: NORMAL
+2026-06-20 17:04:32,339 [INFO] auto_log_t1_picks: logged 0 picks for 2026-06-20
+2026-06-20 17:04:32,340 [INFO]   Auto-logged 0 T1 picks to trades_v4
+2026-06-20 17:04:33,218 [INFO]   Near-breakout watchlist: 10 stocks
+2026-06-20 17:04:33,218 [INFO] 
+[5/6] Scoring complete:
+2026-06-20 17:04:33,218 [INFO]       Tier 1 (Top Picks):   8
+2026-06-20 17:04:33,218 [INFO]       Tier 2 (Aggressive):  29
+2026-06-20 17:04:33,218 [INFO]       Tier 3 (Watchlist):   0
+2026-06-20 17:04:33,218 [INFO]       Rejected/below gate:  364
+2026-06-20 17:04:33,219 [INFO] 
+[6/6] Sending email report...
+2026-06-20 17:04:36,699 [INFO] Email sent to 1 recipient(s)
+2026-06-20 17:04:36,699 [INFO]       Email sent successfully.
+2026-06-20 17:04:36,699 [INFO] 
+============================================================
+2026-06-20 17:04:36,700 [INFO]   Scan complete.
+2026-06-20 17:04:36,700 [INFO] ============================================================
+
