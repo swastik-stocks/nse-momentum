@@ -2,9 +2,8 @@ name: NSE Momentum - 10am Confirmation
 
 on:
   schedule:
-    # 10:00 AM IST = 04:30 UTC
     - cron: '30 4 * * 1-5'
-  workflow_dispatch:    # ← manual trigger for testing
+  workflow_dispatch:
 
 jobs:
   confirm:
@@ -17,25 +16,24 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: '3.12'
 
       - name: Install dependencies
-        run: pip install requests
+        run: pip install requests python-dotenv
 
-      # Download the picks JSON saved by last night's evening scan
-      - name: Download picks artifact from latest scan run
+      - name: Download picks artifact from evening scan
         uses: dawidd6/action-download-artifact@v6
         with:
           name: picks_latest
           path: .
-          workflow: scan.yml          # ← name of your evening scan workflow file
+          workflow: daily_scan.yml
           workflow_conclusion: success
 
       - name: Run confirmation checker
-       env:
+        env:
           DHAN_ACCESS_TOKEN: ${{ secrets.DHAN_ACCESS_TOKEN }}
-          DHAN_CLIENT_ID:    ${{ secrets.DHAN_CLIENT_ID }}
-          GMAIL_ADDRESS:     ${{ secrets.GMAIL_ADDRESS }}
-          GMAIL_APP_PASSWORD:${{ secrets.GMAIL_APP_PASSWORD }}
-          PICKS_JSON_PATH:   picks_latest.json
+          DHAN_CLIENT_ID: ${{ secrets.DHAN_CLIENT_ID }}
+          GMAIL_ADDRESS: ${{ secrets.GMAIL_ADDRESS }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+          PICKS_JSON_PATH: picks_latest.json
         run: python confirm_picks.py
