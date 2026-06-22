@@ -447,34 +447,30 @@ class AgentOrchestrator:
             universe_items, stock_data, delivery_data, existing
         )
         log.info(f"  Near-breakout watchlist: {len(near_breakout)} stocks")
-
-        return {
-            # Save picks as JSON for 10am confirmation checker
         import json
         picks_json = []
         for r in t1 + t2:
             picks_json.append({
-                "ticker":      r.ticker,
-                "name":        getattr(r, "name", r.ticker),
-                "sector":      getattr(r, "sector", ""),
-                "security_id": str(getattr(r, "security_id", "")),
-                "segment":     "NSE_EQ",
-                "entry":       round(r.entry_price, 2),
-                "sl":          round(r.stop_loss, 2),
-                "pivot":       round(r.breakout_level if r.breakout_level > 0 else r.entry_price, 2),
-                "t1":          round(r.target1, 2),
-                "t2":          round(getattr(r, "target2", r.target1), 2),
-                "rr":          round(r.asymmetry_rr, 1),
-                "score":       r.total_score,
-                "tier":        r.tier,
-                "pattern":     r.pattern or "",
+                "ticker":  r.ticker,
+                "name":    r.name,
+                "sector":  r.sector,
+                "security_id": "",
+                "segment": "NSE_EQ",
+                "entry":   round(r.entry, 2),
+                "sl":      round(r.stop_loss, 2),
+                "pivot":   round(r.breakout_level if r.breakout_level > 0 else r.entry, 2),
+                "t1":      round(r.target1, 2),
+                "t2":      round(r.target2, 2),
+                "rr":      round(r.asymmetry_rr, 1),
+                "score":   r.total_score,
+                "tier":    r.tier,
+                "pattern": r.pattern or "",
             })
         with open("picks_latest.json", "w") as f:
             json.dump(picks_json, f, indent=2)
         log.info(f"  Saved {len(picks_json)} picks to picks_latest.json")
-	    "tier1": t1, "tier2": t2, "tier3": t3,
-            "near_breakout": near_breakout,
-            "all_results": all_results,
+        return {
+            "tier1": t1, "tier2": t2, "tier3": t3,
             "regime": self.regime, "regime_name": self.regime_name,
             "breadth": self.breadth_score,
             "breadth_detail": self.breadth_detail,
