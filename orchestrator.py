@@ -471,6 +471,8 @@ class AgentOrchestrator:
         log.info(f"  Saved {len(picks_json)} picks to picks_latest.json")
         return {
             "tier1": t1, "tier2": t2, "tier3": t3,
+            "near_breakout": near_breakout,
+            "all_results": all_results,
             "regime": self.regime, "regime_name": self.regime_name,
             "breadth": self.breadth_score,
             "breadth_detail": self.breadth_detail,
