@@ -22,14 +22,27 @@ jobs:
           python-version: '3.12'
 
       - name: Install dependencies
-        run: pip install python-dotenv
+        run: pip install python-dotenv requests
 
-      - name: Download picks artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: picks_latest
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          run-id: ${{ github.event.workflow_run.id }}
+      - name: Download picks via GitHub API
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python - <<'EOF'
+          import requests, os, zipfile, io
+          token = os.environ['GH_TOKEN']
+          repo  = os.environ['GITHUB_REPOSITORY']
+          h     = {'Authorization': f'Bearer {token}', 'Accept': 'application/vnd.github+json'}
+          runs  = requests.get(f'https://api.github.com/repos/{repo}/actions/workflows/daily_scan.yml/runs?status=completed&per_page=5', headers=h).json()
+          run_id = runs['workflow_runs'][0]['id']
+          print(f'Latest scan run: {run_id}')
+          arts  = requests.get(f'https://api.github.com/repos/{repo}/actions/runs/{run_id}/artifacts', headers=h).json()
+          art   = next(a for a in arts['artifacts'] if a['name'] == 'picks_latest')
+          print(f'Found artifact: {art["id"]}')
+          z     = requests.get(f'https://api.github.com/repos/{repo}/actions/artifacts/{art["id"]}/zip', headers=h)
+          zipfile.ZipFile(io.BytesIO(z.content)).extractall('.')
+          print('picks_latest.json downloaded successfully')
+          EOF
 
       - name: Run confirmation checker
         env:
