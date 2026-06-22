@@ -33,34 +33,16 @@ def _load_recipients() -> list:
 # DHAN LIVE QUOTE
 DHAN_QUOTE_URL = "https://api.dhan.co/v2/marketfeed/quote"
 
-def get_dhan_quote(security_id: str, segment: str = "NSE_EQ") -> dict | None:
-    if not security_id or not DHAN_ACCESS_TOKEN or not DHAN_CLIENT_ID:
-        return None
+def get_live_quote(ticker: str) -> dict | None:
     try:
-        payload = json.dumps({segment: [security_id]}).encode()
-        req = urllib.request.Request(
-            DHAN_QUOTE_URL,
-            data=payload,
-            headers={
-                "Content-Type": "application/json",
-                "access-token": DHAN_ACCESS_TOKEN,
-                "client-id":    DHAN_CLIENT_ID,
-            },
-            method="POST"
-        )
-        with urllib.request.urlopen(req, timeout=10) as r:
-            data = json.loads(r.read())
-        seg_data = data.get("data", {}).get(segment, {})
-        stock    = seg_data.get(security_id, {})
-        if not stock:
-            return None
-        return {
-            "ltp":        float(stock.get("last_price", 0)),
-            "volume":     int(stock.get("volume", 0)),
-            "avg_volume": int(stock.get("avg_traded_qty", 0)),
-        }
+        import yfinance as yf
+        t = ticker if ticker.endswith(".NS") else ticker + ".NS"
+        fast = yf.Ticker(t).fast_info
+        ltp  = float(fast.last_price)
+        vol  = float(fast.three_month_average_volume or 1)
+        return {"ltp": ltp, "volume": vol, "avg_volume": vol}
     except Exception as e:
-        print(f"  [WARN] Dhan quote failed for {security_id}: {e}")
+        print(f"  [WARN] yfinance quote failed for {ticker}: {e}")
         return None
 
 # CLASSIFICATION
@@ -293,7 +275,7 @@ def main():
         sec_id = pick.get("security_id", "")
         seg    = pick.get("segment", "NSE_EQ")
         print(f"  Checking {ticker}...")
-        quote  = get_dhan_quote(sec_id, seg) if sec_id else None
+        quote  = get_live_quote(ticker)
         c      = classify(pick, quote)
         print(f"    -> {c['status']:20s}  CMP={c['ltp']}  {c['action'][:60]}")
         results.append({"pick": pick, "classification": c})
