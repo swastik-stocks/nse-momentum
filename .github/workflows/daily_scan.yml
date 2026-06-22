@@ -47,3 +47,11 @@ jobs:
           name: scan-log-${{ github.run_number }}
           path: logs/
           retention-days: 7
+       # ── 6. Upload picks for 10am confirmation checker ──────────────────────
+      - name: Upload picks for confirmation
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: picks_latest
+          path: picks_latest.json
+          retention-days: 2
