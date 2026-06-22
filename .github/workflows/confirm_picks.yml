@@ -1,4 +1,4 @@
-name: NSE Momentum - 10am Confirmation
+﻿name: NSE Momentum - 10am Confirmation
 
 on:
   schedule:
@@ -8,7 +8,6 @@ on:
 jobs:
   confirm:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
@@ -19,9 +18,9 @@ jobs:
           python-version: '3.12'
 
       - name: Install dependencies
-        run: pip install requests python-dotenv
+        run: pip install python-dotenv
 
-      - name: Download picks artifact from evening scan
+      - name: Download picks artifact
         uses: dawidd6/action-download-artifact@v6
         with:
           name: picks_latest
