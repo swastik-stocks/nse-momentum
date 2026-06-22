@@ -27,6 +27,7 @@ jobs:
       - name: Download picks artifact
         uses: dawidd6/action-download-artifact@v6
         with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
           name: picks_latest
           path: .
           workflow: daily_scan.yml
