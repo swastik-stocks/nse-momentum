@@ -22,7 +22,7 @@ jobs:
           python-version: '3.12'
 
       - name: Install dependencies
-        run: pip install python-dotenv requests
+        run: pip install python-dotenv requests yfinance
 
       - name: Download picks via GitHub API
         env:
@@ -52,3 +52,4 @@ jobs:
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
           PICKS_JSON_PATH: picks_latest.json
         run: python confirm_picks.py
+
