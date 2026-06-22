@@ -1,0 +1,57 @@
+[
+  {
+    "ticker": "CGPOWER", "name": "CG Power", "sector": "Industrials - MID",
+    "security_id": "11924", "segment": "NSE_EQ", "entry": 957.8, "sl": 910.5,
+    "pivot": 958.9, "t1": 1258.3, "t2": 1444.0, "rr": 6.3, "score": 92, "tier": 1, "pattern": "Swing High Breakout"
+  },
+  {
+    "ticker": "KPIL", "name": "Kalpataru Projects", "sector": "Industrials - MID",
+    "security_id": "19223", "segment": "NSE_EQ", "entry": 1366.7, "sl": 1300.2,
+    "pivot": 1391.7, "t1": 1597.4, "t2": 1864.4, "rr": 3.5, "score": 91, "tier": 1, "pattern": "Swing High Breakout"
+  },
+  {
+    "ticker": "TIINDIA", "name": "Tube Investments", "sector": "Auto - MID",
+    "security_id": "3952", "segment": "NSE_EQ", "entry": 3267.7, "sl": 3107.6,
+    "pivot": 3269.2, "t1": 3850.6, "t2": 4525.2, "rr": 3.6, "score": 90, "tier": 1, "pattern": "Swing High Breakout"
+  },
+  {
+    "ticker": "NAM-INDIA", "name": "Nippon Life AMC", "sector": "Financials - MID",
+    "security_id": "10893", "segment": "NSE_EQ", "entry": 1165.5, "sl": 1100.4,
+    "pivot": 1181.0, "t1": 1513.6, "t2": 1728.8, "rr": 5.3, "score": 89, "tier": 1, "pattern": "Swing High Breakout"
+  },
+  {
+    "ticker": "ANGELONE", "name": "Angel One", "sector": "Financials - MID",
+    "security_id": "14366", "segment": "NSE_EQ", "entry": 352.3, "sl": 335.5,
+    "pivot": 352.8, "t1": 481.8, "t2": 561.8, "rr": 7.7, "score": 87, "tier": 1, "pattern": "Swing High Breakout"
+  },
+  {
+    "ticker": "ADANIENT", "name": "Adani Enterprises", "sector": "Metals - LARGE",
+    "security_id": "25", "segment": "NSE_EQ", "entry": 3051.5, "sl": 2933.8,
+    "pivot": 3079.9, "t1": 4363.9, "t2": 5174.9, "rr": 11.1, "score": 81, "tier": 1, "pattern": "High Base"
+  },
+  {
+    "ticker": "SONACOMS", "name": "Sona BLW Precision", "sector": "Auto - MID",
+    "security_id": "14413", "segment": "NSE_EQ", "entry": 618.4, "sl": 593.7,
+    "pivot": 626.2, "t1": 767.0, "t2": 858.8, "rr": 6.0, "score": 81, "tier": 1, "pattern": "High Base"
+  },
+  {
+    "ticker": "HONAUT", "name": "Honeywell Automation", "sector": "Industrials - MID",
+    "security_id": "508675", "segment": "NSE_EQ", "entry": 37078.1, "sl": 35075.0,
+    "pivot": 37272.7, "t1": 41035.5, "t2": 43522.5, "rr": 2.0, "score": 91, "tier": 1, "pattern": "Swing High Breakout"
+  },
+  {
+    "ticker": "BHARATFORG", "name": "Bharat Forge", "sector": "Auto - MID",
+    "security_id": "1237", "segment": "NSE_EQ", "entry": 2024.3, "sl": 1943.3,
+    "pivot": 2031.2, "t1": 2421.5, "t2": 2667.0, "rr": 4.9, "score": 92, "tier": 2, "pattern": "Swing High Breakout"
+  },
+  {
+    "ticker": "KEI", "name": "KEI Industries", "sector": "Industrials - MID",
+    "security_id": "3812", "segment": "NSE_EQ", "entry": 5553.3, "sl": 5304.5,
+    "pivot": 5602.8, "t1": 7076.3, "t2": 8017.5, "rr": 6.1, "score": 90, "tier": 2, "pattern": "Swing High Breakout"
+  },
+  {
+    "ticker": "ITI", "name": "ITI Ltd", "sector": "Telecom - MID",
+    "security_id": "3520", "segment": "NSE_EQ", "entry": 313.1, "sl": 298.0,
+    "pivot": 315.2, "t1": 370.5, "t2": 437.1, "rr": 3.8, "score": 90, "tier": 2, "pattern": "Swing High Breakout"
+  }
+]
