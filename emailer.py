@@ -1,5 +1,5 @@
 """
-NSE Momentum v5.0 - Email Reporter
+NSE Momentum v5.3 - Email Reporter
 4-section HTML email:
   Section 1: T1/T2/T3 evidence-based trade cards
   Section 2: Top 20 watchlist table (no T1 duplicates)
@@ -87,7 +87,7 @@ def send_email_report(tiers: dict):
                        macro_state, event_risk, t1_cap)
 
     msg = MIMEMultipart("alternative")
-    msg["Subject"] = (f"NSE Momentum v5.0 - {date_str} - "
+    msg["Subject"] = (f"NSE Momentum v5.3 - {date_str} - "
                       f"Regime {regime} ({rlbl}) - {len(t1)} picks")
     msg["From"] = GMAIL_ADDRESS
     msg["To"]   = ", ".join(recipients)
@@ -317,7 +317,7 @@ def _build_html(t1, t2, t3, all_r, near_bo,
             border:1px solid #1F3046;border-bottom:none">
   <div style="font-family:monospace;font-size:10px;letter-spacing:0.2em;color:#00D4AA;
               text-transform:uppercase;margin-bottom:6px">
-    NSE Momentum Discovery - v5.0 - {date_str}
+    NSE Momentum Discovery - v5.3 - {date_str}
   </div>
   <div style="font-size:22px;font-weight:800;color:#FFFFFF;margin-bottom:4px">Daily Intelligence Report</div>
   <div style="font-size:11px;color:#5E7A96;margin-bottom:12px">
@@ -423,7 +423,7 @@ def _build_html(t1, t2, t3, all_r, near_bo,
 
   <div style="margin-top:24px;padding-top:16px;border-top:1px solid #1F3046;
               font-size:10px;color:#2D4055;text-align:center;line-height:1.8">
-    NSE Momentum Scanner v5.0 - 404 stocks - All free data - Evidence-based<br>
+    NSE Momentum Scanner v5.3 - 404 stocks - All free data - Evidence-based<br>
     T1 = Gate cleared. T2 = One condition missing. T3 = Setup forming.<br>
     Near-breakout = Set alert only, do not buy until breakout confirmed.<br>
     Not SEBI-registered investment advice. All trading involves capital risk.
@@ -436,4 +436,4 @@ def _build_html(t1, t2, t3, all_r, near_bo,
 
 
 if __name__ == "__main__":
-    print("Emailer v5.0 loaded OK")
+    print("Emailer v5.3 loaded OK")
