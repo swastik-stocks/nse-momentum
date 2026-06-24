@@ -72,7 +72,7 @@ def _rvol_tvdatafeed(ticker_nse: str) -> float:
         tv = TvDatafeed()
         df = tv.get_hist(
             symbol=symbol, exchange="NSE",
-            interval=Interval.in_5_minute, n_bars=60
+            interval=Interval.in_5_minute, n_bars=300
         )
 
         if df is None:
@@ -572,7 +572,7 @@ def main():
     run_time  = now_ist.strftime("%H:%M")
 
     log.info(f"NSE Momentum v5.3 — 10am Confirmation starting "
-             f"({run_time} IST = {datetime.utcnow().strftime('%H:%M')} UTC)...")
+             f"({run_time} IST = {datetime.now(ZoneInfo('UTC')).strftime('%H:%M')} UTC)...")
 
     if not os.path.exists(PICKS_JSON_PATH):
         log.error(f"{PICKS_JSON_PATH} not found — evening scan must run first")
