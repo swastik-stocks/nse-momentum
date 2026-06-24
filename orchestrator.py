@@ -1,15 +1,34 @@
 """
-NSE Momentum v5.0 - Orchestrator (complete)
-All 14 agents wired. Full P1+P2 implementation.
+NSE Momentum v5.2 - Orchestrator
+All 14 agents wired. P0+P1+P2 implementation.
+
+CHANGES vs v5.0:
+  [P0-1] VCP W4 > 8% hard reject now properly enforced via VCPContractionGate
+  [P0-2] SectorConcentrationGate added — max 3 T1 picks per sector
+  [P0-3] AsymmetryGate.check_dynamic() wired in (ATR-based stops)
+  [P1]   T1 capped at self.t1_cap; T2 hard-capped at T2_CAP (8)
+  [P2]   Circuit limit pre-filter via NSEPython (rejects 5%/10% circuit stocks)
+  [LIB]  Logging replaced with loguru — same API, better diagnostics
+  [COSMETIC] .NS suffix stripped in picks_latest.json display field
 """
 
-import sys, logging
+import sys, json
 import pandas as pd
 import numpy as np
 from pathlib import Path
 from dataclasses import dataclass, field
 from typing import List, Dict, Optional
-from datetime import date
+
+try:
+    from loguru import logger as log
+    log.remove()
+    log.add(sys.stderr, level="INFO",
+            format="<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | {message}")
+    log.add("logs/orchestrator_{time:YYYY-MM-DD}.log", level="DEBUG",
+            rotation="1 day", retention="14 days", compression="zip")
+except ImportError:
+    import logging
+    log = logging.getLogger(__name__)
 
 sys.path.insert(0, str(Path(__file__).parent / "agents"))
 
@@ -33,8 +52,66 @@ from agents.near_breakout              import find_near_breakout_stocks
 from trade_logger                      import get_dynamic_weight
 from nse_universe                      import UNIVERSE_CONFIG, UNIVERSE_SEED
 
-log = logging.getLogger(__name__)
+# Hard cap on T2 picks sent to picks_latest.json and confirmation email
+T2_CAP = 8
 
+# Sector cap — max T1 picks in a single sector
+SECTOR_T1_CAP = 3
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Circuit limit pre-filter
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _is_at_circuit_limit(ticker: str) -> bool:
+    """
+    Returns True if the stock is at a 5% or 10% circuit limit.
+    On circuit, stop-loss orders CANNOT execute — entering is a trap.
+    Uses NSEPython (pip install nsepython). Falls back to False on any error
+    so the scanner never crashes due to API failure.
+    """
+    try:
+        from nsepython import nse_get_quote_info
+        symbol = ticker.replace(".NS", "")
+        info   = nse_get_quote_info(symbol)
+        band   = str(info.get("priceBand", "")).strip()
+        if band in ("5%", "10%", "15%", "20%"):
+            log.debug(f"Circuit limit {band} detected for {ticker} — rejecting")
+            return True
+    except ImportError:
+        pass   # nsepython not installed — skip check silently
+    except Exception as e:
+        log.debug(f"Circuit check failed for {ticker}: {e}")
+    return False
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Sector Concentration Gate
+# ─────────────────────────────────────────────────────────────────────────────
+
+class SectorConcentrationGate:
+    """
+    Enforces maximum T1 picks per sector.
+    Pass in accepted T1 picks so far; call can_add() before each new addition.
+    """
+
+    def __init__(self, max_per_sector: int = SECTOR_T1_CAP):
+        self.max_per_sector = max_per_sector
+        self._counts: Dict[str, int] = {}
+
+    def can_add(self, sector: str) -> bool:
+        return self._counts.get(sector, 0) < self.max_per_sector
+
+    def add(self, sector: str):
+        self._counts[sector] = self._counts.get(sector, 0) + 1
+
+    def summary(self) -> str:
+        return "  ".join(f"{s}:{n}" for s, n in self._counts.items())
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# StockResult dataclass (identical to v5.0 — no caller changes needed)
+# ─────────────────────────────────────────────────────────────────────────────
 
 @dataclass
 class StockResult:
@@ -85,7 +162,13 @@ class StockResult:
     event_risk:           str   = "NORMAL"
     confirmation_state:   str   = "SETUP_READY"
     confirmation_score:   int   = 3
+    # v5.2 additions
+    circuit_limit:        str   = ""   # e.g. "5%" — empty = normal trading
 
+
+# ─────────────────────────────────────────────────────────────────────────────
+# AgentOrchestrator
+# ─────────────────────────────────────────────────────────────────────────────
 
 class AgentOrchestrator:
     def __init__(self, data_dict: dict):
@@ -128,13 +211,17 @@ class AgentOrchestrator:
         self.t1_cap      = self.macro_agent.get_t1_cap(self.regime)
 
         # EventRiskAgent (v5)
-        self.event_agent = EventRiskAgent()
-        self.event_state = self.event_agent.get_state()
+        self.event_agent   = EventRiskAgent()
+        self.event_state   = self.event_agent.get_state()
         self.event_penalty = self.event_agent.get_score_penalty()
 
-        log.info(f"Regime: {self.regime} ({self.regime_name}) | "
-                 f"Breadth: {self.breadth_score}/10 | Macro: {self.macro_state} | "
-                 f"Event: {self.event_state} | T1 cap: {self.t1_cap}")
+        log.info(
+            f"Regime: {self.regime} ({self.regime_name}) | "
+            f"Breadth: {self.breadth_score}/10 | Macro: {self.macro_state} | "
+            f"Event: {self.event_state} | T1 cap: {self.t1_cap} | T2 cap: {T2_CAP}"
+        )
+
+    # ── per-stock evaluation ──────────────────────────────────────────────────
 
     def run(self, ticker: str, name: str, sector: str, df: pd.DataFrame,
             delivery_data: dict = None, universe: str = "LARGE") -> StockResult:
@@ -154,8 +241,15 @@ class AgentOrchestrator:
             return r
 
         cfg     = UNIVERSE_CONFIG[universe]
-        del_pct = (delivery_data or {}).get(ticker.replace(".NS",""), 0.0)
+        del_pct = (delivery_data or {}).get(ticker.replace(".NS", ""), 0.0)
         r.del_pct = del_pct
+
+        # [P2] Circuit limit pre-filter
+        if _is_at_circuit_limit(ticker):
+            r.rejected     = True
+            r.circuit_limit = "CIRCUIT"
+            r.reject_reason = f"Circuit limit active — stop orders cannot execute"
+            return r
 
         # G1: Liquidity
         liq = LiquidityAgent(df, universe=universe)
@@ -170,29 +264,29 @@ class AgentOrchestrator:
         if not pa.pattern:
             r.rejected = True; r.reject_reason = "No pattern detected"
             return r
-        dyn_weight        = get_dynamic_weight(pa.pattern)
-        r.pattern         = pa.pattern
-        r.breakout_level  = pa.breakout_level
-        r.entry_low       = pa.entry_low
-        r.entry_high      = pa.entry_high
-        r.pattern_score   = min(dyn_weight, 18)
-        r.ema_score       = pa.get_ema_score()
-        r.macd_score      = pa.get_macd_score()
-        r.rsi_score       = pa.get_rsi_score()
+        dyn_weight         = get_dynamic_weight(pa.pattern)
+        r.pattern          = pa.pattern
+        r.breakout_level   = pa.breakout_level
+        r.entry_low        = pa.entry_low
+        r.entry_high       = pa.entry_high
+        r.pattern_score    = min(dyn_weight, 18)
+        r.ema_score        = pa.get_ema_score()
+        r.macd_score       = pa.get_macd_score()
+        r.rsi_score        = pa.get_rsi_score()
         r.breakout_quality = getattr(pa, "breakout_quality", "MINOR")
 
+        # RSI value
         try:
             import ta
             r.rsi_val = float(
                 ta.momentum.RSIIndicator(df["Close"].squeeze(), 14).rsi().iloc[-1])
         except Exception:
-            # Fallback: pure pandas RSI calculation
             try:
                 c     = df["Close"].squeeze()
                 delta = c.diff()
                 gain  = delta.clip(lower=0).rolling(14).mean()
                 loss  = (-delta.clip(upper=0)).rolling(14).mean()
-                rs    = gain / loss.replace(0, float('nan'))
+                rs    = gain / loss.replace(0, float("nan"))
                 rsi_s = 100 - 100 / (1 + rs)
                 r.rsi_val = float(rsi_s.iloc[-1])
             except Exception:
@@ -202,7 +296,7 @@ class AgentOrchestrator:
         avg20v = float(np.mean(vol[-20:])) if np.mean(vol[-20:]) > 0 else 1
         r.rvol = round(float(vol[-1]) / avg20v, 2)
 
-        # G3: RS (gate now 30th percentile)
+        # G3: RS (gate at 30th percentile)
         rsa = RSAgent(
             df, self.data.get("nifty50_data", pd.DataFrame()),
             universe_ranks=self.universe_rs_ranks, ticker=ticker
@@ -230,7 +324,8 @@ class AgentOrchestrator:
         r.sector_score = self.sector_agent.score_for_sector(sector, self.sector_ranks)
 
         # G4: Risk
-        risk = RiskAgent(df, r.breakout_level, r.entry_low, r.entry_high, universe=universe)
+        risk = RiskAgent(df, r.breakout_level, r.entry_low, r.entry_high,
+                         universe=universe)
         if not risk.passes():
             r.rejected = True; r.reject_reason = risk.reject_reason()
             return r
@@ -238,10 +333,13 @@ class AgentOrchestrator:
         r.target1 = risk.target1; r.target2 = risk.target2
         r.rrr = risk.rrr; r.stop_pct = risk.stop_pct; r.gain_pct_t1 = risk.gain_pct
 
-        # G5: AsymmetryGate
+        # [P0-3] G5: AsymmetryGate — dynamic path with ATR recompute
         ag = AsymmetryGate(entry=r.entry_high, stop=r.stop_loss,
                            target1=r.target1, universe=universe)
-        ag_result = ag.check()
+        ag_result = ag.check_dynamic(df=df, w4_pct=r.vcp_w4_pct)
+        # Fall back to legacy check() if dynamic path wasn't decisive
+        if not ag_result["qualified"] and ag_result["fail_stage"] == "INPUT":
+            ag_result = ag.check()
         r.asymmetry_risk_pct   = ag_result["risk_pct"]
         r.asymmetry_reward_pct = ag_result["reward_pct"]
         r.asymmetry_rr         = ag_result["rr_ratio"]
@@ -250,36 +348,42 @@ class AgentOrchestrator:
             r.rejected = True; r.reject_reason = ag_result["fail_reason"]
             return r
 
-        # G6: VCP
+        # [P0-1] G6: VCP — hard reject now enforced
         vcpg = VCPContractionGate(df=df)
         vcp  = vcpg.check()
-        r.vcp_w4_pct = vcp["w4_pct"]; r.vcp_contracting = vcp["contracting"]
-        r.vcp_penalty = vcp["penalty"]
+        r.vcp_w4_pct    = vcp["w4_pct"]
+        r.vcp_contracting = vcp["contracting"]
+        r.vcp_penalty   = vcp["penalty"]
         if vcp["hard_reject"]:
             r.rejected = True; r.reject_reason = vcp["fail_reason"]
             return r
 
         # G7: Headroom
         if r.entry_high > 0 and r.target1 > r.entry_high:
-            r.headroom_pct = round((r.target1 - r.entry_high) / r.entry_high * 100, 2)
+            r.headroom_pct = round(
+                (r.target1 - r.entry_high) / r.entry_high * 100, 2)
         if r.headroom_pct < 4.5:
             r.rejected = True
-            r.reject_reason = (f"Headroom {r.headroom_pct:.1f}% < 4.5% "
-                               f"(T1 {r.target1:.0f} vs entry {r.entry_high:.0f})")
+            r.reject_reason = (
+                f"Headroom {r.headroom_pct:.1f}% < 4.5% "
+                f"(T1 {r.target1:.0f} vs entry {r.entry_high:.0f})"
+            )
             return r
 
         # Fundamental proxy
         fp = FundamentalProxyAgent(ticker, df, del_pct, r.rs_percentile,
-                                    self.sector_ranks.get(sector, 7))
+                                   self.sector_ranks.get(sector, 7))
         r.fundamental_score = fp.evaluate()["fundamental_proxy_score"]
 
         # Institutional proxy
         ip = InstitutionalProxyAgent(ticker, df, del_pct)
         r.institutional_score = ip.evaluate()["institutional_proxy_score"]
 
-        r.bonus_score = min(r.liq_score // 2
-                            + r.fundamental_score // 4
-                            + r.institutional_score // 4, 5)
+        r.bonus_score = min(
+            r.liq_score // 2
+            + r.fundamental_score // 4
+            + r.institutional_score // 4, 5
+        )
 
         # Earnings catalyst
         try:
@@ -288,38 +392,35 @@ class AgentOrchestrator:
             r.earnings_flag  = eca.get("catalyst_found", False)
             r.earnings_score = eca.get("score", 0)
         except Exception as e:
-            log.debug("EarningsCatalystAgent %s: %s", ticker, e)
+            log.debug(f"EarningsCatalystAgent {ticker}: {e}")
 
         # ConfirmationAgent (v5)
         conf = ConfirmationAgent(ticker, r.entry, r.stop_loss, r.breakout_level)
         r.confirmation_state = conf.get_state()
         r.confirmation_score = conf.get_score()
 
-        # Master score (v5 rebalanced)
-        # RS(18) + Pattern(16) + RSI(10) + Volume(12) + EMA(8)
-        # + Market(6-macro) + MACD(4) + Sector(8) + Confirmation(6)
-        # + Bonus(2) + Earnings(4) - VCP penalty = ~94 base + extras
+        # Master score
         r.raw_score = (
-            r.rs_score       +   # 0-18 (rebalanced from 20)
-            r.pattern_score  +   # 0-16 (rebalanced from 18)
-            r.rsi_score      +   # 0-10 (rebalanced from 15)
-            r.volume_score   +   # 0-12
-            r.ema_score      +   # 0-8  (rebalanced from 10)
-            r.market_score   +   # 0-5
-            r.macd_score     +   # 0-4  (rebalanced from 8)
-            r.sector_score   +   # 0-8  (rebalanced from 7)
-            r.bonus_score        # 0-2  (compressed from 5)
+            r.rs_score       +
+            r.pattern_score  +
+            r.rsi_score      +
+            r.volume_score   +
+            r.ema_score      +
+            r.market_score   +
+            r.macd_score     +
+            r.sector_score   +
+            r.bonus_score
         )
 
         penalty = int(self.regime_penalty * cfg["regime_penalty_mult"])
         r.total_score = max(0, (
             r.raw_score
             + penalty
-            + r.earnings_score       # 0 or 4
-            + self.macro_score        # 0, 3, or 6
-            + r.confirmation_score    # 3 or 6
-            - r.vcp_penalty           # 0 or 5
-            - self.event_penalty      # 0, 2, or 5
+            + r.earnings_score
+            + self.macro_score
+            + r.confirmation_score
+            - r.vcp_penalty
+            - self.event_penalty
         ))
 
         # Conviction
@@ -327,8 +428,7 @@ class AgentOrchestrator:
         r.confidence_pct = ca.calibrate_confidence(r.pattern, r.total_score, universe)
 
         # Tier assignment
-        gate = cfg["score_gate"]
-        # Event risk raises the effective gate
+        gate           = cfg["score_gate"]
         effective_gate = gate + self.event_penalty
         if r.total_score >= effective_gate:
             r.tier = 1
@@ -343,12 +443,14 @@ class AgentOrchestrator:
             r.what_is_working    = self._why_working(r)[:2]
             r.trigger_conditions = self._triggers(r)
         else:
-            r.rejected = True
+            r.rejected     = True
             r.reject_reason = f"Score {r.total_score} below watchlist threshold"
             return r
 
         r.risk_factors = self._risk_factors(r)
         return r
+
+    # ── universe scan ────────────────────────────────────────────────────────
 
     def run_universe(self, universe_items: list,
                      stock_data: dict, delivery_data: dict) -> dict:
@@ -372,18 +474,18 @@ class AgentOrchestrator:
                 key = f"Exception: {type(e).__name__}"
                 reject_reasons[key] = reject_reasons.get(key, 0) + 1
 
-        # Rejection buckets
+        # Rejection summary
         if reject_reasons:
-            buckets = {}
+            buckets: Dict[str, int] = {}
             for reason, count in reject_reasons.items():
-                if "AsymmetryGate" in reason and "risk" in reason:
+                if "AsymmetryGate" in reason and "stop" in reason.lower():
                     key = "AsymmetryGate: stop too wide"
-                elif "AsymmetryGate" in reason and "reward" in reason:
-                    key = "AsymmetryGate: reward too small"
+                elif "AsymmetryGate" in reason and "reward" in reason.lower():
+                    key = "AsymmetryGate: insufficient headroom"
                 elif "AsymmetryGate" in reason:
                     key = "AsymmetryGate: R:R below minimum"
                 elif "VCPGate" in reason:
-                    key = "VCPGate: W4 too loose"
+                    key = "VCPGate: W4 too wide (> 8%)"
                 elif "Headroom" in reason:
                     key = "Headroom < 4.5%"
                 elif reason.startswith("R:R"):
@@ -398,45 +500,68 @@ class AgentOrchestrator:
                     key = "Insufficient price history"
                 elif "RS Percentile" in reason:
                     key = reason
+                elif "Circuit" in reason:
+                    key = "Circuit limit — stop cannot execute"
                 else:
                     key = reason
                 buckets[key] = buckets.get(key, 0) + count
             log.info("  Rejection breakdown:")
             for reason, count in sorted(buckets.items(), key=lambda x: -x[1])[:12]:
-                log.info(f"    {count:>3} x {reason}")
+                log.info(f"    {count:>3} × {reason}")
 
         all_results.sort(key=lambda x: x.total_score, reverse=True)
 
-        t1 = [r for r in all_results if r.tier == 1]
-        t2 = [r for r in all_results if r.tier == 2]
-        t3 = [r for r in all_results if r.tier == 3]
+        t1_raw = [r for r in all_results if r.tier == 1]
+        t2_raw = [r for r in all_results if r.tier == 2]
+        t3     = [r for r in all_results if r.tier == 3]
 
-        # Ranking funnel - apply T1 cap (P1 item)
-        if len(t1) > self.t1_cap:
-            # Sort by: confirmation state first, then RS persistence, then score
-            t1.sort(key=lambda r: (
-                0 if r.confirmation_state == "BREAKOUT_CONFIRMED" else 1,
-                -r.rs_persistence,
-                -r.total_score
-            ))
-            overflow = t1[self.t1_cap:]
-            t1 = t1[:self.t1_cap]
-            # Demote overflow to T2
+        # [P0-2] Sector concentration gate applied to T1
+        t1_sorted = sorted(t1_raw, key=lambda r: (
+            0 if r.confirmation_state == "BREAKOUT_CONFIRMED" else 1,
+            -r.rs_persistence,
+            -r.total_score
+        ))
+        sector_gate = SectorConcentrationGate(max_per_sector=SECTOR_T1_CAP)
+        t1_accepted: List[StockResult] = []
+        sector_overflow: List[StockResult] = []
+
+        for r in t1_sorted:
+            if sector_gate.can_add(r.sector):
+                sector_gate.add(r.sector)
+                t1_accepted.append(r)
+            else:
+                r.tier = 2
+                r.reject_reason = f"SECTOR_CAP_{r.sector} (max {SECTOR_T1_CAP})"
+                sector_overflow.append(r)
+                log.debug(f"  {r.ticker} demoted T1→T2: sector cap ({r.sector})")
+
+        # [P1] T1 cap
+        if len(t1_accepted) > self.t1_cap:
+            overflow = t1_accepted[self.t1_cap:]
+            t1_accepted = t1_accepted[:self.t1_cap]
             for r in overflow:
                 r.tier = 2
-            t2 = overflow + t2
-            t2.sort(key=lambda r: -r.total_score)
+            sector_overflow = overflow + sector_overflow
 
-        log.info(f"  Tier 1 (Top Picks):  {len(t1)} (cap={self.t1_cap})")
-        log.info(f"  Tier 2 (Aggressive): {len(t2)}")
+        # Merge T2
+        t2 = sector_overflow + t2_raw
+        t2.sort(key=lambda r: -r.total_score)
+        t2 = t2[:T2_CAP]   # hard cap T2 at 8
+
+        log.info(
+            f"  Tier 1 (Top Picks):  {len(t1_accepted)}"
+            f" (t1_cap={self.t1_cap}, sector_cap={SECTOR_T1_CAP})"
+            f" | sector dist: {sector_gate.summary()}"
+        )
+        log.info(f"  Tier 2 (Aggressive): {len(t2)} (cap={T2_CAP})")
         log.info(f"  Tier 3 (Watchlist):  {len(t3)}")
         log.info(f"  Macro: {self.macro_state} | Event: {self.event_state}")
 
         # Auto-log T1 picks
-        if t1:
+        if t1_accepted:
             try:
                 from trade_logger import auto_log_t1_picks
-                logged = auto_log_t1_picks(t1, regime=self.regime)
+                logged = auto_log_t1_picks(t1_accepted, regime=self.regime)
                 log.info(f"  Auto-logged {logged} T1 picks to trades_v4")
             except Exception as e:
                 log.warning(f"  Auto-log failed: {e}")
@@ -447,39 +572,55 @@ class AgentOrchestrator:
             universe_items, stock_data, delivery_data, existing
         )
         log.info(f"  Near-breakout watchlist: {len(near_breakout)} stocks")
-        import json
+
+        # Save picks_latest.json
         picks_json = []
-        for r in t1 + t2:
+        for r in t1_accepted + t2:
             picks_json.append({
-                "ticker":  r.ticker,
-                "name":    r.name,
-                "sector":  r.sector,
+                # [COSMETIC] display_ticker strips .NS — clean name in email
+                "ticker":      r.ticker.replace(".NS", ""),
+                "ticker_raw":  r.ticker,   # keep raw for yfinance lookups
+                "name":        r.name,
+                "sector":      r.sector,
                 "security_id": "",
-                "segment": "NSE_EQ",
-                "entry":   round(r.entry, 2),
-                "sl":      round(r.stop_loss, 2),
-                "pivot":   round(r.breakout_level if r.breakout_level > 0 else r.entry, 2),
-                "t1":      round(r.target1, 2),
-                "t2":      round(r.target2, 2),
-                "rr":      round(r.asymmetry_rr, 1),
-                "score":   r.total_score,
-                "tier":    r.tier,
-                "pattern": r.pattern or "",
+                "segment":     "NSE_EQ",
+                "entry":       round(r.entry,           2),
+                "sl":          round(r.stop_loss,       2),
+                "pivot":       round(r.breakout_level if r.breakout_level > 0
+                                     else r.entry,      2),
+                "t1":          round(r.target1,         2),
+                "t2":          round(r.target2,         2),
+                "rr":          round(r.asymmetry_rr,    1),
+                "score":       r.total_score,
+                "tier":        r.tier,
+                "pattern":     r.pattern or "",
+                "vcp_w4_pct":  round(r.vcp_w4_pct,     2),
             })
         with open("picks_latest.json", "w") as f:
             json.dump(picks_json, f, indent=2)
-        log.info(f"  Saved {len(picks_json)} picks to picks_latest.json")
+        log.info(
+            f"  Saved {len(picks_json)} picks to picks_latest.json "
+            f"(T1={len(t1_accepted)}, T2={len(t2)})"
+        )
+
         return {
-            "tier1": t1, "tier2": t2, "tier3": t3,
+            "tier1":         t1_accepted,
+            "tier2":         t2,
+            "tier3":         t3,
             "near_breakout": near_breakout,
-            "all_results": all_results,
-            "regime": self.regime, "regime_name": self.regime_name,
-            "breadth": self.breadth_score,
+            "all_results":   all_results,
+            "regime":        self.regime,
+            "regime_name":   self.regime_name,
+            "breadth":       self.breadth_score,
             "breadth_detail": self.breadth_detail,
-            "macro_state": self.macro_state,
-            "event_risk": self.event_state,
-            "t1_cap": self.t1_cap,
+            "macro_state":   self.macro_state,
+            "event_risk":    self.event_state,
+            "t1_cap":        self.t1_cap,
+            "t2_cap":        T2_CAP,
+            "sector_distribution": sector_gate.summary(),
         }
+
+    # ── narrative helpers (unchanged from v5.0) ──────────────────────────────
 
     def _why_working(self, r: StockResult) -> List[str]:
         reasons = []
@@ -544,4 +685,6 @@ class AgentOrchestrator:
             risks.append("Macro HOSTILE - reduce position size")
         if r.confirmation_state == "SETUP_READY":
             risks.append("Not yet confirmed - wait for next session close above pivot")
+        if r.circuit_limit:
+            risks.append(f"Circuit limit {r.circuit_limit} detected at scan time")
         return risks[:3]
