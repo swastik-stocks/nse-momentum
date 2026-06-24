@@ -34,6 +34,9 @@ GMAIL_ADDRESS      = os.getenv("GMAIL_ADDRESS", "")
 GMAIL_APP_PASSWORD = os.getenv("GMAIL_APP_PASSWORD", "")
 PICKS_JSON_PATH    = os.getenv("PICKS_JSON_PATH", "picks_latest.json")
 
+# ── Version — single source of truth ─────────────────────────────────────────
+VERSION = "5.3"
+
 # ── Thresholds ────────────────────────────────────────────────────────────────
 RVOL_CONFIRM_MIN        = 1.5   # RVOL >= this → CONFIRMED (full size)
 RVOL_LOW_VOL_MIN        = 1.0   # RVOL >= this → CONFIRMED_LOW_VOL (half size)
@@ -387,6 +390,18 @@ def _row(r: dict) -> str:
         )
     tier = f"T{p.get('tier','?')}"
 
+    # [P1] SL/T1/T2/RR shown on all rows — critical for intraday decisions
+    sl  = p.get("sl",  p.get("stop_loss", 0)) or 0
+    t1  = p.get("t1",  p.get("target1",   0)) or 0
+    t2  = p.get("t2",  p.get("target2",   0)) or 0
+    rr  = p.get("rr",  p.get("rrr",       0)) or 0
+    entry = p.get("entry", 0) or 0
+
+    sl_cell  = f"<span style='color:#dc2626;font-weight:600;'>₹{sl:,.1f}</span>"  if sl  else "—"
+    t1_cell  = f"<span style='color:#16a34a;font-weight:600;'>₹{t1:,.1f}</span>"  if t1  else "—"
+    t2_cell  = f"<span style='color:#15803d;font-size:11px;'>₹{t2:,.1f}</span>"   if t2  else "—"
+    rr_cell  = f"<span style='color:#1e40af;font-weight:600;'>{rr:.1f}x</span>"   if rr  else "—"
+
     return f"""
     <tr style="border-bottom:1px solid #e5e7eb;">
       <td style="padding:10px 8px;">
@@ -402,6 +417,18 @@ def _row(r: dict) -> str:
       <td style="padding:10px 8px;text-align:right;font-weight:700;color:#111827;">{ltp}</td>
       <td style="padding:10px 8px;text-align:right;">{_fmt_rvol(c['rvol'], c.get('rvol_src',''))}</td>
       <td style="padding:10px 8px;text-align:right;color:#6b7280;">{gap}</td>
+      <td style="padding:10px 8px;text-align:right;font-size:12px;">
+        {sl_cell}<br><span style='color:#9ca3af;font-size:10px;'>SL</span>
+      </td>
+      <td style="padding:10px 8px;text-align:right;font-size:12px;">
+        {t1_cell}<br><span style='color:#9ca3af;font-size:10px;'>T1</span>
+      </td>
+      <td style="padding:10px 8px;text-align:right;font-size:12px;">
+        {t2_cell}<br><span style='color:#9ca3af;font-size:10px;'>T2</span>
+      </td>
+      <td style="padding:10px 8px;text-align:right;font-size:12px;">
+        {rr_cell}<br><span style='color:#9ca3af;font-size:10px;'>R:R</span>
+      </td>
       <td style="padding:10px 8px;font-size:11px;color:#6b7280;">{drift_cell}</td>
       <td style="padding:10px 8px;font-size:12px;color:#374151;">{c['action']}</td>
     </tr>"""
@@ -412,11 +439,48 @@ def _section(items: list, label: str, accent: str) -> str:
         return ""
     header = f"""
     <tr>
-      <td colspan="8" style="padding:14px 8px 6px;font-size:11px;font-weight:700;
+      <td colspan="12" style="padding:14px 8px 6px;font-size:11px;font-weight:700;
           letter-spacing:1.5px;text-transform:uppercase;color:{accent};
           border-bottom:2px solid {accent};">{label}</td>
     </tr>"""
     return header + "".join(_row(r) for r in items)
+
+
+def build_stale_html(scan_date_str: str, today_iso: str, run_time: str) -> str:
+    """Email sent when picks_latest.json is from a previous day."""
+    return f"""<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"></head>
+<body style="margin:0;padding:0;background:#f9fafb;
+    font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;">
+<div style="max-width:600px;margin:24px auto;background:#ffffff;
+    border-radius:12px;box-shadow:0 1px 4px rgba(0,0,0,.08);overflow:hidden;">
+  <div style="background:#0f172a;padding:20px 28px;">
+    <div style="color:#94a3b8;font-size:11px;letter-spacing:2px;">
+        NSE MOMENTUM DISCOVERY &ndash; V{VERSION}</div>
+    <div style="color:#f1f5f9;font-size:22px;font-weight:700;margin-top:4px;">
+        10am Confirmation — STALE DATA</div>
+    <div style="color:#64748b;font-size:13px;margin-top:2px;">
+        Run at {run_time} IST</div>
+  </div>
+  <div style="background:#fef2f2;border-left:4px solid #dc2626;
+      margin:24px;padding:16px;border-radius:0 4px 4px 0;">
+    <div style="font-weight:700;color:#991b1b;font-size:15px;">
+      Evening scan did not run for today
+    </div>
+    <div style="color:#7f1d1d;font-size:13px;margin-top:8px;">
+      picks_latest.json is dated <strong>{scan_date_str}</strong> but today is
+      <strong>{today_iso}</strong>.<br><br>
+      No confirmation performed. Do not trade today until the evening scan runs
+      and produces a fresh picks file.
+    </div>
+  </div>
+  <div style="background:#f8fafc;border-top:1px solid #e2e8f0;padding:14px 28px;
+      font-size:11px;color:#94a3b8;">
+    Not SEBI-registered investment advice. All trading involves capital risk.
+  </div>
+</div>
+</body></html>"""
 
 
 def build_html(results: list, scan_date: str, run_time: str) -> str:
@@ -500,7 +564,7 @@ def build_html(results: list, scan_date: str, run_time: str) -> str:
 
   <div style="background:#0f172a;padding:20px 28px;">
     <div style="color:#94a3b8;font-size:11px;letter-spacing:2px;">
-        NSE MOMENTUM DISCOVERY &ndash; V5.3</div>
+        NSE MOMENTUM DISCOVERY &ndash; V{VERSION}</div>
     <div style="color:#f1f5f9;font-size:22px;font-weight:700;margin-top:4px;">
         10am Confirmation Report</div>
     <div style="color:#64748b;font-size:13px;margin-top:2px;">
@@ -527,6 +591,10 @@ def build_html(results: list, scan_date: str, run_time: str) -> str:
           <th style="padding:10px 8px;text-align:right;font-size:11px;color:#6b7280;letter-spacing:1px;text-transform:uppercase;">CMP</th>
           <th style="padding:10px 8px;text-align:right;font-size:11px;color:#6b7280;letter-spacing:1px;text-transform:uppercase;">RVOL</th>
           <th style="padding:10px 8px;text-align:right;font-size:11px;color:#6b7280;letter-spacing:1px;text-transform:uppercase;">vs Pivot</th>
+          <th style="padding:10px 8px;text-align:right;font-size:11px;color:#dc2626;letter-spacing:1px;text-transform:uppercase;">SL</th>
+          <th style="padding:10px 8px;text-align:right;font-size:11px;color:#16a34a;letter-spacing:1px;text-transform:uppercase;">T1</th>
+          <th style="padding:10px 8px;text-align:right;font-size:11px;color:#15803d;letter-spacing:1px;text-transform:uppercase;">T2</th>
+          <th style="padding:10px 8px;text-align:right;font-size:11px;color:#1e40af;letter-spacing:1px;text-transform:uppercase;">R:R</th>
           <th style="padding:10px 8px;text-align:right;font-size:11px;color:#6b7280;letter-spacing:1px;text-transform:uppercase;">vs Entry</th>
           <th style="padding:10px 8px;text-align:left;font-size:11px;color:#6b7280;letter-spacing:1px;text-transform:uppercase;">Action</th>
         </tr>
@@ -581,6 +649,22 @@ def main():
     with open(PICKS_JSON_PATH, encoding="utf-8") as f:
         picks = json.load(f)
     log.info(f"  Loaded {len(picks)} picks from {PICKS_JSON_PATH}")
+
+    # [P0] Stale data guard — reject picks from a previous day
+    today_iso  = date.today().isoformat()
+    picks_meta = picks[0] if picks else {}
+    scan_date_str = picks_meta.get("scan_date", "")
+    if scan_date_str and scan_date_str != today_iso:
+        log.error(
+            f"STALE PICKS FILE — scan_date={scan_date_str}, today={today_iso}. "
+            f"Evening scan did not run today or picks_latest.json was not updated. Aborting."
+        )
+        stale_html = build_stale_html(scan_date_str, today_iso, run_time)
+        send_email(
+            f"[NSE Momentum 10am] STALE DATA — evening scan missing | {today_str}",
+            stale_html
+        )
+        return
 
     results = []
     for pick in picks:

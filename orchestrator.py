@@ -574,6 +574,7 @@ class AgentOrchestrator:
         log.info(f"  Near-breakout watchlist: {len(near_breakout)} stocks")
 
         # Save picks_latest.json
+        from datetime import date as _date
         picks_json = []
         for r in t1_accepted + t2:
             picks_json.append({
@@ -595,6 +596,7 @@ class AgentOrchestrator:
                 "tier":        r.tier,
                 "pattern":     r.pattern or "",
                 "vcp_w4_pct":  round(r.vcp_w4_pct,     2),
+                "scan_date":   _date.today().isoformat(),  # stale data guard
             })
         with open("picks_latest.json", "w") as f:
             json.dump(picks_json, f, indent=2)
