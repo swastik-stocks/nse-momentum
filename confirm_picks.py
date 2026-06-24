@@ -72,7 +72,7 @@ def _rvol_tvdatafeed(ticker_nse: str) -> float:
         tv = TvDatafeed()
         df = tv.get_hist(
             symbol=symbol, exchange="NSE",
-            interval=Interval.in_5_minute, n_bars=300
+            interval=Interval.in_15_minute, n_bars=500
         )
 
         if df is None:
@@ -94,7 +94,7 @@ def _rvol_tvdatafeed(ticker_nse: str) -> float:
         today_45 = df[
             (df.index.date == today) &
             (df.index.time >= datetime.strptime("09:15", "%H:%M").time()) &
-            (df.index.time <= datetime.strptime("10:00", "%H:%M").time())
+            (df.index.time <= datetime.strptime("10:15", "%H:%M").time())
         ]
 
         if today_45.empty:
@@ -112,12 +112,12 @@ def _rvol_tvdatafeed(ticker_nse: str) -> float:
             day_45 = hist[
                 (hist.index.date == row_date) &
                 (hist.index.time >= datetime.strptime("09:15", "%H:%M").time()) &
-                (hist.index.time <= datetime.strptime("10:00", "%H:%M").time())
+                (hist.index.time <= datetime.strptime("10:15", "%H:%M").time())
             ]
             if not day_45.empty:
                 hist_by_day[row_date] = float(day_45["volume"].sum())
 
-        if len(hist_by_day) < 5:
+        if len(hist_by_day) < 3:
             log.warning(f"    [tvDatafeed] {symbol}: only {len(hist_by_day)} "
                         f"historical days — insufficient for avg")
             return -1.0
@@ -162,7 +162,7 @@ def _rvol_yfinance_fallback(ticker_nse: str) -> float:
         today_45 = df_1m[
             (df_1m.index.date == today) &
             (df_1m.index.time >= datetime.strptime("09:15", "%H:%M").time()) &
-            (df_1m.index.time <= datetime.strptime("10:00", "%H:%M").time())
+            (df_1m.index.time <= datetime.strptime("10:15", "%H:%M").time())
         ]
         if today_45.empty:
             log.warning(f"    [yfinance-fallback] {t}: no bars for today in window")
@@ -175,7 +175,7 @@ def _rvol_yfinance_fallback(ticker_nse: str) -> float:
             day_45 = hist[
                 (hist.index.date == row_date) &
                 (hist.index.time >= datetime.strptime("09:15", "%H:%M").time()) &
-                (hist.index.time <= datetime.strptime("10:00", "%H:%M").time())
+                (hist.index.time <= datetime.strptime("10:15", "%H:%M").time())
             ]
             if not day_45.empty:
                 hist_by_day[row_date] = float(day_45["Volume"].sum())
