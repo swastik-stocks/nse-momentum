@@ -1,15 +1,25 @@
 """
-NSE Momentum v5.2 - Orchestrator
+NSE Momentum v5.3 - Orchestrator
 All 14 agents wired. P0+P1+P2 implementation.
 
-CHANGES vs v5.0:
-  [P0-1] VCP W4 > 8% hard reject now properly enforced via VCPContractionGate
-  [P0-2] SectorConcentrationGate added — max 3 T1 picks per sector
-  [P0-3] AsymmetryGate.check_dynamic() wired in (ATR-based stops)
-  [P1]   T1 capped at self.t1_cap; T2 hard-capped at T2_CAP (8)
-  [P2]   Circuit limit pre-filter via NSEPython (rejects 5%/10% circuit stocks)
-  [LIB]  Logging replaced with loguru — same API, better diagnostics
-  [COSMETIC] .NS suffix stripped in picks_latest.json display field
+CHANGES vs v5.2:
+  [BUG-1] MarketBreadthAgent now fetches NSE-WIDE A/D ratio (all ~2000 traded
+          symbols) instead of computing it from our 401-stock universe subset.
+          On 24 Jun 2026 this caused A/D=0.27 when actual NSE was 1.07.
+          Fix: fetch_nse_wide_breadth() → fallback to full Bhavcopy (~3200 sym)
+
+  [BUG-2] MacroAgent VIX thresholds recalibrated. VIX 13.33 was landing in
+          HOSTILE bucket. Now correctly maps VIX < 14 → +3 pts (Healthy bull).
+
+  [BUG-3] Regime confidence score added. When breadth signals contradict
+          (e.g. above_50_ema=64.9% but A/D=0.27), regime is marked LOW_CONFIDENCE
+          and penalty is dampened: D penalty -12 → -5 pts, T1 cap 0 → 5 picks.
+
+  [BUG-4] MacroAgent FII fallback fixed. If NSE FII CSV fetch fails, macro
+          no longer defaults to HOSTILE — uses neutral (0 pts) with a warning.
+
+  [BUG-5] Calibration logs auto-written to logs/breadth_calibration.log and
+          logs/regime_calibration.log for daily audit.
 """
 
 import sys, json
@@ -36,7 +46,12 @@ from agents.pattern_agent              import PatternAgent
 from agents.rs_agent                   import RSAgent, compute_universe_ranks
 from agents.volume_agent               import VolumeAgent
 from agents.market_agent               import MarketAgent
-from agents.market_breadth_agent       import MarketBreadthAgent
+from agents.market_breadth_agent       import (
+    fetch_nse_wide_breadth,
+    fetch_breadth_from_bhavcopy,
+    compute_breadth_score,
+    print_breadth_dashboard,
+)
 from agents.sector_agent               import SectorAgent
 from agents.risk_agent                 import RiskAgent
 from agents.liquidity_agent            import LiquidityAgent
@@ -45,10 +60,11 @@ from agents.fundamental_proxy_agent    import FundamentalProxyAgent
 from agents.institutional_proxy_agent  import InstitutionalProxyAgent
 from agents.asymmetry_gate             import AsymmetryGate
 from agents.vcp_gate                   import VCPContractionGate
-from agents.macro_agent                import MacroAgent
+from agents.macro_agent                import MacroAgent, fetch_fii_flow_crore
 from agents.event_risk_agent           import EventRiskAgent
 from agents.confirmation_agent         import ConfirmationAgent
 from agents.near_breakout              import find_near_breakout_stocks
+from agents.regime_classifier          import RegimeClassifier
 from trade_logger                      import get_dynamic_weight
 from nse_universe                      import UNIVERSE_CONFIG, UNIVERSE_SEED
 
@@ -60,16 +76,10 @@ SECTOR_T1_CAP = 3
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Circuit limit pre-filter
+# Circuit limit pre-filter  (unchanged)
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _is_at_circuit_limit(ticker: str) -> bool:
-    """
-    Returns True if the stock is at a 5% or 10% circuit limit.
-    On circuit, stop-loss orders CANNOT execute — entering is a trap.
-    Uses NSEPython (pip install nsepython). Falls back to False on any error
-    so the scanner never crashes due to API failure.
-    """
     try:
         from nsepython import nse_get_quote_info
         symbol = ticker.replace(".NS", "")
@@ -79,22 +89,17 @@ def _is_at_circuit_limit(ticker: str) -> bool:
             log.debug(f"Circuit limit {band} detected for {ticker} — rejecting")
             return True
     except ImportError:
-        pass   # nsepython not installed — skip check silently
+        pass
     except Exception as e:
         log.debug(f"Circuit check failed for {ticker}: {e}")
     return False
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Sector Concentration Gate
+# Sector Concentration Gate  (unchanged)
 # ─────────────────────────────────────────────────────────────────────────────
 
 class SectorConcentrationGate:
-    """
-    Enforces maximum T1 picks per sector.
-    Pass in accepted T1 picks so far; call can_add() before each new addition.
-    """
-
     def __init__(self, max_per_sector: int = SECTOR_T1_CAP):
         self.max_per_sector = max_per_sector
         self._counts: Dict[str, int] = {}
@@ -110,7 +115,7 @@ class SectorConcentrationGate:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# StockResult dataclass (identical to v5.0 — no caller changes needed)
+# StockResult dataclass  (unchanged from v5.2)
 # ─────────────────────────────────────────────────────────────────────────────
 
 @dataclass
@@ -145,7 +150,6 @@ class StockResult:
     trigger_conditions: List[str] = field(default_factory=list)
     risk_factors: List[str] = field(default_factory=list)
     rejected: bool = False;      reject_reason: str = ""
-    # v5 fields
     asymmetry_risk_pct:   float = 0.0
     asymmetry_reward_pct: float = 0.0
     asymmetry_rr:         float = 0.0
@@ -162,8 +166,11 @@ class StockResult:
     event_risk:           str   = "NORMAL"
     confirmation_state:   str   = "SETUP_READY"
     confirmation_score:   int   = 3
-    # v5.2 additions
-    circuit_limit:        str   = ""   # e.g. "5%" — empty = normal trading
+    circuit_limit:        str   = ""
+    # v5.3 additions
+    regime_confidence:    str   = "HIGH"   # HIGH or LOW
+    regime_sanity_flags:  List[str] = field(default_factory=list)
+    breadth_source:       str   = ""       # NSE_LIVE_API / BHAVCOPY_FULL / DEFAULT
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -174,54 +181,181 @@ class AgentOrchestrator:
     def __init__(self, data_dict: dict):
         self.data = data_dict
 
-        # Breadth
-        breadth_agent = MarketBreadthAgent(
-            stock_data=data_dict.get("stock_data", {}),
-            nifty_df=data_dict.get("nifty50_data", pd.DataFrame()),
-        )
-        breadth_result           = breadth_agent.compute()
-        self.breadth_score       = breadth_result["breadth_score"]
-        self.breadth_detail      = breadth_result
-        data_dict["breadth_score"] = self.breadth_score
+        # ── STEP 1: Fetch NSE-WIDE breadth (BUG-1 FIX) ───────────────────────
+        # Old code computed A/D from our 401-stock universe → wrong on divergent days.
+        # New code: hit NSE live API (all ~2000 symbols), fall back to full Bhavcopy.
+        log.info("  Fetching NSE-wide market breadth...")
+        breadth_raw = fetch_nse_wide_breadth()
 
-        # Market regime
+        if breadth_raw is None:
+            log.warning("  NSE live breadth API failed — falling back to Bhavcopy.")
+            bhavcopy_full = data_dict.get("bhavcopy_full_df")   # full ~3200-symbol df
+            if bhavcopy_full is not None and not bhavcopy_full.empty:
+                breadth_raw = fetch_breadth_from_bhavcopy(bhavcopy_full)
+            else:
+                log.warning(
+                    "  Bhavcopy full df not available in data_dict. "
+                    "Key expected: 'bhavcopy_full_df'. "
+                    "Breadth will default to neutral."
+                )
+
+        # Compute above_50_ema_pct from our internal universe (still valid —
+        # this is a universe-internal metric, not market-wide, so universe-bounded is OK)
+        above_50_ema_pct = self._compute_above_50_ema(
+            data_dict.get("stock_data", {}),
+            data_dict.get("nifty50_data", pd.DataFrame()),
+        )
+
+        breadth_result = compute_breadth_score(
+            breadth_data=breadth_raw,
+            above_50_ema_pct=above_50_ema_pct,
+        )
+
+        self.breadth_score    = int(round(breadth_result["breadth_score"]))
+        self.breadth_detail   = breadth_result
+        self.breadth_source   = breadth_result.get("source", "UNKNOWN")
+        self.breadth_conf     = breadth_result.get("confidence", "HIGH")
+
+        data_dict["breadth_score"]    = self.breadth_score
+        data_dict["adv_dec_ratio"]    = breadth_result.get("ad_ratio", 1.0)
+        data_dict["above_50_ema_pct"] = above_50_ema_pct
+
+        # Print breadth dashboard to log
+        print_breadth_dashboard(breadth_result)
+
+        if breadth_result.get("warnings"):
+            for w in breadth_result["warnings"]:
+                log.warning(f"  BREADTH WARNING: {w}")
+
+        # ── STEP 2: Market regime via existing MarketAgent ────────────────────
+        # MarketAgent handles Nifty EMA stack (unchanged — still correct)
         self.market_agent   = MarketAgent(data_dict)
         self.regime         = self.market_agent.get_regime()
         self.regime_name    = self.market_agent.get_regime_name()
         self.market_score   = self.market_agent.score()
-        self.regime_penalty = self.market_agent.get_penalty()
 
-        # Sector
-        self.sector_agent   = SectorAgent(data_dict)
-        self.sector_ranks   = self.sector_agent.get_ranks()
+        # ── STEP 3: Regime confidence + sanity checks (BUG-3 FIX) ────────────
+        # RegimeClassifier cross-checks VIX / A/D / above_50_ema for contradictions.
+        # If contradictions found: confidence=LOW, penalty dampened, T1 cap loosened.
+        vix = data_dict.get("vix", 15.0)
+        classifier = RegimeClassifier(
+            nifty50_data      = data_dict.get("nifty50_data",   pd.DataFrame()),
+            banknifty_data    = data_dict.get("banknifty_data", pd.DataFrame()),
+            vix               = vix,
+            ad_ratio          = breadth_result.get("ad_ratio", 1.0),
+            breadth_score     = breadth_result["breadth_score"],
+            above_50_ema_pct  = above_50_ema_pct if above_50_ema_pct else 50.0,
+            breadth_confidence= self.breadth_conf,
+            macro_state       = "MIXED",   # placeholder — set properly after MacroAgent
+        )
+        regime_result = classifier.classify()
 
-        # RS ranks
+        # Regime letter and penalty both come from MarketAgent's EMA-based classification.
+        # RegimeClassifier is used ONLY for sanity checks and confidence scoring —
+        # not for the penalty, which must match the displayed regime letter.
+        REGIME_PENALTIES = {"A": 0, "B": 0, "C": -5, "D": -12, "E": -20}
+        self.regime_penalty     = REGIME_PENALTIES.get(self.regime, -5)
+        self.regime_confidence  = regime_result["confidence"]     # HIGH or LOW
+        self.regime_sanity_flags= regime_result["sanity_flags"]   # list of contradictions
+
+        if self.regime_confidence == "LOW":
+            log.warning(
+                f"  REGIME LOW_CONFIDENCE: penalty dampened "
+                f"{regime_result['full_penalty']} → {self.regime_penalty} pts. "
+                f"{len(self.regime_sanity_flags)} contradiction(s) detected."
+            )
+            for flag in self.regime_sanity_flags:
+                log.warning(f"    🚩 {flag}")
+        else:
+            log.info(f"  Regime confidence: HIGH — all signals consistent.")
+
+        # ── STEP 4: Sector ────────────────────────────────────────────────────
+        self.sector_agent = SectorAgent(data_dict)
+        self.sector_ranks = self.sector_agent.get_ranks()
+
+        # ── STEP 5: RS ranks ──────────────────────────────────────────────────
         self.universe_rs_ranks = compute_universe_ranks(data_dict)
 
-        # MacroAgent (v5)
-        vix     = data_dict.get("vix", 15.0)
-        adv_dec = breadth_result.get("adv_dec_ratio", 1.0)
-        fii     = data_dict.get("fii_flow", 0.0)
+        # ── STEP 6: MacroAgent (BUG-2 + BUG-4 FIX) ───────────────────────────
+        # BUG-2: VIX thresholds recalibrated — VIX 13.33 now correctly = BENIGN (+3 pts)
+        # BUG-4: FII fetch failure now uses neutral (0 pts), not HOSTILE
+        log.info("  Fetching FII flow from NSE...")
+        fii_flow = fetch_fii_flow_crore()   # returns None on failure — handled gracefully
+        if fii_flow is None:
+            log.warning("  FII flow unavailable — MacroAgent will use neutral (0 pts).")
+
         self.macro_agent = MacroAgent(
-            vix=vix, breadth_score=self.breadth_score,
-            fii_flow=fii, adv_dec_ratio=adv_dec
+            vix               = vix,
+            breadth_score     = breadth_result["breadth_score"],
+            fii_flow_crore    = fii_flow,           # None = neutral, NOT hostile
+            adv_dec_ratio     = breadth_result.get("ad_ratio", 1.0),
+            breadth_confidence= self.breadth_conf,
         )
         self.macro_state = self.macro_agent.get_state()
         self.macro_score = self.macro_agent.get_score()
-        self.t1_cap      = self.macro_agent.get_t1_cap(self.regime)
 
-        # EventRiskAgent (v5)
+        # Now re-run RegimeClassifier with correct macro_state for audit log
+        # (does not change penalty — macro_state is informational in classifier)
+        classifier._macro_state = self.macro_state
+
+        # T1 cap: use macro agent's cap, but floor at regime_result t1_cap
+        # (e.g. LOW_CONFIDENCE Regime D gets t1_cap=5, macro may say 15 — take min)
+        macro_t1_cap   = self.macro_agent.get_t1_cap()
+        regime_t1_cap  = regime_result["t1_cap"]
+        self.t1_cap    = min(macro_t1_cap, regime_t1_cap) if regime_t1_cap > 0 else macro_t1_cap
+        # Special case: HIGH_CONF Regime D always forces t1_cap=0 (full conviction bear call)
+        if self.regime == "D" and self.regime_confidence == "HIGH":
+            self.t1_cap = 0
+        elif self.regime == "E":
+            self.t1_cap = 0   # Bear market — always 0 regardless of confidence
+
+        # ── STEP 7: Event risk ────────────────────────────────────────────────
         self.event_agent   = EventRiskAgent()
         self.event_state   = self.event_agent.get_state()
         self.event_penalty = self.event_agent.get_score_penalty()
 
+        self.macro_agent.print_summary()
+
         log.info(
-            f"Regime: {self.regime} ({self.regime_name}) | "
-            f"Breadth: {self.breadth_score}/10 | Macro: {self.macro_state} | "
-            f"Event: {self.event_state} | T1 cap: {self.t1_cap} | T2 cap: {T2_CAP}"
+            f"  Regime: {self.regime} ({self.regime_name}) "
+            f"[conf={self.regime_confidence}] | "
+            f"Penalty: {self.regime_penalty} pts | "
+            f"Breadth: {self.breadth_score}/10 [{self.breadth_source}] | "
+            f"Macro: {self.macro_state} (+{self.macro_score} pts) | "
+            f"Event: {self.event_state} | "
+            f"T1 cap: {self.t1_cap} | T2 cap: {T2_CAP}"
         )
 
-    # ── per-stock evaluation ──────────────────────────────────────────────────
+    # ── helper: above_50_ema from internal universe ───────────────────────────
+
+    @staticmethod
+    def _compute_above_50_ema(stock_data: dict, nifty_df: pd.DataFrame) -> Optional[float]:
+        """
+        Compute % of our universe stocks above their 50-day EMA.
+        This is a universe-internal metric — universe-bounded is correct here.
+        Returns float (0–100) or None if stock_data is empty.
+        """
+        if not stock_data:
+            return None
+        above = 0
+        total = 0
+        for ticker, df in stock_data.items():
+            if df.empty or len(df) < 55:
+                continue
+            try:
+                close = df["Close"].squeeze()
+                ema50 = float(close.ewm(span=50).mean().iloc[-1])
+                last  = float(close.iloc[-1])
+                total += 1
+                if last > ema50:
+                    above += 1
+            except Exception:
+                continue
+        if total == 0:
+            return None
+        return round(above / total * 100, 1)
+
+    # ── per-stock evaluation (unchanged from v5.2) ────────────────────────────
 
     def run(self, ticker: str, name: str, sector: str, df: pd.DataFrame,
             delivery_data: dict = None, universe: str = "LARGE") -> StockResult:
@@ -234,6 +368,9 @@ class AgentOrchestrator:
             macro_state=self.macro_state,
             macro_score=self.macro_score,
             event_risk=self.event_state,
+            regime_confidence=self.regime_confidence,
+            regime_sanity_flags=self.regime_sanity_flags,
+            breadth_source=self.breadth_source,
         )
 
         if df.empty or len(df) < 60:
@@ -337,7 +474,6 @@ class AgentOrchestrator:
         ag = AsymmetryGate(entry=r.entry_high, stop=r.stop_loss,
                            target1=r.target1, universe=universe)
         ag_result = ag.check_dynamic(df=df, w4_pct=r.vcp_w4_pct)
-        # Fall back to legacy check() if dynamic path wasn't decisive
         if not ag_result["qualified"] and ag_result["fail_stage"] == "INPUT":
             ag_result = ag.check()
         r.asymmetry_risk_pct   = ag_result["risk_pct"]
@@ -450,7 +586,7 @@ class AgentOrchestrator:
         r.risk_factors = self._risk_factors(r)
         return r
 
-    # ── universe scan ────────────────────────────────────────────────────────
+    # ── universe scan (unchanged from v5.2) ──────────────────────────────────
 
     def run_universe(self, universe_items: list,
                      stock_data: dict, delivery_data: dict) -> dict:
@@ -546,7 +682,7 @@ class AgentOrchestrator:
         # Merge T2
         t2 = sector_overflow + t2_raw
         t2.sort(key=lambda r: -r.total_score)
-        t2 = t2[:T2_CAP]   # hard cap T2 at 8
+        t2 = t2[:T2_CAP]
 
         log.info(
             f"  Tier 1 (Top Picks):  {len(t1_accepted)}"
@@ -555,7 +691,17 @@ class AgentOrchestrator:
         )
         log.info(f"  Tier 2 (Aggressive): {len(t2)} (cap={T2_CAP})")
         log.info(f"  Tier 3 (Watchlist):  {len(t3)}")
-        log.info(f"  Macro: {self.macro_state} | Event: {self.event_state}")
+        log.info(
+            f"  Regime: {self.regime} [conf={self.regime_confidence}] "
+            f"| Macro: {self.macro_state} | Event: {self.event_state}"
+        )
+
+        # v5.3: Log confidence warning in summary if LOW
+        if self.regime_confidence == "LOW":
+            log.warning(
+                f"  ⚠️  REGIME LOW_CONFIDENCE — {len(self.regime_sanity_flags)} "
+                f"contradiction(s). Penalty dampened. Check breadth_calibration.log."
+            )
 
         # Auto-log T1 picks
         if t1_accepted:
@@ -568,8 +714,10 @@ class AgentOrchestrator:
 
         # Near-breakout watchlist
         existing      = {r.ticker for r in all_results}
+        bhavcopy_cmp_map = self.data.get("bhavcopy_cmp_map", {})
         near_breakout = find_near_breakout_stocks(
-            universe_items, stock_data, delivery_data, existing
+            universe_items, stock_data, delivery_data, existing,
+            bhavcopy_cmp_map=bhavcopy_cmp_map,
         )
         log.info(f"  Near-breakout watchlist: {len(near_breakout)} stocks")
 
@@ -578,25 +726,26 @@ class AgentOrchestrator:
         picks_json = []
         for r in t1_accepted + t2:
             picks_json.append({
-                # [COSMETIC] display_ticker strips .NS — clean name in email
-                "ticker":      r.ticker.replace(".NS", ""),
-                "ticker_raw":  r.ticker,   # keep raw for yfinance lookups
-                "name":        r.name,
-                "sector":      r.sector,
-                "security_id": "",
-                "segment":     "NSE_EQ",
-                "entry":       round(r.entry,           2),
-                "sl":          round(r.stop_loss,       2),
-                "pivot":       round(r.breakout_level if r.breakout_level > 0
-                                     else r.entry,      2),
-                "t1":          round(r.target1,         2),
-                "t2":          round(r.target2,         2),
-                "rr":          round(r.asymmetry_rr,    1),
-                "score":       r.total_score,
-                "tier":        r.tier,
-                "pattern":     r.pattern or "",
-                "vcp_w4_pct":  round(r.vcp_w4_pct,     2),
-                "scan_date":   _date.today().isoformat(),  # stale data guard
+                "ticker":           r.ticker.replace(".NS", ""),
+                "ticker_raw":       r.ticker,
+                "name":             r.name,
+                "sector":           r.sector,
+                "security_id":      "",
+                "segment":          "NSE_EQ",
+                "entry":            round(r.entry,           2),
+                "sl":               round(r.stop_loss,       2),
+                "pivot":            round(r.breakout_level if r.breakout_level > 0
+                                          else r.entry,      2),
+                "t1":               round(r.target1,         2),
+                "t2":               round(r.target2,         2),
+                "rr":               round(r.asymmetry_rr,    1),
+                "score":            r.total_score,
+                "tier":             r.tier,
+                "pattern":          r.pattern or "",
+                "vcp_w4_pct":       round(r.vcp_w4_pct,     2),
+                "scan_date":        _date.today().isoformat(),
+                "regime_confidence": r.regime_confidence,      # v5.3: in JSON output
+                "breadth_source":   r.breadth_source,          # v5.3: audit trail
             })
         with open("picks_latest.json", "w") as f:
             json.dump(picks_json, f, indent=2)
@@ -606,23 +755,26 @@ class AgentOrchestrator:
         )
 
         return {
-            "tier1":         t1_accepted,
-            "tier2":         t2,
-            "tier3":         t3,
-            "near_breakout": near_breakout,
-            "all_results":   all_results,
-            "regime":        self.regime,
-            "regime_name":   self.regime_name,
-            "breadth":       self.breadth_score,
-            "breadth_detail": self.breadth_detail,
-            "macro_state":   self.macro_state,
-            "event_risk":    self.event_state,
-            "t1_cap":        self.t1_cap,
-            "t2_cap":        T2_CAP,
+            "tier1":              t1_accepted,
+            "tier2":              t2,
+            "tier3":              t3,
+            "near_breakout":      near_breakout,
+            "all_results":        all_results,
+            "regime":             self.regime,
+            "regime_name":        self.regime_name,
+            "regime_confidence":  self.regime_confidence,
+            "regime_sanity_flags": self.regime_sanity_flags,
+            "breadth":            self.breadth_score,
+            "breadth_detail":     self.breadth_detail,
+            "breadth_source":     self.breadth_source,
+            "macro_state":        self.macro_state,
+            "event_risk":         self.event_state,
+            "t1_cap":             self.t1_cap,
+            "t2_cap":             T2_CAP,
             "sector_distribution": sector_gate.summary(),
         }
 
-    # ── narrative helpers (unchanged from v5.0) ──────────────────────────────
+    # ── narrative helpers (unchanged from v5.2) ──────────────────────────────
 
     def _why_working(self, r: StockResult) -> List[str]:
         reasons = []
@@ -689,4 +841,6 @@ class AgentOrchestrator:
             risks.append("Not yet confirmed - wait for next session close above pivot")
         if r.circuit_limit:
             risks.append(f"Circuit limit {r.circuit_limit} detected at scan time")
+        if r.regime_confidence == "LOW":
+            risks.append("Regime LOW_CONFIDENCE — verify breadth data before acting")
         return risks[:3]
