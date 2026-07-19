@@ -1,0 +1,54 @@
+name: NSE Momentum - 10am Confirmation
+
+on:
+  schedule:
+    - cron: '30 4 * * 1-5'
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  confirm:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          pip install python-dotenv requests yfinance loguru
+          pip install git+https://github.com/rongardF/tvdatafeed.git || echo "tvDatafeed install failed - RVOL will use yfinance fallback"
+
+      - name: Download picks via GitHub API
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python - <<'EOF'
+          import requests, os, zipfile, io
+          token = os.environ['GH_TOKEN']
+          repo  = os.environ['GITHUB_REPOSITORY']
+          h     = {'Authorization': f'Bearer {token}', 'Accept': 'application/vnd.github+json'}
+          runs  = requests.get(f'https://api.github.com/repos/{repo}/actions/workflows/daily_scan.yml/runs?status=completed&per_page=5', headers=h).json()
+          run_id = runs['workflow_runs'][0]['id']
+          print(f'Latest scan run: {run_id}')
+          arts  = requests.get(f'https://api.github.com/repos/{repo}/actions/runs/{run_id}/artifacts', headers=h).json()
+          art   = next(a for a in arts['artifacts'] if a['name'] == 'picks_latest')
+          print(f'Found artifact: {art["id"]}')
+          z     = requests.get(f'https://api.github.com/repos/{repo}/actions/artifacts/{art["id"]}/zip', headers=h)
+          zipfile.ZipFile(io.BytesIO(z.content)).extractall('.')
+          print('picks_latest.json downloaded successfully')
+          EOF
+
+      - name: Run confirmation checker
+        env:
+          GMAIL_ADDRESS:      ${{ secrets.GMAIL_ADDRESS }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+          PICKS_JSON_PATH:    picks_latest.json
+        run: python confirm_picks.py

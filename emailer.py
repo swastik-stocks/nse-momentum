@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """
 NSE Momentum v5.3 - Email Reporter
 4-section HTML email:

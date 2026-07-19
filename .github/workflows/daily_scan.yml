@@ -4,50 +4,45 @@ on:
   schedule:
     # 7:30 PM IST = 14:00 UTC (IST is UTC+5:30)
     # Runs Mon-Fri only. Bhavcopy is available by 6 PM IST.
-    # 30-minute contingency buffer built in.
     - cron: '0 14 * * 1-5'
-
-  # Allow manual trigger from GitHub UI (for testing)
   workflow_dispatch:
 
 jobs:
   scan:
     runs-on: ubuntu-latest
-    timeout-minutes: 30   # kill if something hangs
+    timeout-minutes: 30
 
     steps:
 
-      # ── 1. Get the code ──────────────────────────────────────────────────
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # ── 2. Set up Python ─────────────────────────────────────────────────
       - name: Set up Python 3.12
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
           cache: 'pip'
 
-      # ── 3. Install dependencies ──────────────────────────────────────────
       - name: Install dependencies
-        run: pip install -r requirements.txt
+        run: |
+          pip install -r requirements.txt
+          pip install git+https://github.com/rongardF/tvdatafeed.git || echo "tvDatafeed install failed - RVOL will use yfinance fallback"
+          pip install pandas-ta --no-deps || echo "pandas-ta install failed - using manual calculations"
 
-      # ── 4. Run the scanner ───────────────────────────────────────────────
-      - name: Run NSE Momentum Scanner v4.3
+      - name: Run NSE Momentum Scanner v5.3
         env:
           GMAIL_ADDRESS:      ${{ secrets.GMAIL_ADDRESS }}
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
         run: python scanner.py
 
-      # ── 5. Upload log (kept 7 days for debugging) ────────────────────────
       - name: Upload scan log
-        if: always()   # upload even if scan failed
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: scan-log-${{ github.run_number }}
           path: logs/
           retention-days: 7
-       # ── 6. Upload picks for 10am confirmation checker ──────────────────────
+
       - name: Upload picks for confirmation
         if: always()
         uses: actions/upload-artifact@v4
