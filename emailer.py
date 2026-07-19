@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 NSE Momentum v5.3 - Email Reporter
 4-section HTML email:
@@ -112,6 +111,22 @@ def _tier_card(r, tier_label: str, tier_color: str) -> str:
                f'border:1px solid {bq_col};border-radius:3px;'
                f'padding:1px 5px;margin-left:6px">{bq}</span>')
 
+    # NEW — low historical edge badge. Distinct from breakout_quality above:
+    # that measures breakout SIZE (major vs minor move), this measures the
+    # PATTERN's own backtested expectancy (e.g. High Base +0.09% — barely
+    # above zero across 20,916 signals). A pick can be a MAJOR breakout on
+    # a pattern with near-zero historical edge; both facts matter separately.
+    low_edge_html = ""
+    if getattr(r, "low_edge_pattern", False):
+        low_edge_html = (
+            '<span style="font-size:9px;color:#FF7043;'
+            'border:1px solid #FF7043;border-radius:3px;'
+            'padding:1px 5px;margin-left:6px" '
+            'title="This pattern\'s own backtested expectancy is below 0.15% — '
+            'score cleared on other factors, not pattern strength">'
+            'LOW HISTORICAL EDGE</span>'
+        )
+
     # Confirmation state
     conf       = getattr(r, "confirmation_state", "SETUP_READY")
     conf_col   = "#00E676" if conf == "BREAKOUT_CONFIRMED" else "#FFB300"
@@ -147,7 +162,7 @@ def _tier_card(r, tier_label: str, tier_color: str) -> str:
       <span style="font-family:monospace;font-size:10px;color:{tier_color};
                    letter-spacing:0.15em;text-transform:uppercase">{tier_label}</span>
       <div style="font-size:17px;font-weight:700;color:#FFFFFF;margin:3px 0">
-        {r.ticker.replace('.NS','')} {bq_html}
+        {r.ticker.replace('.NS','')} {bq_html}{low_edge_html}
       </div>
       <div style="font-size:11px;color:#5E7A96">{r.name} - {r.sector} - {r.universe}</div>
       <div style="margin-top:4px">
@@ -322,7 +337,7 @@ def _build_html(t1, t2, t3, all_r, near_bo,
   </div>
   <div style="font-size:22px;font-weight:800;color:#FFFFFF;margin-bottom:4px">Daily Intelligence Report</div>
   <div style="font-size:11px;color:#5E7A96;margin-bottom:12px">
-    404 stocks - 3 universes - 14 agents - 19 patterns - All free data
+    ~401 stocks - 3 universes - 5 validated patterns (14 pruned) - All free data
   </div>
   <div style="display:flex;gap:8px;flex-wrap:wrap">
     <div style="background:{rbg};border:1px solid {rborder};border-radius:20px;padding:5px 14px">
@@ -424,7 +439,7 @@ def _build_html(t1, t2, t3, all_r, near_bo,
 
   <div style="margin-top:24px;padding-top:16px;border-top:1px solid #1F3046;
               font-size:10px;color:#2D4055;text-align:center;line-height:1.8">
-    NSE Momentum Scanner v5.3 - 404 stocks - All free data - Evidence-based<br>
+    NSE Momentum Scanner v5.4 - ~401 stocks - All free data - Evidence-based<br>
     T1 = Gate cleared. T2 = One condition missing. T3 = Setup forming.<br>
     Near-breakout = Set alert only, do not buy until breakout confirmed.<br>
     Not SEBI-registered investment advice. All trading involves capital risk.

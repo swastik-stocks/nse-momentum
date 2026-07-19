@@ -42,8 +42,8 @@ except ImportError:
 
 sys.path.insert(0, str(Path(__file__).parent / "agents"))
 
-from agents.pattern_agent              import PatternAgent
-from agents.rs_agent                   import RSAgent, compute_universe_ranks
+from agents.pattern_agent              import PatternAgent, is_low_edge_pattern, PATTERN_EXPECTANCY
+from agents.rs_agent                   import RSAgent, compute_universe_ranks, compute_sector_relative_ranks
 from agents.volume_agent               import VolumeAgent
 from agents.market_agent               import MarketAgent
 from agents.market_breadth_agent       import (
@@ -139,6 +139,8 @@ class StockResult:
     raw_score: int = 0;          total_score: int = 0
     confidence_pct: float = 0.0
     rs_percentile: float = 0.0;  rs_persistence: int = 0
+    rs_sector_pct: float = 0.0   # NEW — Mansfield sector-relative RS percentile
+    low_edge_pattern: bool = False   # NEW — True if pattern's own backtested expectancy < 0.15%
     market_regime: str = ""
     regime: str = "";            regime_name: str = ""
     adt_cr: float = 0.0;         mcap_cr: float = 0.0
@@ -275,6 +277,13 @@ class AgentOrchestrator:
 
         # ── STEP 5: RS ranks ──────────────────────────────────────────────────
         self.universe_rs_ranks = compute_universe_ranks(data_dict)
+        # NEW — Mansfield sector-relative RS: stock vs its OWN sector peers,
+        # not the whole ~401-stock universe. See agents/rs_agent.py for the
+        # full rationale (this was documented as a v5 change but never
+        # actually implemented until now).
+        self.sector_rs_ranks = compute_sector_relative_ranks(
+            data_dict, universe_meta=data_dict.get("universe_meta", {})
+        )
 
         # ── STEP 6: MacroAgent (BUG-2 + BUG-4 FIX) ───────────────────────────
         # BUG-2: VIX thresholds recalibrated — VIX 13.33 now correctly = BENIGN (+3 pts)
@@ -436,10 +445,13 @@ class AgentOrchestrator:
         # G3: RS (gate at 30th percentile)
         rsa = RSAgent(
             df, self.data.get("nifty50_data", pd.DataFrame()),
-            universe_ranks=self.universe_rs_ranks, ticker=ticker
+            universe_ranks=self.universe_rs_ranks,
+            sector_ranks=self.sector_rs_ranks,   # NEW
+            ticker=ticker
         )
         r.rs_score       = min(int(rsa.score() * cfg["rs_weight_mult"]), 20)
         r.rs_percentile  = rsa.get_percentile()
+        r.rs_sector_pct  = rsa.get_sector_percentile()   # NEW
         r.rs_persistence = rsa.get_persistence()
 
         if not rsa.passes_gate():
@@ -566,9 +578,23 @@ class AgentOrchestrator:
         # Tier assignment
         gate           = cfg["score_gate"]
         effective_gate = gate + self.event_penalty
-        if r.total_score >= effective_gate:
+        r.low_edge_pattern = is_low_edge_pattern(r.pattern)
+
+        if r.total_score >= effective_gate and not r.low_edge_pattern:
             r.tier = 1
             r.what_is_working = self._why_working(r)
+        elif r.total_score >= effective_gate and r.low_edge_pattern:
+            # NEW — score clears the Tier 1 gate, but the pattern itself has
+            # near-zero backtested edge (High Base +0.09%, Volume Expansion
+            # 0.00% — see PATTERN_EXPECTANCY in pattern_agent.py). Capped at
+            # Tier 2 so the email doesn't present this with the same
+            # confidence as a genuinely validated setup like High Tight Flag.
+            r.tier = 2
+            r.what_is_working    = self._why_working(r)
+            r.what_is_missing    = [f"Pattern '{r.pattern}' has low historical edge "
+                                     f"({PATTERN_EXPECTANCY.get(r.pattern, 0):.2f}% backtested "
+                                     f"expectancy) — score cleared on other factors, not pattern strength"]
+            r.trigger_conditions = self._triggers(r)
         elif r.total_score >= 55:
             r.tier = 2
             r.what_is_working    = self._why_working(r)

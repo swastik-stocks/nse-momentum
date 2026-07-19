@@ -191,12 +191,20 @@ def resolve_tickers(raw_names: pd.Series, isins: pd.Series = None) -> tuple:
     matching is a fallback ONLY — and is explicitly flagged as such, because
     a silent wrong-stock match on a capital-protection tool is a serious
     problem, not a cosmetic one (e.g. 'ICICI Prudential Life Insurance' vs
-    'ICICI Prudential Asset Management' are different companies that share
-    a name prefix — fuzzy matching can confuse them).
+    'ICICI Prudential Asset Management', or 'Bajaj Finance' vs 'Bajaj
+    Finserv', are different companies that share a name prefix — fuzzy
+    matching can confuse them).
+
+    AMBIGUITY CHECK: the 0.75 cutoff alone only tells you the BEST match
+    cleared a bar — it says nothing about whether a close runner-up existed
+    that could just as easily have been picked. This pulls the top 2
+    candidates and flags AMBIGUOUS_FUZZY when they're within 0.08 similarity
+    of each other, which is the actual signature of a same-prefix collision
+    risk, not just "did the top match clear the threshold."
 
     Returns (resolved_tickers: pd.Series, methods: pd.Series) where methods
-    is one of: ISIN_EXACT, FUZZY_NAME, UNRESOLVED — always inspect FUZZY_NAME
-    rows before trusting their advice.
+    is one of: ISIN_EXACT, FUZZY_NAME, AMBIGUOUS_FUZZY, UNRESOLVED — always
+    inspect FUZZY_NAME and AMBIGUOUS_FUZZY rows before trusting their advice.
     """
     isin_map, name_map = _load_nse_master()
     if not isin_map and not name_map:
@@ -204,6 +212,7 @@ def resolve_tickers(raw_names: pd.Series, isins: pd.Series = None) -> tuple:
         return raw_names, pd.Series(["UNRESOLVED"] * len(raw_names), index=raw_names.index)
 
     name_keys = list(name_map.keys())
+    AMBIGUITY_MARGIN = 0.08   # runner-up within this of the top match = flag it
 
     resolved, methods = [], []
     for i, raw_name in enumerate(raw_names):
@@ -217,9 +226,22 @@ def resolve_tickers(raw_names: pd.Series, isins: pd.Series = None) -> tuple:
             # like the ICICI Prudential example above scores dangerously
             # high on loose fuzzy matching. Better to leave it UNRESOLVED
             # and force a manual check than silently pick the wrong company.
-            match = difflib.get_close_matches(str(raw_name), name_keys, n=1, cutoff=0.75)
-            if match:
-                symbol, method = name_map[match[0]], "FUZZY_NAME"
+            candidates = difflib.get_close_matches(str(raw_name), name_keys, n=2, cutoff=0.75)
+            if candidates:
+                symbol = name_map[candidates[0]]
+                if len(candidates) == 2:
+                    top_ratio = difflib.SequenceMatcher(None, str(raw_name), candidates[0]).ratio()
+                    runner_ratio = difflib.SequenceMatcher(None, str(raw_name), candidates[1]).ratio()
+                    if (top_ratio - runner_ratio) <= AMBIGUITY_MARGIN:
+                        method = "AMBIGUOUS_FUZZY"
+                        log.warning(f"  AMBIGUOUS match for '{raw_name}': top candidate "
+                                    f"'{candidates[0]}' ({top_ratio:.2f}) vs runner-up "
+                                    f"'{candidates[1]}' ({runner_ratio:.2f}) — too close to "
+                                    f"trust automatically, flagging for manual review.")
+                    else:
+                        method = "FUZZY_NAME"
+                else:
+                    method = "FUZZY_NAME"
 
         if symbol:
             resolved.append(symbol)
@@ -592,22 +614,80 @@ _STATUS_COLOR = {
 }
 
 
+def find_prefix_collisions(df: pd.DataFrame, min_prefix_len: int = 6) -> list:
+    """
+    Second, INDEPENDENT sanity net — separate from resolution-method
+    tracking. Even a correctly-resolved ticker can sit right next to a
+    company with a genuinely similar name (Bajaj Finance vs Bajaj Finserv,
+    ICICI Prudential Life vs ICICI Prudential AMC) — worth a second look
+    regardless of whether resolution used ISIN or fuzzy matching, since a
+    broker holdings file with two similarly-named positions is exactly the
+    scenario where a human reviewing the report (not just the resolver)
+    might misread one for the other.
+
+    Scans all RAW broker-supplied names in the report and flags any pair
+    sharing a common prefix of at least min_prefix_len characters. Does not
+    distinguish resolution method — this catches cases the ISIN-vs-fuzzy
+    tracking structurally can't, since it operates on what the broker file
+    actually said, not on how confidently it was resolved.
+
+    Returns a list of (name_a, ticker_a, name_b, ticker_b, shared_prefix) tuples.
+    """
+    if df.empty or "raw_name" not in df.columns:
+        return []
+
+    collisions = []
+    names = df[["raw_name", "ticker"]].drop_duplicates().reset_index(drop=True)
+    upper_names = names["raw_name"].astype(str).str.upper().str.strip()
+
+    for i in range(len(names)):
+        for j in range(i + 1, len(names)):
+            a, b = upper_names.iloc[i], upper_names.iloc[j]
+            if names["ticker"].iloc[i] == names["ticker"].iloc[j]:
+                continue  # same resolved stock, not a collision — e.g. odd-lot rows
+            prefix_len = 0
+            for ca, cb in zip(a, b):
+                if ca == cb:
+                    prefix_len += 1
+                else:
+                    break
+            if prefix_len >= min_prefix_len:
+                collisions.append((
+                    names["raw_name"].iloc[i], names["ticker"].iloc[i],
+                    names["raw_name"].iloc[j], names["ticker"].iloc[j],
+                    a[:prefix_len],
+                ))
+    return collisions
+
+
 def print_report(df: pd.DataFrame) -> None:
     if df.empty:
         print("\n  No holdings to report.\n")
         return
 
-    fuzzy = df[df.get("resolution_method") == "FUZZY_NAME"]
+    fuzzy = df[df.get("resolution_method").isin(["FUZZY_NAME", "AMBIGUOUS_FUZZY"])]
     if not fuzzy.empty:
         print("\n" + "!" * 100)
         print("  ⚠️  VERIFY THESE — resolved by approximate name match, not exact ISIN.")
         print("  Fuzzy company-name matching can confuse similarly-named companies")
         print("  (e.g. 'ICICI Prudential Life Insurance' vs 'ICICI Prudential Asset")
-        print("  Management'). Check each one is the stock you actually hold before")
-        print("  acting on its advice below.")
+        print("  Management', or 'Bajaj Finance' vs 'Bajaj Finserv'). Check each one")
+        print("  is the stock you actually hold before acting on its advice below.")
         print("!" * 100)
         for _, r in fuzzy.iterrows():
-            print(f"    '{r['raw_name']}'  →  resolved as {r['ticker']}")
+            tag = " *** AMBIGUOUS — close runner-up candidate existed ***" if r.get("resolution_method") == "AMBIGUOUS_FUZZY" else ""
+            print(f"    '{r['raw_name']}'  →  resolved as {r['ticker']}{tag}")
+        print("!" * 100)
+
+    collisions = find_prefix_collisions(df)
+    if collisions:
+        print("\n" + "!" * 100)
+        print("  ⚠️  SIMILAR NAMES IN YOUR PORTFOLIO — independent second check, regardless")
+        print("  of how each ticker was resolved. Two holdings share a long common name")
+        print("  prefix — worth a manual glance to be sure neither was misread.")
+        print("!" * 100)
+        for name_a, ticker_a, name_b, ticker_b, prefix in collisions:
+            print(f"    '{name_a}' ({ticker_a})  vs  '{name_b}' ({ticker_b})  — shared prefix: '{prefix}'")
         print("!" * 100)
 
     df = df.sort_values(by="status", key=lambda s: s.map(_STATUS_ORDER))
@@ -619,7 +699,8 @@ def print_report(df: pd.DataFrame) -> None:
         cmp_str = f"{r['cmp']:.2f}" if r['cmp'] is not None and pd.notna(r['cmp']) else "N/A"
         avg_str = f"{r['avg_price']:.2f}" if r['avg_price'] is not None and pd.notna(r['avg_price']) else "N/A"
         rsi_str = f"{r['rsi']}" if r['rsi'] is not None and pd.notna(r['rsi']) else "N/A"
-        flag = "  ⚠️ FUZZY-MATCHED" if r.get("resolution_method") == "FUZZY_NAME" else ""
+        method = r.get("resolution_method")
+        flag = "  ⚠️ AMBIGUOUS-MATCHED" if method == "AMBIGUOUS_FUZZY" else ("  ⚠️ FUZZY-MATCHED" if method == "FUZZY_NAME" else "")
         print(f"\n  {r['ticker']:<14} [{r['account']}]   {r['status']:<17} "
               f"CMP {cmp_str}  Avg {avg_str}  P&L {pnl_str}  RSI {rsi_str}{flag}")
         print(f"    → {r['advice']}")
