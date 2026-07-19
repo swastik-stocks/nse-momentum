@@ -69,6 +69,32 @@ PRUNED_PATTERNS = {
 
 ALL_WEIGHTS = {**DEFAULT_WEIGHTS, **PRUNED_PATTERNS}
 
+# ── Backtested expectancy per validated pattern (from the same 2023-2026 ──
+# NSE backtest that produced DEFAULT_WEIGHTS above). Used to flag patterns
+# whose historical edge rounds to statistical noise, even though they still
+# score high enough to clear the Tier 1 gate on RS/volume/EMA/etc alone.
+PATTERN_EXPECTANCY = {
+    "High Tight Flag":   0.69,
+    "Flat Base":         0.51,
+    "Rounded Base":      0.40,
+    "High Base":         0.09,
+    "Volume Expansion":  0.00,
+}
+LOW_EDGE_EXPECTANCY_THRESHOLD = 0.15   # below this, don't badge the pick as high-conviction Tier 1
+
+
+def is_low_edge_pattern(pattern_name: str) -> bool:
+    """
+    True if this pattern's own backtested expectancy is below the threshold
+    for a high-conviction label — e.g. High Base (+0.09%) and Volume
+    Expansion (0.00%) can still legitimately clear the Tier 1 SCORE gate on
+    RS/volume/EMA strength alone, but their own historical data says the
+    pattern itself doesn't carry real edge. That distinction should be
+    visible to the trader, not flattened into the same 'MAJOR' badge as
+    High Tight Flag (+0.69%).
+    """
+    return PATTERN_EXPECTANCY.get(pattern_name, 1.0) < LOW_EDGE_EXPECTANCY_THRESHOLD
+
 
 class PatternAgent:
     def __init__(self, df: pd.DataFrame):
