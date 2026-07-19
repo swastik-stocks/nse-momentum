@@ -307,6 +307,36 @@ class AgentOrchestrator:
         # (does not change penalty — macro_state is informational in classifier)
         classifier._macro_state = self.macro_state
 
+        # ── STEP 6b: Optional NIM narration (annotation only, never authoritative) ──
+        # Placed HERE (after MacroAgent, not before) so it gets real macro_state
+        # and fii_flow rather than a hardcoded placeholder. Fail-safe by design —
+        # see agents/regime_narrator.py docstring. If NVIDIA_API_KEY is unset or
+        # the call fails, this silently no-ops and the scan proceeds exactly as
+        # it always has. Never overrides regime/confidence/penalty above.
+        try:
+            from agents.regime_narrator import narrate_regime
+            narration = narrate_regime({
+                "regime": self.regime, "regime_name": self.regime_name,
+                "regime_confidence": self.regime_confidence,
+                "regime_penalty": self.regime_penalty,
+                "above_50_ema_pct": above_50_ema_pct,
+                "ad_ratio": breadth_result.get("ad_ratio", 1.0),
+                "breadth_score": breadth_result["breadth_score"],
+                "vix": vix,
+                "macro_state": self.macro_state,
+                "fii_flow_crore": fii_flow,
+                "sanity_flags": self.regime_sanity_flags,
+            })
+            self.regime_narrative = narration.get("narrative", "")
+            if self.regime_narrative:
+                log.info(f"  Regime narrative: {self.regime_narrative[:200]}...")
+        except Exception as e:
+            # Belt-and-suspenders on top of regime_narrator.py's own internal
+            # fail-safe — an optional annotation feature must never be able
+            # to take down the evening scan.
+            log.warning(f"  Regime narration skipped (non-fatal): {e}")
+            self.regime_narrative = ""
+
         # T1 cap: use macro agent's cap, but floor at regime_result t1_cap
         # (e.g. LOW_CONFIDENCE Regime D gets t1_cap=5, macro may say 15 — take min)
         macro_t1_cap   = self.macro_agent.get_t1_cap()
