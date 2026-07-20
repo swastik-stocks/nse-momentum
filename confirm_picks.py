@@ -85,13 +85,19 @@ def _rvol_tvdatafeed(ticker_nse: str) -> float:
         log.info(f"    [tvDatafeed] {symbol}: got {df.shape[0]} bars, "
                  f"index range {df.index[0]} → {df.index[-1]}")
 
+        # --- FIX: tvDatafeed returns naive timestamps in UTC, not IST.
+        # Must localize to UTC first, then convert to IST — localizing
+        # directly to IST just relabels the UTC clock time without
+        # shifting it, causing the 09:15-10:15 window search to miss
+        # every bar (they land ~5.5hrs off from where they should be).
         try:
-            df.index = df.index.tz_localize("Asia/Kolkata")
+            df.index = df.index.tz_localize("UTC").tz_convert("Asia/Kolkata")
         except Exception:
             try:
                 df.index = df.index.tz_convert("Asia/Kolkata")
             except Exception:
                 pass
+        # --- END FIX
 
         today = datetime.now(IST).date()
         today_45 = df[
