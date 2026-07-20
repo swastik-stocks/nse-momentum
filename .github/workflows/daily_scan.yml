@@ -49,4 +49,4 @@ jobs:
         with:
           name: picks_latest
           path: picks_latest.json
-          retention-days: 2
+          retention-days: 3
