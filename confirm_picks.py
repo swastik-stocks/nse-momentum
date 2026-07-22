@@ -13,6 +13,11 @@ CHANGES vs v5.2:
           Drift guard now checks pivot extension, not just entry price.
   [BUG-5] MEDANTA / extended breakouts: 2.7%+ above pivot with low RVOL
           correctly classified as MISSED, not LOW_VOL.
+  [BUG-6] Stale-data guard now compares scan_date against the LAST TRADING
+          DAY (skipping weekends + NSE holidays), not literally "today".
+          The evening scan runs the night before and produces picks meant
+          to be confirmed the next trading morning -- scan_date == the
+          prior trading day is the CORRECT, expected state, not staleness.
 """
 
 import os, json, smtplib, time
@@ -21,6 +26,8 @@ from zoneinfo import ZoneInfo
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from dotenv import load_dotenv
+
+from market_calendar.staleness_check import check_staleness, StaleDataError
 
 try:
     from loguru import logger as log
@@ -453,7 +460,7 @@ def _section(items: list, label: str, accent: str) -> str:
 
 
 def build_stale_html(scan_date_str: str, today_iso: str, run_time: str) -> str:
-    """Email sent when picks_latest.json is from a previous day."""
+    """Email sent when picks_latest.json is genuinely stale."""
     return f"""<!DOCTYPE html>
 <html lang="en">
 <head><meta charset="UTF-8"></head>
@@ -472,11 +479,11 @@ def build_stale_html(scan_date_str: str, today_iso: str, run_time: str) -> str:
   <div style="background:#fef2f2;border-left:4px solid #dc2626;
       margin:24px;padding:16px;border-radius:0 4px 4px 0;">
     <div style="font-weight:700;color:#991b1b;font-size:15px;">
-      Evening scan did not run for today
+      Evening scan did not run
     </div>
     <div style="color:#7f1d1d;font-size:13px;margin-top:8px;">
-      picks_latest.json is dated <strong>{scan_date_str}</strong> but today is
-      <strong>{today_iso}</strong>.<br><br>
+      picks_latest.json is dated <strong>{scan_date_str}</strong> which is older than
+      the last trading day before <strong>{today_iso}</strong>.<br><br>
       No confirmation performed. Do not trade today until the evening scan runs
       and produces a fresh picks file.
     </div>
@@ -656,21 +663,25 @@ def main():
         picks = json.load(f)
     log.info(f"  Loaded {len(picks)} picks from {PICKS_JSON_PATH}")
 
-    # [P0] Stale data guard — reject picks from a previous day
-    today_iso  = date.today().isoformat()
-    picks_meta = picks[0] if picks else {}
+    # [BUG-6 FIX] Stale data guard — compare scan_date against the LAST
+    # TRADING DAY, not literally "today". scan_date == yesterday's
+    # trading day is the CORRECT, expected state (see module docstring).
+    today_iso     = date.today().isoformat()
+    picks_meta    = picks[0] if picks else {}
     scan_date_str = picks_meta.get("scan_date", "")
-    if scan_date_str and scan_date_str != today_iso:
-        log.error(
-            f"STALE PICKS FILE — scan_date={scan_date_str}, today={today_iso}. "
-            f"Evening scan did not run today or picks_latest.json was not updated. Aborting."
-        )
-        stale_html = build_stale_html(scan_date_str, today_iso, run_time)
-        send_email(
-            f"[NSE Momentum 10am] STALE DATA — evening scan missing | {today_str}",
-            stale_html
-        )
-        return
+
+    if scan_date_str:
+        try:
+            picks_date = date.fromisoformat(scan_date_str)
+            check_staleness(picks_date)
+        except StaleDataError as e:
+            log.error(f"STALE PICKS FILE — {e}")
+            stale_html = build_stale_html(scan_date_str, today_iso, run_time)
+            send_email(
+                f"[NSE Momentum 10am] STALE DATA — evening scan missing | {today_str}",
+                stale_html
+            )
+            return
 
     results = []
     for pick in picks:
