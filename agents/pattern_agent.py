@@ -1,22 +1,83 @@
 """
-NSE Momentum v5.3 — Pattern Agent (complete replacement)
+NSE Momentum v6.2 — Pattern Agent
 
-CHANGES vs v5.2:
-  [PRUNE] 14 patterns removed from DEFAULT_WEIGHTS after validation showed
-          negative expectancy on 2yr NSE data (2023-2026).
-  [KEEP]  5 patterns retained with weights proportional to validated edge:
-          High Tight Flag  +0.69% expectancy → weight 20
-          Flat Base        +0.51% expectancy → weight 18
-          Rounded Base     +0.40% expectancy → weight 15
-          High Base        +0.09% expectancy → weight 12
-          Volume Expansion  0.00% expectancy → weight 8 (kept as filter signal)
-  [DETECT] All 19 pattern detection blocks preserved in _detect() —
-           pruned patterns still detected but score 0, so they never
-           win the "best pattern" selection against a WATCH pattern.
-           This means if a stock has both Rounded Base AND Swing High
-           Breakout, Rounded Base wins. If it ONLY has Swing High
-           Breakout, no pattern is assigned → stock rejected at G2.
-  [API]  All public methods unchanged — orchestrator unaffected.
+CHANGES vs v6.1 (this rebuild, 2026-07-27):
+  [WEIGHTS REBUILT — EVIDENCE-BASED] DEFAULT_WEIGHTS replaced, first time
+  since v5.3, with numbers backed by a real full-pipeline replay instead
+  of a disputed/stale backtest. Chain of evidence:
+
+    1. validation/pipeline_replay_deep.py --all-patterns --fresh
+       (2026-07-27, 10:17-11:37 AM): tested all 19 detected patterns
+       through the REAL live gate chain (Pattern+RS+Liquidity+Risk+
+       Asymmetry+VCP gates), 10yr point-in-time NIFTY 500 universe,
+       501 tickers, real NSE transaction costs (0.363% round-trip,
+       0.35%/leg brokerage confirmed via Yes Bank contract note
+       analysis — corrected from a prior 0%-brokerage run same day).
+       6,106 gate-cleared signals total.
+
+    2. validation/monte_carlo_significance.py (2026-07-27, same day):
+       bootstrap 95% CIs + permutation test (vs. the full 6,106-trade
+       pooled pool) on the 5 candidate patterns, to separate real edge
+       from sample noise. Results (net of real costs):
+
+           Pattern                N      Net AvgR   PF     Verdict
+           Cup & Handle          1119    1.06R      2.73   SIGNIFICANT (p=0.0000)
+           Swing High Breakout   1456    0.67R      1.98   SIGNIFICANT (p=0.0000)
+           VCP                     70    0.50R      1.78   INCONCLUSIVE (p=0.1455)
+           Falling Wedge          102    0.22R      1.21   NOT SIGNIFICANT (p=0.4817)
+           Bull Flag              400    0.16R      1.15   NOT SIGNIFICANT (p=0.6680)
+
+       Cup & Handle and Swing High Breakout are unambiguous: large
+       samples, both tests agree strongly. VCP's bootstrap CI barely
+       clears zero but the permutation test can't distinguish it from
+       a random draw — real edge is plausible but N=70 is thin; kept
+       at reduced weight and flagged low-conviction. Falling Wedge and
+       Bull Flag did NOT hold up under the permutation test despite
+       positive point estimates — both left pruned rather than promoted.
+
+    3. The 5 previously-live patterns (High Tight Flag, Flat Base,
+       Rounded Base, High Base, Volume Expansion) were, per the same
+       2026-07-27 replay, at or below breakeven with real costs applied
+       (Flat Base -0.07R best of the five; High Base -0.46R, Rounded
+       Base -0.47R, Volume Expansion -0.65R). High Tight Flag still
+       too rare to register any gate-cleared signal in 10yr of
+       history — untested, not disproven, but contributes nothing live
+       either way. All 5 moved to PRUNED_PATTERNS.
+
+  [PROMOTE] Cup & Handle (weight 20), Swing High Breakout (weight 16),
+            VCP (weight 8, reduced conviction — see verdict above).
+  [PRUNE]   High Tight Flag, Flat Base, Rounded Base, High Base,
+            Volume Expansion — moved from DEFAULT_WEIGHTS to
+            PRUNED_PATTERNS. Falling Wedge and Bull Flag remain pruned
+            (tested, did not clear significance).
+  [DETECT]  No detection logic changed. All 19 pattern detection blocks
+            were already present (see v6.1 note below) — this is a
+            pure weight/metadata change, nothing structural.
+  [DATA]    Corrected monte_carlo_significance DB table (was stale,
+            dated 2026-07-26 pre-brokerage-fix; now reflects the
+            2026-07-27 cost-corrected replay).
+
+CHANGES vs v6.0 (unchanged, retained for history):
+  [CORRECTION] The "+0.69% / +0.51% / +0.40% / +0.09% / 0.00% validated
+  expectancy" claims previously here (and in PATTERN_EXPECTANCY) traced
+  back to a v4.0-era backtest that was shown to be unreliable, for two
+  confirmed, distinct reasons:
+
+    1. That backtest had ALL 19 patterns competing for the same
+       max(detections, key=weight) selection under 2023-era weights,
+       where e.g. Flat Base was weighted 10/19 (near the bottom). Its
+       old count (40 signals) measured "how often this pattern WON
+       against 18 higher-weighted competitors," not "how often this
+       shape occurs." Not a stable baseline to compare weights against.
+
+    2. Independently, validation/backtest.py had a window-cap bug (fixed
+       2026-07-25) that capped every test window to 120 bars, making
+       `above_200` — and therefore High Base specifically — permanently
+       undetectable in that script, regardless of real price action.
+
+  DEFAULT_WEIGHTS was left unchanged at the time pending a full
+  historical replay of the actual orchestrator.run() gate chain — that
+  replay is what section [WEIGHTS REBUILT] above reports on.
 """
 
 import logging
@@ -35,66 +96,77 @@ except ImportError:
 
 log = logging.getLogger(__name__)
 
-# ── Validated pattern weights (v5.3 — post-validation pruning) ───────────────
-# Only patterns with positive expectancy in 2023-2026 NSE backtest.
-# 14 patterns removed: VCP, Bull Flag, Base Breakout, 52W Momentum,
-# Double Bottom, Cup & Handle, Ascending Triangle, Symmetrical Triangle,
-# Descending Wedge, Falling Wedge, 3-Weeks-Tight, Swing High Breakout,
-# Diamond Bottom, IPO Base.
+# ── Pattern weights (v6.2 — EVIDENCE-BASED, see docstring) ────────────────────────
+# Rebuilt 2026-07-27 from validation/pipeline_replay_deep.py --all-patterns
+# --fresh (real gate chain, 10yr point-in-time universe, real NSE costs)
+# + validation/monte_carlo_significance.py (bootstrap CI + permutation test
+# vs. the full 6,106-trade pooled pool). See module docstring for the full
+# evidence chain and numbers. Weight is roughly proportional to statistical
+# conviction, not raw avg R alone — VCP is weighted well below its avg R
+# would suggest because its edge, while plausible, is not yet statistically
+# distinguishable from noise (permutation p=0.1455, N=70).
 DEFAULT_WEIGHTS = {
-    "High Tight Flag":   20,   # +0.69% exp, 163 signals, PF 1.21x
-    "Flat Base":         18,   # +0.51% exp,  40 signals, PF 1.24x
-    "Rounded Base":      15,   # +0.40% exp, 7216 signals, PF 1.17x
-    "High Base":         12,   # +0.09% exp, 20916 signals, PF 1.05x
-    "Volume Expansion":   8,   #  0.00% exp, 6632 signals, PF 1.00x — filter only
+    "Cup & Handle":        20,   # N=1119, net avg R=1.06, PF=2.73, p=0.0000 — strong
+    "Swing High Breakout": 16,   # N=1456, net avg R=0.67, PF=1.98, p=0.0000 — strong
+    "VCP":                  8,   # N=70,   net avg R=0.50, PF=1.78, p=0.1455 — inconclusive, low conviction
 }
 
-# Pruned patterns — detected but weight=0 so never selected as best pattern
+# Pruned patterns — detected but weight=0 so never selected as best pattern.
+# High Tight Flag / Flat Base / Rounded Base / High Base / Volume Expansion
+# moved here 2026-07-27: all at or below breakeven with real costs applied
+# in the full-pipeline replay (see docstring). Falling Wedge and Bull Flag
+# remain pruned — tested via Monte Carlo, did not clear significance
+# (p=0.4817 and p=0.6680 respectively) despite positive point estimates.
 PRUNED_PATTERNS = {
-    "VCP":                  0,
-    "Bull Flag":            0,
-    "Base Breakout":        0,
-    "52W Momentum":         0,
-    "Double Bottom":        0,
-    "Cup & Handle":         0,
-    "Ascending Triangle":   0,
-    "Symmetrical Triangle": 0,
-    "Descending Wedge":     0,
-    "Falling Wedge":        0,
-    "3-Weeks-Tight":        0,
-    "Swing High Breakout":  0,
-    "Diamond Bottom":       0,
-    "IPO Base":             0,
+    "High Tight Flag":      0,   # untested — too rare to register a gate-cleared signal in 10yr
+    "Flat Base":             0,   # net avg R=-0.07 in 2026-07-27 replay
+    "Rounded Base":          0,   # net avg R=-0.47 in 2026-07-27 replay
+    "High Base":             0,   # net avg R=-0.46 in 2026-07-27 replay
+    "Volume Expansion":      0,   # net avg R=-0.65 in 2026-07-27 replay
+    "Falling Wedge":         0,   # N=102, p=0.4817 — not significant
+    "Bull Flag":             0,   # N=400, p=0.6680 — not significant
+    "Base Breakout":         0,
+    "52W Momentum":          0,
+    "Double Bottom":         0,
+    "Ascending Triangle":    0,
+    "Symmetrical Triangle":  0,
+    "Descending Wedge":      0,
+    "3-Weeks-Tight":         0,
+    "Diamond Bottom":        0,
+    "IPO Base":              0,
 }
 
 ALL_WEIGHTS = {**DEFAULT_WEIGHTS, **PRUNED_PATTERNS}
 
-# ── Backtested expectancy per validated pattern (from the same 2023-2026 ──
-# NSE backtest that produced DEFAULT_WEIGHTS above). Used to flag patterns
-# whose historical edge rounds to statistical noise, even though they still
-# score high enough to clear the Tier 1 gate on RS/volume/EMA/etc alone.
+# ── Evidence-based expectancy (v6.2) ─────────────────────────────────────
+# Net avg R per trade (real NSE costs applied), from the 2026-07-27
+# cost-corrected full-pipeline replay + Monte Carlo significance test.
+# Units changed from v6.0/v6.1 (% expectancy, disputed) to R-multiples
+# (this is what pipeline_replay_deep.py and monte_carlo_significance.py
+# both report in — keeping units consistent with the actual evidence).
 PATTERN_EXPECTANCY = {
-    "High Tight Flag":   0.69,
-    "Flat Base":         0.51,
-    "Rounded Base":      0.40,
-    "High Base":         0.09,
-    "Volume Expansion":  0.00,
+    "Cup & Handle":        1.06,   # p=0.0000 — statistically solid
+    "Swing High Breakout": 0.67,   # p=0.0000 — statistically solid
+    "VCP":                 0.50,   # p=0.1455 — inconclusive, see is_low_edge_pattern note
 }
-LOW_EDGE_EXPECTANCY_THRESHOLD = 0.15   # below this, don't badge the pick as high-conviction Tier 1
+# Threshold set at 0.55R — deliberately placed just above VCP's 0.50R so
+# VCP badges as low-conviction (statistically inconclusive) while Cup &
+# Handle and Swing High Breakout, both p=0.0000, badge as high-conviction.
+LOW_EDGE_EXPECTANCY_THRESHOLD = 0.55
 
 
 def is_low_edge_pattern(pattern_name: str) -> bool:
     """
-    True if this pattern's own backtested expectancy is below the threshold
-    for a high-conviction label — e.g. High Base (+0.09%) and Volume
-    Expansion (0.00%) can still legitimately clear the Tier 1 SCORE gate on
-    RS/volume/EMA strength alone, but their own historical data says the
-    pattern itself doesn't carry real edge. That distinction should be
-    visible to the trader, not flattened into the same 'MAJOR' badge as
-    High Tight Flag (+0.69%).
+    True if this pattern's real, evidence-based net expectancy (from the
+    2026-07-27 cost-corrected full-pipeline replay + Monte Carlo test) is
+    below the high-conviction threshold. Unlike v6.0/v6.1, these figures
+    ARE trustworthy — they come from testing the real live gate chain
+    against 10yr of point-in-time data with real transaction costs, not
+    a raw/isolated backtest. Currently this only flags VCP (statistically
+    inconclusive per the permutation test, p=0.1455) as lower-conviction
+    than Cup & Handle / Swing High Breakout (both p=0.0000).
     """
     return PATTERN_EXPECTANCY.get(pattern_name, 1.0) < LOW_EDGE_EXPECTANCY_THRESHOLD
-
 
 class PatternAgent:
     def __init__(self, df: pd.DataFrame):
@@ -106,6 +178,13 @@ class PatternAgent:
         self.raw_score        = 0
         self.breakout_quality = "MINOR"
         self.indicators       = {}
+        # v6.1: every pattern detected this bar, weighted or pruned —
+        # [(pattern_name, breakout_level), ...]. self.pattern (below) still
+        # picks a single "best" one for live conviction scoring, unchanged.
+        # This list exists so validation/pipeline_replay_deep.py can test
+        # ALL 19 patterns independently through the real gate chain,
+        # instead of only the 5 that can currently win pattern selection.
+        self.all_detections   = []
         self._compute_indicators()
         self._detect()
 
@@ -278,9 +357,11 @@ class PatternAgent:
 
         detections = []
 
-        # ── VALIDATED PATTERNS (positive expectancy — will be selected) ───────
+        # ── PRUNED as of 2026-07-27: no gate-cleared signal in 10yr replay,
+        # untested rather than disproven — detection kept in case regime/
+        # liquidity conditions change and it starts firing. See DEFAULT_WEIGHTS.
 
-        # 1. HIGH TIGHT FLAG — best edge (+0.69%)
+        # HIGH TIGHT FLAG — untested (0 gate-cleared signals in 10yr replay)
         if n >= 40:
             pole_low   = float(np.min(low[-40:-15]))
             pole_high  = float(np.max(high[-40:-15]))
@@ -292,7 +373,7 @@ class PatternAgent:
             if pole_gain_pct >= 0.80 and flag_range_pct <= 0.25 and vol_dry:
                 detections.append(("High Tight Flag", flag_high * 1.003))
 
-        # 2. FLAT BASE — good edge (+0.51%)
+        # FLAT BASE — pruned 2026-07-27: net avg R=-0.07 in cost-corrected replay
         if n >= 25:
             fb_range    = ((max(close[-25:]) - min(close[-25:])) / max(close[-25:])
                            if max(close[-25:]) > 0 else 1)
@@ -300,7 +381,7 @@ class PatternAgent:
             if fb_range <= 0.12 and fb_breakout and above_50:
                 detections.append(("Flat Base", float(np.max(high[-25:]))))
 
-        # 3. ROUNDED BASE — solid edge (+0.40%, large sample)
+        # ROUNDED BASE — pruned 2026-07-27: net avg R=-0.47 in cost-corrected replay
         if n >= 60:
             mid        = len(close) // 2
             left_avg   = float(np.mean(close[:mid//2]))
@@ -312,7 +393,7 @@ class PatternAgent:
                 detections.append(("Rounded Base",
                                    float(np.max(high[-10:])) * 1.002))
 
-        # 4. HIGH BASE — marginal edge (+0.09%, very large sample confirms it)
+        # HIGH BASE — pruned 2026-07-27: net avg R=-0.46 in cost-corrected replay
         if n >= 25 and near_52w:
             hb_range = ((max(close[-25:]) - min(close[-25:])) / max(close[-25:])
                         if max(close[-25:]) > 0 else 1)
@@ -320,16 +401,17 @@ class PatternAgent:
                 detections.append(("High Base",
                                    float(np.max(high[-25:])) * 1.002))
 
-        # 5. VOLUME EXPANSION — break-even, kept as confirming signal
+        # VOLUME EXPANSION — pruned 2026-07-27: net avg R=-0.65 in cost-corrected replay
         if rvol >= 1.3 and price > close[-2]:
             resistance = float(np.max(high[-30:])) if n >= 30 else float(np.max(high))
             detections.append(("Volume Expansion", resistance))
 
-        # ── PRUNED PATTERNS (detected but weight=0 — only win if no WATCH pattern) ──
-        # Detection logic preserved exactly — useful for future re-validation
-        # after adding regime filter.
+        # ── REMAINING PATTERNS — mix of promoted (VCP) and pruned. VCP promoted
+        # 2026-07-27 at reduced weight (see DEFAULT_WEIGHTS); Cup & Handle and
+        # Swing High Breakout, both below, promoted at full conviction. Everything
+        # else here stays pruned — detected for future re-validation, weight=0.
 
-        # VCP
+        # VCP — PROMOTED 2026-07-27, weight 8 (reduced conviction, see DEFAULT_WEIGHTS)
         if n >= 60:
             ranges = []
             for w in [20, 10, 5]:
@@ -342,7 +424,7 @@ class PatternAgent:
             if vcp_contracting and above_50 and vcp_vol_dry and vcp_breakout:
                 detections.append(("VCP", float(np.max(high[-20:]))))
 
-        # SWING HIGH BREAKOUT
+        # SWING HIGH BREAKOUT — PROMOTED 2026-07-27, weight 16, p=0.0000
         if n >= 30:
             recent_swing = float(np.max(high[-30:-5]))
             if price >= recent_swing * 0.995 and (rvol >= 0.8 or price > recent_swing):
@@ -365,7 +447,7 @@ class PatternAgent:
                 detections.append(("Bull Flag",
                                    float(max(close[-10:])) * 1.003))
 
-        # CUP & HANDLE
+        # CUP & HANDLE — PROMOTED 2026-07-27, weight 20 (highest), p=0.0000
         if n >= 60:
             cup_high     = float(np.max(high[-60:-30]))
             cup_low      = float(np.min(low[-45:-15]))
@@ -460,6 +542,12 @@ class PatternAgent:
             vol_dry        = float(np.mean(v10)) < 0.8 * avg20v
             if base_range_pct <= 0.20 and vol_dry and price >= 0.90 * base_high:
                 detections.append(("IPO Base", base_high * 1.002))
+
+        # v6.1: capture EVERY detection (weighted + pruned) before the
+        # weight-based selection below discards all but one. This is what
+        # lets the deep replay test all 19 patterns' real gate-adjusted
+        # performance, instead of only the 5 that can win the max() below.
+        self.all_detections = list(detections)
 
         # ── Select best detection by weight ───────────────────────────────────
         # Validated patterns (weight > 0) always beat pruned patterns (weight 0)

@@ -6,7 +6,7 @@ Outputs 3-tier report + sends combined HTML email.
 Run: python scanner.py (or double-click run_scanner.bat)
 """
 
-import sys, logging, json
+import sys, logging, json, argparse
 from datetime import datetime
 from pathlib import Path
 
@@ -32,9 +32,9 @@ logging.basicConfig(
 log = logging.getLogger(__name__)
 
 
-def run_scan():
+def run_scan(dry_run: bool = False, max_tickers: int = None):
     log.info("=" * 60)
-    log.info("  NSE MOMENTUM SCANNER v5.3")
+    log.info("  NSE MOMENTUM SCANNER v5.3" + ("  [DRY RUN]" if dry_run else ""))
     log.info(f"  {datetime.today().strftime('%d %b %Y  %H:%M')}")
     log.info("=" * 60)
 
@@ -46,6 +46,10 @@ def run_scan():
         if item[0] not in seen:
             seen.add(item[0])
             universe.append(item)
+
+    if max_tickers:
+        universe = universe[:max_tickers]
+        log.info(f"      [DRY RUN] Universe capped to first {max_tickers} tickers for a fast sanity check")
 
     log.info(f"\n[0/6] Universe: {len(universe)} stocks")
     for u in ["LARGE", "MID", "SMALL"]:
@@ -112,18 +116,67 @@ def run_scan():
     #      Console print
     print_results(tiers)
 
-    #      Email
-    log.info("\n[6/6] Sending email report...")
-    try:
-        send_email_report(tiers)
-        log.info("      Email sent successfully.")
-    except Exception as e:
-        log.error(f"      Email failed: {e}")
+    if dry_run:
+        #      DRY RUN: skip email entirely, dump results + pattern distribution
+        #      to disk instead so the new weights can be sanity-checked without
+        #      sending a real email or needing repeated manual review.
+        log.info("\n[6/6] DRY RUN — skipping email send.")
+        print_pattern_distribution(all_r, log)
+
+        dump_path = LOG_DIR / f"dryrun_results_{TODAY}_{datetime.now().strftime('%H%M%S')}.json"
+        serializable = {
+            "regime": tiers["regime"],
+            "regime_name": tiers["regime_name"],
+            "breadth": tiers["breadth"],
+            "tier_counts": {"tier1": len(t1), "tier2": len(t2), "tier3": len(t3)},
+            "all_results": [
+                {
+                    "ticker": r.ticker, "pattern": r.pattern, "total_score": r.total_score,
+                    "rs_percentile": r.rs_percentile, "rvol": r.rvol, "entry": r.entry,
+                    "stop_loss": r.stop_loss, "target1": r.target1, "target2": r.target2,
+                    "rrr": r.rrr, "universe": r.universe,
+                }
+                for r in all_r
+            ],
+        }
+        with open(dump_path, "w", encoding="utf-8") as f:
+            json.dump(serializable, f, indent=2)
+        log.info(f"      Results written to {dump_path}")
+    else:
+        #      Email
+        log.info("\n[6/6] Sending email report...")
+        try:
+            send_email_report(tiers)
+            log.info("      Email sent successfully.")
+        except Exception as e:
+            log.error(f"      Email failed: {e}")
 
     log.info("\n" + "=" * 60)
     log.info("  Scan complete.")
     log.info("=" * 60 + "\n")
     return tiers
+
+
+def print_pattern_distribution(all_r, log):
+    """
+    v6.2 weight-rebuild sanity check: how many picks came from each
+    pattern, across ALL results (not just Tier 1). Lets you eyeball
+    whether the new weights (Cup & Handle / Swing High Breakout / VCP)
+    are actually winning pattern selection now, versus the old 5
+    (High Tight Flag / Flat Base / Rounded Base / High Base / Volume
+    Expansion) which should no longer appear at all since they're now
+    in PRUNED_PATTERNS with weight 0.
+    """
+    from collections import Counter
+    counts = Counter(r.pattern for r in all_r if r.pattern)
+    log.info("\n      Pattern distribution across all scored results:")
+    if not counts:
+        log.info("        (no patterns assigned — check gate thresholds / data)")
+        return
+    old_five = {"High Tight Flag", "Flat Base", "Rounded Base", "High Base", "Volume Expansion"}
+    for pattern, count in counts.most_common():
+        flag = "  <-- SHOULD NOT APPEAR (old pruned pattern)" if pattern in old_five else ""
+        log.info(f"        {pattern:<24} {count:>4}{flag}")
 
 
 def print_results(tiers: dict):
@@ -188,4 +241,12 @@ def print_results(tiers: dict):
 
 
 if __name__ == "__main__":
-    run_scan()
+    parser = argparse.ArgumentParser(description="NSE Momentum Scanner")
+    parser.add_argument("--dry-run", action="store_true",
+                         help="Run the full pipeline but skip the email send; "
+                              "writes results + pattern distribution to logs/ instead")
+    parser.add_argument("--max-tickers", type=int, default=None,
+                         help="Cap the universe to the first N tickers, for a fast "
+                              "smoke test (e.g. --max-tickers 30) instead of the full 504")
+    args = parser.parse_args()
+    run_scan(dry_run=args.dry_run, max_tickers=args.max_tickers)
