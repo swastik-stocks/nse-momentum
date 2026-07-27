@@ -1,10 +1,16 @@
 """
-NSE Momentum v5.3 - Email Reporter
-4-section HTML email:
+NSE Momentum v6.2 - Email Reporter
+5-section HTML email:
   Section 1: T1/T2/T3 evidence-based trade cards
   Section 2: Top 20 watchlist table (no T1 duplicates)
   Section 3: Market intelligence (regime, breadth, macro, event)
   Section 4: Near-breakout watchlist (set alerts, do not buy yet)
+  Section 5: Defensive / Relative-Strength watchlist (capital preservation
+             triage — only populated when the scan actually produced one;
+             see agents/defensive_agent.py for the trigger logic). Styled
+             deliberately differently from Sections 1/2/4 — muted/neutral
+             palette, no "buy" language anywhere — because these are NOT
+             new entry signals, just relatively-less-damaged names.
 """
 
 import os, smtplib, logging
@@ -25,6 +31,10 @@ GMAIL_ADDRESS = os.getenv("GMAIL_ADDRESS")
 GMAIL_APP_PW  = os.getenv("GMAIL_APP_PASSWORD")
 BASE_DIR      = Path(__file__).parent
 
+# Change this if you ever want the greeting to say something else —
+# kept as one constant rather than hardcoded inline so it's a single edit.
+RECIPIENT_NAME = "Swastik"
+
 REGIME_META = {
     "A": ("STRONG BULL",  "#00E676", "rgba(0,230,118,0.12)", "rgba(0,230,118,0.35)",
           "All conditions optimal. Highest probability entry window."),
@@ -41,6 +51,13 @@ REGIME_META = {
 MACRO_COLOR = {"SUPPORTIVE": "#00E676", "MIXED": "#FFB300", "HOSTILE": "#FF5252"}
 EVENT_COLOR = {"NORMAL": "#5E7A96",     "WATCH": "#FFB300",  "HIGH_RISK": "#FF5252"}
 BQ_COLOR    = {"MAJOR": "#00E676",      "MINOR": "#FFB300",  "RECOVERY": "#4D9EFF"}
+
+# Deliberately muted/neutral — NOT the green/orange/red buy-signal palette
+# used elsewhere in this file. A defensive pick should never visually read
+# like a Tier 1/2/3 trade card at a glance.
+DEFENSIVE_COLOR  = "#8FA3B8"
+DEFENSIVE_BG     = "rgba(143,163,184,0.08)"
+DEFENSIVE_BORDER = "rgba(143,163,184,0.25)"
 
 
 def _load_recipients() -> list:
@@ -70,6 +87,7 @@ def send_email_report(tiers: dict):
     t3           = tiers.get("tier3", [])
     all_r        = tiers.get("all_results", [])
     near_bo      = tiers.get("near_breakout", [])
+    defensive    = tiers.get("defensive_watchlist", [])   # NEW
     regime       = tiers.get("regime", "C")
     brdth        = tiers.get("breadth", 5)
     bd           = tiers.get("breadth_detail", {})
@@ -81,13 +99,13 @@ def send_email_report(tiers: dict):
     date_str = datetime.today().strftime("%d %b %Y")
     penalty  = {"A": 0, "B": 0, "C": -5, "D": -12, "E": -25}.get(regime, 0)
 
-    html = _build_html(t1, t2, t3, all_r, near_bo,
+    html = _build_html(t1, t2, t3, all_r, near_bo, defensive,
                        regime, rlbl, rcol, rbg, rborder, rnote,
                        brdth, bd, date_str, penalty,
                        macro_state, event_risk, t1_cap)
 
     msg = MIMEMultipart("alternative")
-    msg["Subject"] = (f"NSE Momentum v5.3 - {date_str} - "
+    msg["Subject"] = (f"NSE Momentum v6.2 - {date_str} - "
                       f"Regime {regime} ({rlbl}) - {len(t1)} picks")
     msg["From"] = GMAIL_ADDRESS
     msg["To"]   = ", ".join(recipients)
@@ -122,7 +140,7 @@ def _tier_card(r, tier_label: str, tier_color: str) -> str:
             '<span style="font-size:9px;color:#FF7043;'
             'border:1px solid #FF7043;border-radius:3px;'
             'padding:1px 5px;margin-left:6px" '
-            'title="This pattern\'s own backtested expectancy is below 0.15% — '
+            'title="This pattern\'s prior expectancy estimate is disputed — '
             'score cleared on other factors, not pattern strength">'
             'LOW HISTORICAL EDGE</span>'
         )
@@ -259,7 +277,73 @@ def _near_breakout_section(near_bo: list) -> str:
   </div>"""
 
 
-def _build_html(t1, t2, t3, all_r, near_bo,
+def _defensive_section(defensive: list, regime: str) -> str:
+    """
+    NEW — Section 5. Only renders anything when defensive_watchlist is
+    non-empty (i.e. agents/defensive_agent.py actually triggered and found
+    qualifying candidates that scan). Deliberately styled with the muted
+    DEFENSIVE_COLOR palette, not the green/gold/blue used for T1/T2/T3 —
+    a reader should never mistake this table for a buy-signal list.
+    """
+    if not defensive:
+        return ""
+
+    rows = ""
+    for d in defensive:
+        note_html = ""
+        if d.get("note"):
+            note_html = (f'<div style="font-size:10px;color:#6B7F94;margin-top:2px">'
+                         f'{d["note"]}</div>')
+        rows += f"""
+<tr style="border-bottom:1px solid #1F3046">
+  <td style="padding:7px 10px;font-weight:600;color:#E8F0F8;font-family:monospace">
+    {d['ticker']}
+    {note_html}
+  </td>
+  <td style="padding:7px 10px;color:#9AAFC4;font-size:11px">{d['sector']}</td>
+  <td style="padding:7px 10px;font-size:10px;color:#5E7A96">{d['tier']}</td>
+  <td style="padding:7px 10px;font-family:monospace;color:{DEFENSIVE_COLOR}">{d['rs_universe_pct']:.0f}th</td>
+  <td style="padding:7px 10px;font-family:monospace;color:{DEFENSIVE_COLOR}">{d['rs_sector_pct']:.0f}th</td>
+  <td style="padding:7px 10px;font-family:monospace;color:#9AAFC4">{d['stock_dd_pct']:.1f}%</td>
+  <td style="padding:7px 10px;font-family:monospace;color:#5E7A96">{d['nifty_dd_pct']:.1f}%</td>
+  <td style="padding:7px 10px;font-family:monospace;color:#9AAFC4">Rs.{d['adt_cr']:.0f}Cr</td>
+</tr>"""
+
+    return f"""
+  <div style="font-family:monospace;font-size:9px;letter-spacing:0.2em;color:#5E7A96;
+              text-transform:uppercase;margin:24px 0 10px">
+    Section 5 - Defensive / Relative-Strength Watchlist
+  </div>
+  <div style="background:{DEFENSIVE_BG};border:1px solid {DEFENSIVE_BORDER};border-radius:8px;
+              padding:10px 14px;margin-bottom:12px;font-size:11px;color:#9AAFC4">
+    Regime {regime} triggered a capital-preservation scan — no new Tier 1/2 entries
+    are being generated today. These names are relatively less damaged than NIFTY
+    (higher relative strength, shallower drawdown over the same window) — useful
+    as a "what's holding up" reference or a hold/rotate-into view for existing
+    positions. <strong style="color:{DEFENSIVE_COLOR}">This is not a new-entry buy
+    signal</strong> — treat it with the same caution as the rest of a Regime
+    {regime} scan.
+  </div>
+  <div style="overflow-x:auto">
+  <table style="width:100%;border-collapse:collapse;font-size:12px">
+    <thead>
+      <tr style="background:#0A1018;border-bottom:1px solid #1F3046">
+        <th style="padding:7px 10px;text-align:left;color:#5E7A96;font-size:9px">TICKER</th>
+        <th style="padding:7px 10px;text-align:left;color:#5E7A96;font-size:9px">SECTOR</th>
+        <th style="padding:7px 10px;text-align:left;color:#5E7A96;font-size:9px">TIER</th>
+        <th style="padding:7px 10px;text-align:left;color:#5E7A96;font-size:9px">RS (UNIVERSE)</th>
+        <th style="padding:7px 10px;text-align:left;color:#5E7A96;font-size:9px">RS (SECTOR)</th>
+        <th style="padding:7px 10px;text-align:left;color:#5E7A96;font-size:9px">STOCK DD</th>
+        <th style="padding:7px 10px;text-align:left;color:#5E7A96;font-size:9px">NIFTY DD</th>
+        <th style="padding:7px 10px;text-align:left;color:#5E7A96;font-size:9px">ADT</th>
+      </tr>
+    </thead>
+    <tbody>{rows}</tbody>
+  </table>
+  </div>"""
+
+
+def _build_html(t1, t2, t3, all_r, near_bo, defensive,
                 regime, rlbl, rcol, rbg, rborder, rnote,
                 breadth, bd, date_str, penalty,
                 macro_state, event_risk, t1_cap) -> str:
@@ -321,7 +405,8 @@ def _build_html(t1, t2, t3, all_r, near_bo,
     bbar = int(breadth / 10 * 100)
     bcol = "#00E676" if breadth >= 7 else "#FFB300" if breadth >= 4 else "#FF5252"
 
-    near_section = _near_breakout_section(near_bo)
+    near_section       = _near_breakout_section(near_bo)
+    defensive_section  = _defensive_section(defensive, regime)   # NEW
 
     return f"""<!DOCTYPE html>
 <html>
@@ -333,11 +418,12 @@ def _build_html(t1, t2, t3, all_r, near_bo,
             border:1px solid #1F3046;border-bottom:none">
   <div style="font-family:monospace;font-size:10px;letter-spacing:0.2em;color:#00D4AA;
               text-transform:uppercase;margin-bottom:6px">
-    NSE Momentum Discovery - v5.3 - {date_str}
+    NSE Momentum Discovery - v6.2 - {date_str}
   </div>
+  <div style="font-size:13px;color:#9AAFC4;margin-bottom:6px">Hi {RECIPIENT_NAME},</div>
   <div style="font-size:22px;font-weight:800;color:#FFFFFF;margin-bottom:4px">Daily Intelligence Report</div>
   <div style="font-size:11px;color:#5E7A96;margin-bottom:12px">
-    ~401 stocks - 3 universes - 5 validated patterns (14 pruned) - All free data
+    500 stocks - 3 universes - 3 validated patterns (16 pruned, evidence-based) - All free data
   </div>
   <div style="display:flex;gap:8px;flex-wrap:wrap">
     <div style="background:{rbg};border:1px solid {rborder};border-radius:20px;padding:5px 14px">
@@ -361,6 +447,7 @@ def _build_html(t1, t2, t3, all_r, near_bo,
                 border-radius:20px;padding:5px 14px">
       <span style="font-family:monospace;font-size:10px;color:#9AAFC4">
         {len(t1)} Picks (cap {t1_cap}) - {len(t2)} Watchlist - {len(near_bo)} Near-breakout
+        {"" if not defensive else f" - {len(defensive)} Defensive"}
       </span>
     </div>
   </div>
@@ -437,11 +524,14 @@ def _build_html(t1, t2, t3, all_r, near_bo,
 
   {near_section}
 
+  {defensive_section}
+
   <div style="margin-top:24px;padding-top:16px;border-top:1px solid #1F3046;
               font-size:10px;color:#2D4055;text-align:center;line-height:1.8">
-    NSE Momentum Scanner v5.4 - ~401 stocks - All free data - Evidence-based<br>
+    NSE Momentum Scanner v6.2 - 500 stocks - All free data - Evidence-based<br>
     T1 = Gate cleared. T2 = One condition missing. T3 = Setup forming.<br>
     Near-breakout = Set alert only, do not buy until breakout confirmed.<br>
+    Defensive watchlist = Capital-preservation reference, not a buy signal.<br>
     Not SEBI-registered investment advice. All trading involves capital risk.
   </div>
 
@@ -452,4 +542,4 @@ def _build_html(t1, t2, t3, all_r, near_bo,
 
 
 if __name__ == "__main__":
-    print("Emailer v5.3 loaded OK")
+    print("Emailer v6.2 loaded OK")

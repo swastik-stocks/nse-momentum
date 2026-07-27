@@ -20,6 +20,12 @@ CHANGES vs v5.2:
 
   [BUG-5] Calibration logs auto-written to logs/breadth_calibration.log and
           logs/regime_calibration.log for daily audit.
+
+CHANGES vs v5.3 (this edit):
+  [NEW] Defensive/RS watchlist wired in — see agents/defensive_agent.py.
+        Only produces output when regime is D or E (matches the existing
+        t1_cap=0 risk-off behaviour in those regimes). Saved separately to
+        defensive_watchlist.json, never merged into picks_latest.json.
 """
 
 import sys, json
@@ -65,6 +71,7 @@ from agents.event_risk_agent           import EventRiskAgent
 from agents.confirmation_agent         import ConfirmationAgent
 from agents.near_breakout              import find_near_breakout_stocks
 from agents.regime_classifier          import RegimeClassifier
+from agents.defensive_agent            import run_defensive_scan
 from trade_logger                      import get_dynamic_weight
 from nse_universe                      import UNIVERSE_CONFIG, UNIVERSE_SEED
 
@@ -777,6 +784,15 @@ class AgentOrchestrator:
         )
         log.info(f"  Near-breakout watchlist: {len(near_breakout)} stocks")
 
+        # Defensive / relative-strength watchlist — no-op unless regime is D or E.
+        # Reuses self.universe_rs_ranks / self.sector_rs_ranks computed in
+        # __init__ above; does not recompute RS. See agents/defensive_agent.py.
+        defensive_watchlist = run_defensive_scan(
+            self, universe_items, stock_data,
+            self.data.get("nifty50_data", pd.DataFrame()),
+            delivery_data,
+        )
+
         # Save picks_latest.json
         from datetime import date as _date
         picks_json = []
@@ -810,11 +826,22 @@ class AgentOrchestrator:
             f"(T1={len(t1_accepted)}, T2={len(t2)})"
         )
 
+        # Defensive watchlist saved SEPARATELY — never merged into
+        # picks_latest.json, which confirm_picks.py parses expecting
+        # entry/sl/pivot/t1/t2/rr fields a defensive pick doesn't have.
+        with open("defensive_watchlist.json", "w") as f:
+            json.dump(defensive_watchlist, f, indent=2)
+        log.info(
+            f"  Saved {len(defensive_watchlist)} defensive candidates to "
+            f"defensive_watchlist.json"
+        )
+
         return {
             "tier1":              t1_accepted,
             "tier2":              t2,
             "tier3":              t3,
             "near_breakout":      near_breakout,
+            "defensive_watchlist": defensive_watchlist,
             "all_results":        all_results,
             "regime":             self.regime,
             "regime_name":        self.regime_name,
