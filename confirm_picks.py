@@ -31,15 +31,14 @@ CHANGES vs v5.3:
           momentum continuation got graded by the same "don't chase"
           tolerance as a choppy Regime C day. Now these thresholds vary
           by the evening scan's regime (see REGIME_TOLERANCE below).
-          ASSUMPTION TO VERIFY: this reads picks_meta.get("regime") as a
-          single-letter code (A-E), matching the scheme visible elsewhere
-          in this codebase (orchestrator.py's regime output, the
-          "Regime penalties: A/B=0 | C=-5 | D=-12 | E=-25" scheme in
-          README.md). If picks_latest.json actually stores this under a
-          different key or format, REGIME_TOLERANCE lookup silently
-          falls back to the old fixed defaults (safe, but confirm the
-          real key name against your scanner's pick-serialization code
-          so the regime-aware behavior actually activates).
+          CONFIRMED 2026-07-28: picks_latest.json never actually included
+          a "regime" field at all (verified against orchestrator.py's
+          picks_json construction) -- not a wrong key name, the data
+          simply didn't exist yet. Fixed by adding "regime": self.regime
+          to orchestrator.py's per-pick dict (same evening-scan regime
+          letter scanner.py already logs as orc.regime). This file's
+          picks_meta.get("regime") lookup needed no changes -- it was
+          already reading the right key, just waiting on real data.
 """
 
 import os, json, smtplib, time
@@ -744,7 +743,9 @@ def _get_tolerance(regime_code: str | None) -> dict:
     """
     [FIX-3] Looks up regime-aware drift/extension tolerance. Falls back
     to the fixed module defaults if regime_code is missing or unrecognized
-    -- see docstring ASSUMPTION note re: picks_meta.get("regime") key name.
+    -- as of 2026-07-28, orchestrator.py always writes "regime" to every
+    pick, so a fallback here now means something else went wrong (e.g.
+    an old picks_latest.json from before that fix), not a naming mismatch.
     """
     if regime_code and regime_code in REGIME_TOLERANCE:
         return REGIME_TOLERANCE[regime_code]

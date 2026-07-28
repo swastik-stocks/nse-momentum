@@ -816,6 +816,9 @@ class AgentOrchestrator:
                 "pattern":          r.pattern or "",
                 "vcp_w4_pct":       round(r.vcp_w4_pct,     2),
                 "scan_date":        _date.today().isoformat(),
+                "regime":           self.regime,               # v5.4: was missing entirely --
+                                                                  # confirm_picks.py's regime-aware
+                                                                  # chase tolerance had nothing to read
                 "regime_confidence": r.regime_confidence,      # v5.3: in JSON output
                 "breadth_source":   r.breadth_source,          # v5.3: audit trail
             })
