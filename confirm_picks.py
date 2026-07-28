@@ -1,23 +1,45 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-NSE Momentum v5.3 — 10am Confirmation Checker (complete replacement)
+NSE Momentum v5.4 — Multi-Checkpoint Confirmation Checker
 
-CHANGES vs v5.2:
-  [BUG-1] tvDatafeed: explicit debug logging added so failures are visible
-          in GitHub Actions logs. No more silent fallthrough.
-  [BUG-2] New status BREAKOUT_NO_VOLUME for stocks above pivot with RVOL < 1.0x
-          Subject line now accurate: counts each status separately.
-  [BUG-3] Timestamp fixed: datetime.now(ZoneInfo) for IST, not UTC labeled as IST
-  [BUG-4] Secondary drift check: CMP > pivot * 1.03 AND RVOL < 1.5x -> MISSED
-          Drift guard now checks pivot extension, not just entry price.
-  [BUG-5] MEDANTA / extended breakouts: 2.7%+ above pivot with low RVOL
-          correctly classified as MISSED, not LOW_VOL.
-  [BUG-6] Stale-data guard now compares scan_date against the LAST TRADING
-          DAY (skipping weekends + NSE holidays), not literally "today".
-          The evening scan runs the night before and produces picks meant
-          to be confirmed the next trading morning -- scan_date == the
-          prior trading day is the CORRECT, expected state, not staleness.
+CHANGES vs v5.3:
+  [FIX-1] RVOL window was a fixed 09:15-10:15 (60-min) calendar slice
+          regardless of when the script actually ran -- the email footer
+          claimed "first-45min" (wrong on two counts: window is 60 min,
+          and even at the stated 45min a 9:55am run is 5min early against
+          it). Replaced with an ELAPSED-TIME-MATCHED window: today's
+          volume from market open (09:15) to the current run time,
+          compared against the SAME elapsed-time window on historical
+          days. This is correct at ANY run time, not just after a fixed
+          45/60-min mark -- which is what makes genuinely earlier
+          checkpoints (see FIX-2) valid instead of just re-running the
+          same broken fixed window sooner.
+  [FIX-2] MULTIPLE CHECKPOINTS PER MORNING instead of one fixed 9:55am
+          run. On strong-trend days, fast movers can run well past entry
+          before a single 9:55am check ever sees them -- by construction,
+          a pick gets exactly one chance to be caught. Now supports
+          several scheduled runs through the first hour (e.g. 09:20,
+          09:35, 09:55). Terminal-status picks (CONFIRMED/LOW_VOL/
+          NO_VOLUME/MISSED/BROKEN) from an earlier checkpoint are cached
+          in a per-day state file and NOT re-classified or re-emailed --
+          only newly-terminal picks and the final summary get sent, so
+          multiple checkpoints don't mean multiple duplicate emails.
+  [FIX-3] REGIME-AWARE drift/extension tolerance. MAX_ENTRY_DRIFT_PCT and
+          MAX_PIVOT_EXTENSION_PCT were fixed constants regardless of
+          market regime -- meaning a genuine Regime A (STRONG BULL)
+          momentum continuation got graded by the same "don't chase"
+          tolerance as a choppy Regime C day. Now these thresholds vary
+          by the evening scan's regime (see REGIME_TOLERANCE below).
+          ASSUMPTION TO VERIFY: this reads picks_meta.get("regime") as a
+          single-letter code (A-E), matching the scheme visible elsewhere
+          in this codebase (orchestrator.py's regime output, the
+          "Regime penalties: A/B=0 | C=-5 | D=-12 | E=-25" scheme in
+          README.md). If picks_latest.json actually stores this under a
+          different key or format, REGIME_TOLERANCE lookup silently
+          falls back to the old fixed defaults (safe, but confirm the
+          real key name against your scanner's pick-serialization code
+          so the regime-aware behavior actually activates).
 """
 
 import os, json, smtplib, time
@@ -42,15 +64,34 @@ GMAIL_APP_PASSWORD = os.getenv("GMAIL_APP_PASSWORD", "")
 PICKS_JSON_PATH    = os.getenv("PICKS_JSON_PATH", "picks_latest.json")
 
 # ── Version — single source of truth ─────────────────────────────────────────
-VERSION = "5.3"
+VERSION = "5.4"
 
 # ── Thresholds ────────────────────────────────────────────────────────────────
 RVOL_CONFIRM_MIN        = 1.5   # RVOL >= this → CONFIRMED (full size)
 RVOL_LOW_VOL_MIN        = 1.0   # RVOL >= this → CONFIRMED_LOW_VOL (half size)
                                  # RVOL < 1.0 above pivot → BREAKOUT_NO_VOLUME
-MAX_ENTRY_DRIFT_PCT     = 2.0   # CMP > entry + this% → MISSED
-MAX_PIVOT_EXTENSION_PCT = 3.0   # CMP > pivot + this% with low RVOL → MISSED
+MAX_ENTRY_DRIFT_PCT     = 2.0   # fallback default if regime lookup unavailable
+MAX_PIVOT_EXTENSION_PCT = 3.0   # fallback default if regime lookup unavailable
 IST = ZoneInfo("Asia/Kolkata")
+MARKET_OPEN_TIME        = datetime.strptime("09:15", "%H:%M").time()
+
+# [FIX-3] Regime-aware chase tolerance. Wider on strong-trend days (momentum
+# continuation is a different risk profile than chasing in a choppy market),
+# tighter on weak/negative regimes. Letter codes match orchestrator.py's
+# regime output (A=strongest ... E=weakest) -- see docstring ASSUMPTION note.
+REGIME_TOLERANCE = {
+    "A": {"max_entry_drift_pct": 4.0, "max_pivot_extension_pct": 6.0},   # STRONG BULL
+    "B": {"max_entry_drift_pct": 3.0, "max_pivot_extension_pct": 4.5},
+    "C": {"max_entry_drift_pct": 2.0, "max_pivot_extension_pct": 3.0},   # = old fixed defaults
+    "D": {"max_entry_drift_pct": 1.5, "max_pivot_extension_pct": 2.5},
+    "E": {"max_entry_drift_pct": 1.0, "max_pivot_extension_pct": 2.0},
+}
+
+# [FIX-2] Statuses that don't need re-checking once reached -- a pick that's
+# already CONFIRMED, MISSED, etc. this morning stays that way; only PENDING
+# (still below pivot) and DATA_ERROR (retry-worthy) get re-classified on the
+# next checkpoint.
+TERMINAL_STATUSES = {"CONFIRMED", "CONFIRMED_LOW_VOL", "BREAKOUT_NO_VOLUME", "MISSED", "BROKEN"}
 # ─────────────────────────────────────────────────────────────────────────────
 
 
@@ -66,12 +107,20 @@ def _load_recipients() -> list:
 # RVOL — real first-45min calculation
 # ─────────────────────────────────────────────────────────────────────────────
 
-def _rvol_tvdatafeed(ticker_nse: str) -> float:
+def _rvol_tvdatafeed(ticker_nse: str, as_of: datetime = None) -> float:
     """
     Primary RVOL source: tvDatafeed (TradingView 5-min bars).
-    Returns RVOL float >= 0, or -1.0 on failure.
+
+    [FIX-1] Window is now ELAPSED-TIME-MATCHED: volume from market open
+    (09:15) to `as_of` (defaults to now), compared against the SAME
+    elapsed-time window on historical days -- not a fixed 09:15-10:15
+    calendar slice. This makes RVOL meaningful at any checkpoint time,
+    not just after a fixed 45/60-min mark has fully elapsed.
+
+    Returns RVOL float >= 0, or -1.0 on failure / insufficient elapsed time.
     ALL failures are logged explicitly — no silent fallthrough.
     """
+    as_of = as_of or datetime.now(IST)
     try:
         from tvDatafeed import TvDatafeed, Interval
         import pandas as pd
@@ -95,7 +144,7 @@ def _rvol_tvdatafeed(ticker_nse: str) -> float:
         # --- FIX: tvDatafeed returns naive timestamps in UTC, not IST.
         # Must localize to UTC first, then convert to IST — localizing
         # directly to IST just relabels the UTC clock time without
-        # shifting it, causing the 09:15-10:15 window search to miss
+        # shifting it, causing the elapsed-time window search to miss
         # every bar (they land ~5.5hrs off from where they should be).
         try:
             df.index = df.index.tz_localize("UTC").tz_convert("Asia/Kolkata")
@@ -106,32 +155,38 @@ def _rvol_tvdatafeed(ticker_nse: str) -> float:
                 pass
         # --- END FIX
 
-        today = datetime.now(IST).date()
-        today_45 = df[
+        today = as_of.date()
+        elapsed_minutes = (as_of - datetime.combine(today, MARKET_OPEN_TIME, tzinfo=IST)).total_seconds() / 60
+        if elapsed_minutes < 5:
+            log.warning(f"    [tvDatafeed] {symbol}: only {elapsed_minutes:.0f}min elapsed "
+                        f"since open -- too early for a meaningful RVOL")
+            return -1.0
+
+        today_window = df[
             (df.index.date == today) &
-            (df.index.time >= datetime.strptime("09:15", "%H:%M").time()) &
-            (df.index.time <= datetime.strptime("10:15", "%H:%M").time())
+            (df.index.time >= MARKET_OPEN_TIME) &
+            (df.index.time <= as_of.time())
         ]
 
-        if today_45.empty:
+        if today_window.empty:
             log.warning(f"    [tvDatafeed] {symbol}: no bars for today "
-                        f"({today}) in 09:15-10:00 window. "
+                        f"({today}) in 09:15-{as_of.strftime('%H:%M')} window. "
                         f"Latest bar date: {df.index[-1].date()}")
             return -1.0
 
-        today_vol = float(today_45["volume"].sum())
-        log.info(f"    [tvDatafeed] {symbol}: today 45-min vol = {today_vol:,.0f}")
+        today_vol = float(today_window["volume"].sum())
+        log.info(f"    [tvDatafeed] {symbol}: today {elapsed_minutes:.0f}min vol = {today_vol:,.0f}")
 
         hist = df[df.index.date < today]
         hist_by_day = {}
         for row_date in set(hist.index.date):
-            day_45 = hist[
+            day_window = hist[
                 (hist.index.date == row_date) &
-                (hist.index.time >= datetime.strptime("09:15", "%H:%M").time()) &
-                (hist.index.time <= datetime.strptime("10:15", "%H:%M").time())
+                (hist.index.time >= MARKET_OPEN_TIME) &
+                (hist.index.time <= as_of.time())
             ]
-            if not day_45.empty:
-                hist_by_day[row_date] = float(day_45["volume"].sum())
+            if not day_window.empty:
+                hist_by_day[row_date] = float(day_window["volume"].sum())
 
         if len(hist_by_day) < 3:
             log.warning(f"    [tvDatafeed] {symbol}: only {len(hist_by_day)} "
@@ -141,7 +196,7 @@ def _rvol_tvdatafeed(ticker_nse: str) -> float:
         avg_hist = sum(hist_by_day.values()) / len(hist_by_day)
         rvol = round(today_vol / avg_hist, 2) if avg_hist > 0 else -1.0
         log.info(f"    [tvDatafeed] {symbol}: RVOL = {rvol:.2f}x "
-                 f"(today {today_vol:,.0f} / avg {avg_hist:,.0f})")
+                 f"(today {today_vol:,.0f} / avg {avg_hist:,.0f}, {elapsed_minutes:.0f}min elapsed)")
         return rvol
 
     except ImportError:
@@ -152,11 +207,13 @@ def _rvol_tvdatafeed(ticker_nse: str) -> float:
         return -1.0
 
 
-def _rvol_yfinance_fallback(ticker_nse: str) -> float:
+def _rvol_yfinance_fallback(ticker_nse: str, as_of: datetime = None) -> float:
     """
-    Fallback RVOL: yfinance 1-min data.
+    Fallback RVOL: yfinance 1-min data. Same elapsed-time-matched window
+    fix as _rvol_tvdatafeed -- see FIX-1 in module docstring.
     Returns RVOL float >= 0, or -1.0 on failure.
     """
+    as_of = as_of or datetime.now(IST)
     try:
         import yfinance as yf
         import pandas as pd
@@ -174,34 +231,40 @@ def _rvol_yfinance_fallback(ticker_nse: str) -> float:
         except Exception:
             pass
 
-        today = datetime.now(IST).date()
-        today_45 = df_1m[
+        today = as_of.date()
+        elapsed_minutes = (as_of - datetime.combine(today, MARKET_OPEN_TIME, tzinfo=IST)).total_seconds() / 60
+        if elapsed_minutes < 5:
+            log.warning(f"    [yfinance-fallback] {t}: only {elapsed_minutes:.0f}min elapsed "
+                        f"since open -- too early for a meaningful RVOL")
+            return -1.0
+
+        today_window = df_1m[
             (df_1m.index.date == today) &
-            (df_1m.index.time >= datetime.strptime("09:15", "%H:%M").time()) &
-            (df_1m.index.time <= datetime.strptime("10:15", "%H:%M").time())
+            (df_1m.index.time >= MARKET_OPEN_TIME) &
+            (df_1m.index.time <= as_of.time())
         ]
-        if today_45.empty:
+        if today_window.empty:
             log.warning(f"    [yfinance-fallback] {t}: no bars for today in window")
             return -1.0
 
-        today_vol = float(today_45["Volume"].sum())
+        today_vol = float(today_window["Volume"].sum())
         hist = df_1m[df_1m.index.date < today]
         hist_by_day = {}
         for row_date in set(hist.index.date):
-            day_45 = hist[
+            day_window = hist[
                 (hist.index.date == row_date) &
-                (hist.index.time >= datetime.strptime("09:15", "%H:%M").time()) &
-                (hist.index.time <= datetime.strptime("10:15", "%H:%M").time())
+                (hist.index.time >= MARKET_OPEN_TIME) &
+                (hist.index.time <= as_of.time())
             ]
-            if not day_45.empty:
-                hist_by_day[row_date] = float(day_45["Volume"].sum())
+            if not day_window.empty:
+                hist_by_day[row_date] = float(day_window["Volume"].sum())
 
         if len(hist_by_day) < 3:
             return -1.0
 
         avg_hist = sum(hist_by_day.values()) / len(hist_by_day)
         rvol = round(today_vol / avg_hist, 2) if avg_hist > 0 else -1.0
-        log.info(f"    [yfinance-fallback] {t}: RVOL = {rvol:.2f}x")
+        log.info(f"    [yfinance-fallback] {t}: RVOL = {rvol:.2f}x ({elapsed_minutes:.0f}min elapsed)")
         return rvol
 
     except Exception as e:
@@ -209,19 +272,19 @@ def _rvol_yfinance_fallback(ticker_nse: str) -> float:
         return -1.0
 
 
-def get_rvol(ticker: str) -> tuple:
+def get_rvol(ticker: str, as_of: datetime = None) -> tuple:
     """
     Returns (rvol_float, source_label).
     Tries tvDatafeed first, falls back to yfinance, then N/A.
     """
     ticker_raw = ticker if ticker.endswith(".NS") else ticker + ".NS"
 
-    rvol = _rvol_tvdatafeed(ticker_raw)
+    rvol = _rvol_tvdatafeed(ticker_raw, as_of=as_of)
     if rvol >= 0:
         return rvol, "tvDatafeed"
 
     log.info(f"    tvDatafeed failed for {ticker_raw} — trying yfinance fallback")
-    rvol = _rvol_yfinance_fallback(ticker_raw)
+    rvol = _rvol_yfinance_fallback(ticker_raw, as_of=as_of)
     if rvol >= 0:
         return rvol, "yfinance"
 
@@ -249,16 +312,22 @@ def get_live_price(ticker: str) -> float | None:
 # Classification — v5.3 status set
 # ─────────────────────────────────────────────────────────────────────────────
 
-def classify(pick: dict, cmp: float | None, rvol: float, rvol_src: str) -> dict:
+def classify(pick: dict, cmp: float | None, rvol: float, rvol_src: str,
+             max_entry_drift_pct: float = MAX_ENTRY_DRIFT_PCT,
+             max_pivot_extension_pct: float = MAX_PIVOT_EXTENSION_PCT) -> dict:
     """
     Status set (v5.3):
       CONFIRMED           — above pivot, RVOL >= 1.5x
       CONFIRMED_LOW_VOL   — above pivot, RVOL 1.0-1.5x
       BREAKOUT_NO_VOLUME  — above pivot, RVOL < 1.0x  ← NEW
-      MISSED              — entry drift > 2%, OR pivot extension > 3% with low RVOL
+      MISSED              — entry drift > threshold, OR pivot extension > threshold with low RVOL
       PENDING             — below pivot
       BROKEN              — at or below stop loss
       DATA_ERROR          — price feed failed
+
+    [FIX-3] max_entry_drift_pct / max_pivot_extension_pct are now passed
+    in per-call (regime-aware, see REGIME_TOLERANCE) rather than always
+    reading the module-level defaults directly.
     """
     entry = pick["entry"]
     sl    = pick["sl"]
@@ -279,11 +348,11 @@ def classify(pick: dict, cmp: float | None, rvol: float, rvol_src: str) -> dict:
 
     # Entry drift vs planned entry price
     drift_pct       = round(((cmp - entry) / entry) * 100, 1) if entry > 0 else 0.0
-    entry_chasing   = drift_pct > MAX_ENTRY_DRIFT_PCT
+    entry_chasing   = drift_pct > max_entry_drift_pct
 
     # [BUG-4/5] Secondary: pivot extension with low volume
     pivot_ext_pct   = round(((cmp - pivot) / pivot) * 100, 1) if pivot > 0 else 0.0
-    pivot_extended  = (pivot_ext_pct > MAX_PIVOT_EXTENSION_PCT
+    pivot_extended  = (pivot_ext_pct > max_pivot_extension_pct
                        and rvol >= 0 and rvol < RVOL_CONFIRM_MIN)
 
     vol_ok_confirm  = (rvol >= RVOL_CONFIRM_MIN) if rvol >= 0 else True
@@ -643,16 +712,77 @@ def send_email(subject: str, html_body: str):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# [FIX-2] Multi-checkpoint state persistence
+# ─────────────────────────────────────────────────────────────────────────────
+
+STATE_DIR = "logs"
+
+
+def _state_path(today_iso: str) -> str:
+    os.makedirs(STATE_DIR, exist_ok=True)
+    return os.path.join(STATE_DIR, f"confirm_state_{today_iso.replace('-', '')}.json")
+
+
+def _load_state(path: str) -> dict:
+    """{ticker: {"pick": {...}, "classification": {...}}} for already-terminal picks."""
+    if not os.path.exists(path):
+        return {}
+    try:
+        with open(path, encoding="utf-8") as f:
+            return json.load(f)
+    except (json.JSONDecodeError, OSError) as e:
+        log.warning(f"  Could not read state file {path}: {e} — starting fresh")
+        return {}
+
+
+def _save_state(path: str, state: dict):
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(state, f, indent=2, default=str)
+
+
+def _get_tolerance(regime_code: str | None) -> dict:
+    """
+    [FIX-3] Looks up regime-aware drift/extension tolerance. Falls back
+    to the fixed module defaults if regime_code is missing or unrecognized
+    -- see docstring ASSUMPTION note re: picks_meta.get("regime") key name.
+    """
+    if regime_code and regime_code in REGIME_TOLERANCE:
+        return REGIME_TOLERANCE[regime_code]
+    if regime_code:
+        log.warning(f"  Regime code {regime_code!r} not in REGIME_TOLERANCE — "
+                    f"using fixed defaults ({MAX_ENTRY_DRIFT_PCT}%/{MAX_PIVOT_EXTENSION_PCT}%)")
+    else:
+        log.warning(f"  No regime code found in picks_meta — "
+                    f"using fixed defaults ({MAX_ENTRY_DRIFT_PCT}%/{MAX_PIVOT_EXTENSION_PCT}%). "
+                    f"Check picks_latest.json's actual regime field name if this is unexpected.")
+    return {"max_entry_drift_pct": MAX_ENTRY_DRIFT_PCT, "max_pivot_extension_pct": MAX_PIVOT_EXTENSION_PCT}
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Main
 # ─────────────────────────────────────────────────────────────────────────────
 
 def main():
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--checkpoint", default=None,
+                         help="Label for this run, e.g. '09:20', '09:35', '09:55'. "
+                              "Purely for logging/subject clarity -- does not affect logic.")
+    parser.add_argument("--final", action="store_true",
+                         help="Mark this as the last checkpoint of the morning -- always "
+                              "sends a full summary email even if nothing new happened, "
+                              "and includes ALL results (terminal + still-pending) rather "
+                              "than just what's new since the last checkpoint.")
+    args = parser.parse_args()
+
     # [BUG-3] IST timestamp — not UTC labeled as IST
     now_ist   = datetime.now(IST)
     today_str = now_ist.strftime("%d %b %Y")
+    today_iso = now_ist.date().isoformat()
     run_time  = now_ist.strftime("%H:%M")
+    checkpoint_label = args.checkpoint or run_time
 
-    log.info(f"NSE Momentum v5.3 — 10am Confirmation starting "
+    log.info(f"NSE Momentum v{VERSION} — Confirmation checkpoint [{checkpoint_label}] starting "
              f"({run_time} IST = {datetime.now(ZoneInfo('UTC')).strftime('%H:%M')} UTC)...")
 
     if not os.path.exists(PICKS_JSON_PATH):
@@ -666,7 +796,6 @@ def main():
     # [BUG-6 FIX] Stale data guard — compare scan_date against the LAST
     # TRADING DAY, not literally "today". scan_date == yesterday's
     # trading day is the CORRECT, expected state (see module docstring).
-    today_iso     = date.today().isoformat()
     picks_meta    = picks[0] if picks else {}
     scan_date_str = picks_meta.get("scan_date", "")
 
@@ -678,37 +807,92 @@ def main():
             log.error(f"STALE PICKS FILE — {e}")
             stale_html = build_stale_html(scan_date_str, today_iso, run_time)
             send_email(
-                f"[NSE Momentum 10am] STALE DATA — evening scan missing | {today_str}",
+                f"[NSE Momentum Checkpoint] STALE DATA — evening scan missing | {today_str}",
                 stale_html
             )
             return
 
-    results = []
+    # [FIX-3] Regime-aware tolerance — see ASSUMPTION note in module docstring
+    # re: confirming the actual key name if this doesn't seem to activate.
+    regime_code = picks_meta.get("regime")
+    tolerance   = _get_tolerance(regime_code)
+    log.info(f"  Regime: {regime_code!r} → tolerance "
+             f"entry_drift={tolerance['max_entry_drift_pct']}% "
+             f"pivot_ext={tolerance['max_pivot_extension_pct']}%")
+
+    # [FIX-2] Load prior state for today. Empty state = this is the first
+    # checkpoint of the morning.
+    state_path   = _state_path(today_iso)
+    prior_state  = _load_state(state_path)
+    is_first_run = len(prior_state) == 0
+    log.info(f"  Prior state: {len(prior_state)} ticker(s) already terminal "
+              f"({'first checkpoint today' if is_first_run else 'resuming'})")
+
+    results       = []
+    newly_terminal = []
+
     for pick in picks:
         ticker_raw = pick.get("ticker_raw") or pick.get("ticker", "")
         if not ticker_raw.endswith(".NS"):
             ticker_raw += ".NS"
+        ticker_key = pick.get("ticker", ticker_raw)
 
-        log.info(f"  Checking {pick.get('ticker', ticker_raw)}...")
+        # [FIX-2] Reuse cached terminal classification — don't re-fetch
+        # price/RVOL or re-email something already resolved this morning.
+        if ticker_key in prior_state:
+            cached = prior_state[ticker_key]
+            log.info(f"  {ticker_key}: cached [{cached['classification']['status']}] "
+                     f"from earlier checkpoint — skipping re-check")
+            results.append(cached)
+            continue
+
+        log.info(f"  Checking {ticker_key}...")
         cmp            = get_live_price(ticker_raw)
-        rvol, rvol_src = get_rvol(ticker_raw)
-        c              = classify(pick, cmp, rvol, rvol_src)
+        rvol, rvol_src = get_rvol(ticker_raw, as_of=now_ist)
+        c              = classify(pick, cmp, rvol, rvol_src,
+                                   max_entry_drift_pct=tolerance["max_entry_drift_pct"],
+                                   max_pivot_extension_pct=tolerance["max_pivot_extension_pct"])
 
         log.info(
             f"    → {c['status']:25s}  "
             f"CMP={f'₹{cmp:,.1f}' if cmp else 'N/A':>10}  "
             f"RVOL={f'{rvol:.1f}x ({rvol_src})' if rvol >= 0 else 'N/A':>20}"
         )
-        results.append({"pick": pick, "classification": c})
+        entry = {"pick": pick, "classification": c}
+        results.append(entry)
+
+        if c["status"] in TERMINAL_STATUSES:
+            prior_state[ticker_key] = entry
+            newly_terminal.append(entry)
+
         time.sleep(0.3)
 
-    # [BUG-2] Accurate subject line
-    confirmed_n  = sum(1 for r in results if r["classification"]["status"] == "CONFIRMED")
-    low_vol_n    = sum(1 for r in results if r["classification"]["status"] == "CONFIRMED_LOW_VOL")
-    no_vol_n     = sum(1 for r in results if r["classification"]["status"] == "BREAKOUT_NO_VOLUME")
-    missed_n     = sum(1 for r in results if r["classification"]["status"] == "MISSED")
-    broken_n     = sum(1 for r in results if r["classification"]["status"] == "BROKEN")
-    pending_n    = sum(1 for r in results if r["classification"]["status"] == "PENDING")
+    _save_state(state_path, prior_state)
+
+    # ── Decide whether/what to send ──────────────────────────────────────────
+    # First checkpoint of the day: always send (baseline picture).
+    # Final checkpoint: always send, full results (terminal + still-pending).
+    # Middle checkpoints: only send if something NEW became terminal this
+    # run, and only show those newly-terminal picks -- avoids duplicate
+    # near-identical emails across 3+ checkpoints per morning.
+    if args.final or is_first_run:
+        email_results = results
+        scope_label   = "FULL SUMMARY" if args.final else "FIRST CHECK"
+    elif newly_terminal:
+        email_results = newly_terminal
+        scope_label   = "NEW THIS CHECK"
+    else:
+        log.info(f"  No new terminal picks since last checkpoint — skipping email "
+                 f"(not --final, not first run of the day).")
+        log.info("  Done.")
+        return
+
+    confirmed_n  = sum(1 for r in email_results if r["classification"]["status"] == "CONFIRMED")
+    low_vol_n    = sum(1 for r in email_results if r["classification"]["status"] == "CONFIRMED_LOW_VOL")
+    no_vol_n     = sum(1 for r in email_results if r["classification"]["status"] == "BREAKOUT_NO_VOLUME")
+    missed_n     = sum(1 for r in email_results if r["classification"]["status"] == "MISSED")
+    broken_n     = sum(1 for r in email_results if r["classification"]["status"] == "BROKEN")
+    pending_n    = sum(1 for r in email_results if r["classification"]["status"] == "PENDING")
 
     parts = []
     if confirmed_n: parts.append(f"{confirmed_n} CONFIRMED")
@@ -719,9 +903,9 @@ def main():
     if pending_n:   parts.append(f"{pending_n} PENDING")
     if not parts:   parts.append("No actionable setups")
 
-    subject = f"[NSE Momentum 10am] {' | '.join(parts)} | {today_str}"
+    subject = f"[NSE Momentum {checkpoint_label} {scope_label}] {' | '.join(parts)} | {today_str}"
 
-    html = build_html(results, today_str, run_time)
+    html = build_html(email_results, today_str, run_time)
     send_email(subject, html)
     log.info("  Done.")
 
