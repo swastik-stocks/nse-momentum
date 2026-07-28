@@ -151,8 +151,19 @@ def _tier_card(r, tier_label: str, tier_color: str) -> str:
     conf_label = "CONFIRMED" if conf == "BREAKOUT_CONFIRMED" else "SETUP READY"
 
     # Asymmetry
-    risk_pct   = getattr(r, "asymmetry_risk_pct",   r.stop_pct)
-    reward_pct = getattr(r, "asymmetry_reward_pct", r.gain_pct_t1)
+    # [FIX] Previously preferred r.asymmetry_risk_pct / r.asymmetry_reward_pct
+    # when present. Those are computed by the AsymmetryGate against a
+    # DIFFERENT reference point (appears to be the pattern-detection zone's
+    # bound, not the stated Entry price) -- legitimate for that gate's own
+    # risk/reward decision, but wrong to show unlabeled next to "T1 Rs.X"
+    # and "SL Rs.X", which read as "gain/risk from Entry." Confirmed via
+    # cross-check against real report data: r.gain_pct_t1 / r.stop_pct
+    # matched (target1-entry)/entry and (entry-sl)/entry exactly; the
+    # asymmetry_* values were ~4-6 points higher, matching a calculation
+    # anchored to the pattern zone low instead of Entry. Always use the
+    # Entry-anchored values here now.
+    risk_pct   = r.stop_pct
+    reward_pct = r.gain_pct_t1
     rr_actual  = r.rrr   # consistent with table display
 
     working_html = "".join(
