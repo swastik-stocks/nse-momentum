@@ -5,6 +5,27 @@ on:
     - cron: '5 4 * * 1-5'    # 09:35 IST
     - cron: '25 4 * * 1-5'   # 09:55 IST (final checkpoint)
   workflow_dispatch:
+    # [FIX] External triggers (e.g. cronjob.com's early ~09:16 checkpoint) hit this
+    # path, not the schedule path. github.event.schedule is ALWAYS empty here, so
+    # without explicit inputs the checkpoint-label step below fell through to its
+    # "*" branch: label=manual, final=--final. That silently treated every
+    # externally-triggered early check as the FINAL checkpoint of the day, which
+    # (per the multi-checkpoint terminal-status caching) means the real 09:55 run
+    # would reuse thin, premature classifications instead of re-checking them --
+    # quietly reproducing the "missed" problem via a different mechanism.
+    inputs:
+      checkpoint_label:
+        description: 'Checkpoint label for external/manual triggers (e.g. 09:16). Leave blank for default manual/final behaviour.'
+        required: false
+        default: ''
+      is_final:
+        description: 'Treat this run as the FINAL checkpoint of the day (sends full summary + marks terminal)?'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - 'true'
+          - 'false'
 permissions:
   actions: read
   contents: read
@@ -43,7 +64,7 @@ jobs:
           run-id: ${{ steps.find_run.outputs.run_id }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
-      # ── [NEW] Multi-checkpoint state persistence ────────────────────────────
+      # ── Multi-checkpoint state persistence ──────────────────────────────────
       # Each scheduled trigger below is a completely fresh VM -- nothing on
       # disk survives between the 09:20/09:35/09:55 runs automatically. These
       # steps find and download THIS SAME workflow's own most recent earlier
@@ -90,12 +111,30 @@ jobs:
       - name: Determine checkpoint label
         id: checkpoint
         run: |
-          case "${{ github.event.schedule }}" in
-            "50 3 * * 1-5") echo "label=09:20" >> "$GITHUB_OUTPUT"; echo "final=" >> "$GITHUB_OUTPUT" ;;
-            "5 4 * * 1-5")  echo "label=09:35" >> "$GITHUB_OUTPUT"; echo "final=" >> "$GITHUB_OUTPUT" ;;
-            "25 4 * * 1-5") echo "label=09:55" >> "$GITHUB_OUTPUT"; echo "final=--final" >> "$GITHUB_OUTPUT" ;;
-            *) echo "label=manual" >> "$GITHUB_OUTPUT"; echo "final=--final" >> "$GITHUB_OUTPUT" ;;
-          esac
+          # [FIX] Prefer an explicit label/final flag passed via workflow_dispatch
+          # inputs (e.g. cronjob.com's early trigger) over inferring from
+          # github.event.schedule, which is always empty on workflow_dispatch runs.
+          # Falls back to the original schedule-matching + manual-defaults-to-final
+          # behaviour for the GitHub-native schedule triggers and for anyone
+          # clicking "Run workflow" manually in the UI without inputs.
+          input_label="${{ github.event.inputs.checkpoint_label }}"
+          input_final="${{ github.event.inputs.is_final }}"
+
+          if [ -n "$input_label" ]; then
+            echo "label=$input_label" >> "$GITHUB_OUTPUT"
+            if [ "$input_final" = "true" ]; then
+              echo "final=--final" >> "$GITHUB_OUTPUT"
+            else
+              echo "final=" >> "$GITHUB_OUTPUT"
+            fi
+          else
+            case "${{ github.event.schedule }}" in
+              "50 3 * * 1-5") echo "label=09:20" >> "$GITHUB_OUTPUT"; echo "final=" >> "$GITHUB_OUTPUT" ;;
+              "5 4 * * 1-5")  echo "label=09:35" >> "$GITHUB_OUTPUT"; echo "final=" >> "$GITHUB_OUTPUT" ;;
+              "25 4 * * 1-5") echo "label=09:55" >> "$GITHUB_OUTPUT"; echo "final=--final" >> "$GITHUB_OUTPUT" ;;
+              *) echo "label=manual" >> "$GITHUB_OUTPUT"; echo "final=--final" >> "$GITHUB_OUTPUT" ;;
+            esac
+          fi
           echo "Checkpoint: $(cat $GITHUB_OUTPUT)"
 
       - name: Run confirmation checker
