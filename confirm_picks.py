@@ -42,7 +42,7 @@ CHANGES vs v5.3:
 """
 
 import os, json, smtplib, time
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from zoneinfo import ZoneInfo
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -311,9 +311,89 @@ def get_live_price(ticker: str) -> float | None:
 # Classification — v5.3 status set
 # ─────────────────────────────────────────────────────────────────────────────
 
+OPENING_RANGE_MINUTES = 15
+
+
+def get_opening_range(ticker_nse: str, as_of: datetime = None,
+                       minutes: int = OPENING_RANGE_MINUTES) -> tuple:
+    """
+    Returns (opening_range_high, opening_range_low, source) for today's
+    first `minutes` of trading, or (None, None, "unavailable") on failure.
+
+    WHY: classify()'s drift/extension checks compare CMP against the
+    STATIC pivot/entry set the evening before. On a genuine gap-up day,
+    price may have already cleared that pivot within the first few
+    minutes and been consolidating near its OWN opening range since --
+    measuring "how extended" against last night's number on a day like
+    that reproduces the exact false-MISSED pattern that started this
+    whole investigation (13/13 picks missed on 29 Jul, all with real
+    RVOL). Anchoring to the day's actual opening range fixes that,
+    without touching entry/SL/T1 themselves.
+
+    Deliberately a SEPARATE fetch from get_rvol() -- not refactored to
+    share one call with the already-fixed, already-tested elapsed-time
+    RVOL logic, to keep this isolated and low-risk. Costs one extra API
+    call per ticker.
+    """
+    as_of = as_of or datetime.now(IST)
+    today = as_of.date()
+    window_end = (datetime.combine(today, MARKET_OPEN_TIME, tzinfo=IST)
+                  + timedelta(minutes=minutes)).time()
+
+    try:
+        from tvDatafeed import TvDatafeed, Interval
+        symbol = ticker_nse.replace(".NS", "")
+        tv = TvDatafeed()
+        df = tv.get_hist(symbol=symbol, exchange="NSE",
+                          interval=Interval.in_5_minute, n_bars=100)
+        if df is not None and not df.empty:
+            try:
+                df.index = df.index.tz_localize("UTC").tz_convert("Asia/Kolkata")
+            except Exception:
+                try:
+                    df.index = df.index.tz_convert("Asia/Kolkata")
+                except Exception:
+                    pass
+            win = df[(df.index.date == today) &
+                     (df.index.time >= MARKET_OPEN_TIME) &
+                     (df.index.time <= window_end)]
+            if not win.empty:
+                orh, orl = float(win["high"].max()), float(win["low"].min())
+                log.info(f"    [tvDatafeed] {symbol}: opening range ({minutes}min) "
+                         f"= {orl:.1f}-{orh:.1f}")
+                return orh, orl, "tvDatafeed"
+    except Exception as e:
+        log.debug(f"    [tvDatafeed] opening range {ticker_nse}: {type(e).__name__}: {e}")
+
+    try:
+        import yfinance as yf
+        t = ticker_nse if ticker_nse.endswith(".NS") else ticker_nse + ".NS"
+        df_1m = yf.Ticker(t).history(period="5d", interval="1m", prepost=False)
+        if not df_1m.empty:
+            try:
+                df_1m.index = df_1m.index.tz_convert("Asia/Kolkata")
+            except Exception:
+                pass
+            win = df_1m[(df_1m.index.date == today) &
+                        (df_1m.index.time >= MARKET_OPEN_TIME) &
+                        (df_1m.index.time <= window_end)]
+            if not win.empty:
+                orh, orl = float(win["High"].max()), float(win["Low"].min())
+                log.info(f"    [yfinance-fallback] {t}: opening range ({minutes}min) "
+                         f"= {orl:.1f}-{orh:.1f}")
+                return orh, orl, "yfinance"
+    except Exception as e:
+        log.debug(f"    [yfinance-fallback] opening range {ticker_nse}: {type(e).__name__}: {e}")
+
+    log.warning(f"    Opening range unavailable for {ticker_nse} — "
+                f"classify() falls back to static-pivot-only behavior")
+    return None, None, "unavailable"
+
+
 def classify(pick: dict, cmp: float | None, rvol: float, rvol_src: str,
              max_entry_drift_pct: float = MAX_ENTRY_DRIFT_PCT,
-             max_pivot_extension_pct: float = MAX_PIVOT_EXTENSION_PCT) -> dict:
+             max_pivot_extension_pct: float = MAX_PIVOT_EXTENSION_PCT,
+             opening_range: tuple = (None, None, None)) -> dict:
     """
     Status set (v5.3):
       CONFIRMED           — above pivot, RVOL >= 1.5x
@@ -333,6 +413,20 @@ def classify(pick: dict, cmp: float | None, rvol: float, rvol_src: str,
     pivot = pick.get("pivot", entry)
     t1    = pick["t1"]
 
+    # [NEW] Opening-range anchoring — see get_opening_range() docstring.
+    # If today's actual opening range already cleared the static pivot,
+    # judge "how extended" against the OPENING RANGE, not last night's
+    # number. entry/sl/t1 are NEVER changed by this — only the chase
+    # tolerance's reference point is.
+    orh, orl, or_src = opening_range if opening_range else (None, None, None)
+    anchor_pivot = pivot
+    anchor_entry = entry
+    or_anchored  = False
+    if orh is not None and orh > pivot:
+        anchor_pivot = orh
+        anchor_entry = max(entry, orh)
+        or_anchored  = True
+
     if cmp is None:
         return {
             "status": "DATA_ERROR",
@@ -345,12 +439,12 @@ def classify(pick: dict, cmp: float | None, rvol: float, rvol_src: str,
 
     gap_pct = round(((cmp - pivot) / pivot) * 100, 1) if pivot > 0 else 0.0
 
-    # Entry drift vs planned entry price
-    drift_pct       = round(((cmp - entry) / entry) * 100, 1) if entry > 0 else 0.0
+    # Entry drift vs planned entry price (opening-range-anchored when applicable)
+    drift_pct       = round(((cmp - anchor_entry) / anchor_entry) * 100, 1) if anchor_entry > 0 else 0.0
     entry_chasing   = drift_pct > max_entry_drift_pct
 
-    # [BUG-4/5] Secondary: pivot extension with low volume
-    pivot_ext_pct   = round(((cmp - pivot) / pivot) * 100, 1) if pivot > 0 else 0.0
+    # [BUG-4/5] Secondary: pivot extension with low volume (opening-range-anchored)
+    pivot_ext_pct   = round(((cmp - anchor_pivot) / anchor_pivot) * 100, 1) if anchor_pivot > 0 else 0.0
     pivot_extended  = (pivot_ext_pct > max_pivot_extension_pct
                        and rvol >= 0 and rvol < RVOL_CONFIRM_MIN)
 
@@ -370,12 +464,13 @@ def classify(pick: dict, cmp: float | None, rvol: float, rvol_src: str,
 
     # ── MISSED — entry drift OR pivot too extended with no volume ─────────────
     if entry_chasing or pivot_extended:
+        or_note = f" (opening-range anchored: {orl:.1f}-{orh:.1f})" if or_anchored else ""
         if pivot_extended and not entry_chasing:
-            reason = (f"Breakout extended {pivot_ext_pct:.1f}% above pivot "
+            reason = (f"Breakout extended {pivot_ext_pct:.1f}% above pivot{or_note} "
                       f"with only {rvol:.1f}x volume — trap, not entry")
         else:
             reason = (f"Price drifted {drift_pct:+.1f}% above planned entry "
-                      f"₹{entry:,.1f} — R:R destroyed")
+                      f"₹{entry:,.1f}{or_note} — R:R destroyed")
         return {
             "status": "MISSED",
             "ltp": cmp, "gap_pct": gap_pct, "rvol": rvol, "rvol_src": rvol_src,
@@ -447,7 +542,7 @@ def _fmt_rvol(rvol: float, src: str) -> str:
     color = "#16a34a" if rvol >= 1.5 else "#ca8a04" if rvol >= 1.0 else "#dc2626"
     icon  = "✅" if rvol >= 1.5 else "⚠️" if rvol >= 1.0 else "❌"
     return (
-        f"<span style='color:{color};font-weight:700;'>{icon} {rvol:.1f}x</span>"
+        f"<span style='color:{color};font-weight:700;'>{icon} {rvol:.1f}x (Live)</span>"
         f"<br><span style='font-size:10px;color:#9ca3af;'>{src}</span>"
     )
 
@@ -670,7 +765,7 @@ def build_html(results: list, scan_date: str, run_time: str) -> str:
           <th style="padding:10px 8px;text-align:left;font-size:11px;color:#6b7280;letter-spacing:1px;text-transform:uppercase;">Sector</th>
           <th style="padding:10px 8px;text-align:center;font-size:11px;color:#6b7280;letter-spacing:1px;text-transform:uppercase;">Status</th>
           <th style="padding:10px 8px;text-align:right;font-size:11px;color:#6b7280;letter-spacing:1px;text-transform:uppercase;">CMP</th>
-          <th style="padding:10px 8px;text-align:right;font-size:11px;color:#6b7280;letter-spacing:1px;text-transform:uppercase;">RVOL</th>
+          <th style="padding:10px 8px;text-align:right;font-size:11px;color:#6b7280;letter-spacing:1px;text-transform:uppercase;" title="Elapsed-time-matched intraday RVOL — NOT the same metric as the evening Daily Intelligence Report's RVOL (EOD)">RVOL (Live)</th>
           <th style="padding:10px 8px;text-align:right;font-size:11px;color:#6b7280;letter-spacing:1px;text-transform:uppercase;">vs Pivot</th>
           <th style="padding:10px 8px;text-align:right;font-size:11px;color:#dc2626;letter-spacing:1px;text-transform:uppercase;">SL</th>
           <th style="padding:10px 8px;text-align:right;font-size:11px;color:#16a34a;letter-spacing:1px;text-transform:uppercase;">T1</th>
@@ -850,9 +945,11 @@ def main():
         log.info(f"  Checking {ticker_key}...")
         cmp            = get_live_price(ticker_raw)
         rvol, rvol_src = get_rvol(ticker_raw, as_of=now_ist)
+        orh, orl, or_src = get_opening_range(ticker_raw, as_of=now_ist)
         c              = classify(pick, cmp, rvol, rvol_src,
                                    max_entry_drift_pct=tolerance["max_entry_drift_pct"],
-                                   max_pivot_extension_pct=tolerance["max_pivot_extension_pct"])
+                                   max_pivot_extension_pct=tolerance["max_pivot_extension_pct"],
+                                   opening_range=(orh, orl, or_src))
 
         log.info(
             f"    → {c['status']:25s}  "

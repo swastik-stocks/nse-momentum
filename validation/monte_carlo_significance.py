@@ -171,6 +171,32 @@ def bootstrap_ci(r_values: np.ndarray, n_boot: int, confidence: float, rng: np.r
     return avg_r_ci, pf_ci, p_value_mean_ge_0
 
 
+def bootstrap_test(r_values, n_boot: int, seed: int = 42) -> dict:
+    """
+    Thin dict-returning wrapper around bootstrap_ci(), added for
+    validation/split_period_significance.py, which expects a single
+    dict result {observed_avg_r, ci_low, ci_high, p_value_mean_ge_0}
+    keyed by name rather than the tuple bootstrap_ci() returns (which
+    this module's own CLI in main() uses directly). Takes a plain
+    integer seed rather than a pre-built np.random.Generator, since
+    split_period_significance.py calls this once per period with a
+    fixed seed (42 / 43) for reproducibility across the two halves.
+
+    Does not duplicate any bootstrap logic -- delegates straight to
+    bootstrap_ci() so there's exactly one implementation of the actual
+    resampling math in this file.
+    """
+    r_values = np.asarray(r_values, dtype=float)
+    rng = np.random.default_rng(seed)
+    avg_r_ci, _pf_ci, p_value_mean_ge_0 = bootstrap_ci(r_values, n_boot, CONFIDENCE, rng)
+    return {
+        "observed_avg_r": float(r_values.mean()),
+        "ci_low": avg_r_ci[0],
+        "ci_high": avg_r_ci[1],
+        "p_value_mean_ge_0": p_value_mean_ge_0,
+    }
+
+
 def permutation_test(pattern_r: np.ndarray, pooled_r: np.ndarray, n_perm: int, rng: np.random.Generator):
     """
     Null hypothesis: this pattern's trades are indistinguishable from a

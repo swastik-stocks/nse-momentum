@@ -1,0 +1,6 @@
+import os
+os.environ["DHAN_CLIENT_ID"] = "1104133419"
+os.environ["DHAN_ACCESS_TOKEN"] = "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzUxMiJ9.eyJpc3MiOiJkaGFuIiwicGFydG5lcklkIjoiIiwiZXhwIjoxNzg0OTE4MTM4LCJpYXQiOjE3ODQ4MzE3MzgsInRva2VuQ29uc3VtZXJUeXBlIjoiU0VMRiIsIndlYmhvb2tVcmwiOiIiLCJkaGFuQ2xpZW50SWQiOiIxMTA0MTMzNDE5In0.1honzg6NRsoEc-pmp9myzRR9sr3d86bAYrSTSLDalJDCDzrwDnY26ZD7FeOD0_3sWQlFQpGXO7WHNgZ952zY-g"
+import data_fetcher as df
+print(df._check_dhan_auth())
+print(df.fetch_dhan("RELIANCE.NS").tail())
