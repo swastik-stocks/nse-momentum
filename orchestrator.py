@@ -72,6 +72,8 @@ from agents.confirmation_agent         import ConfirmationAgent
 from agents.near_breakout              import find_near_breakout_stocks
 from agents.regime_classifier          import RegimeClassifier
 from agents.defensive_agent            import run_defensive_scan
+from agents.weekly_trend_agent         import WeeklyTrendAgent
+import data_fetcher
 from trade_logger                      import get_dynamic_weight
 from nse_universe                      import UNIVERSE_CONFIG, UNIVERSE_SEED
 
@@ -180,6 +182,8 @@ class StockResult:
     regime_confidence:    str   = "HIGH"   # HIGH or LOW
     regime_sanity_flags:  List[str] = field(default_factory=list)
     breadth_source:       str   = ""       # NSE_LIVE_API / BHAVCOPY_FULL / DEFAULT
+    weekly_trend_bonus:   float = 0.0
+    weekly_trend_weeks:   int   = 0
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -556,6 +560,10 @@ class AgentOrchestrator:
             return r
 
         # Fundamental proxy
+        wta = WeeklyTrendAgent(df)
+        r.weekly_trend_bonus = wta.score_bonus()
+        r.weekly_trend_weeks = wta.get_weeks_available()
+
         fp = FundamentalProxyAgent(ticker, df, del_pct, r.rs_percentile,
                                    self.sector_ranks.get(sector, 7))
         r.fundamental_score = fp.evaluate()["fundamental_proxy_score"]
@@ -594,7 +602,8 @@ class AgentOrchestrator:
             r.market_score   +
             r.macd_score     +
             r.sector_score   +
-            r.bonus_score
+            r.bonus_score    +
+            round(r.weekly_trend_bonus)
         )
 
         penalty = int(self.regime_penalty * cfg["regime_penalty_mult"])
@@ -810,7 +819,11 @@ class AgentOrchestrator:
                                           else r.entry,      2),
                 "t1":               round(r.target1,         2),
                 "t2":               round(r.target2,         2),
-                "rr":               round(r.asymmetry_rr,    1),
+                # [FIX] Was r.asymmetry_rr — AsymmetryGate's own R:R, computed
+                # against entry=r.entry_high (top of the entry zone). Using
+                # r.rrr (Entry-anchored) makes this match emailer.py's evening
+                # card and the 10am confirmation email consistently.
+                "rr":               round(r.rrr,             1),
                 "score":            r.total_score,
                 "tier":             r.tier,
                 "pattern":          r.pattern or "",
@@ -858,6 +871,7 @@ class AgentOrchestrator:
             "t1_cap":             self.t1_cap,
             "t2_cap":             T2_CAP,
             "sector_distribution": sector_gate.summary(),
+            "dhan_status":        data_fetcher.get_dhan_status(),
         }
 
     # ── narrative helpers (unchanged from v5.2) ──────────────────────────────
@@ -870,7 +884,7 @@ class AgentOrchestrator:
             bq = f" [{r.breakout_quality}]" if r.breakout_quality else ""
             reasons.append(f"{r.pattern}{bq} - entry Rs.{r.entry_low:.1f}-{r.entry_high:.1f}")
         if r.rvol >= 1.5:
-            reasons.append(f"Volume {r.rvol:.1f}x avg - institutional activity")
+            reasons.append(f"Volume {r.rvol:.1f}x avg (EOD) - institutional activity")
         if r.del_pct >= 50:
             reasons.append(f"Delivery {r.del_pct:.0f}% - holders not selling")
         if r.sector_score >= 5:
@@ -878,13 +892,16 @@ class AgentOrchestrator:
             if r.sector in [s for s, _ in top]:
                 reasons.append(f"Sector leadership - {r.sector} top-3 in rotation")
         if r.rsi_val > 0:
-            reasons.append(f"RSI {r.rsi_val:.0f} - momentum constructive")
+            reasons.append(f"RSI(D) {r.rsi_val:.0f} - momentum constructive")
         if r.earnings_flag:
             reasons.append("Earnings acceleration within 14 days - catalyst-backed")
         if r.confirmation_state == "BREAKOUT_CONFIRMED":
             reasons.append("Breakout confirmed - held above pivot 1+ sessions")
         if r.rs_persistence >= 8:
             reasons.append(f"RS persistence {r.rs_persistence}/13 weeks - sustained leader")
+        if r.weekly_trend_weeks >= 30 and r.weekly_trend_bonus >= 1.5:
+            reasons.append(f"Weekly trend strongly aligned (+{r.weekly_trend_bonus:.1f}) - "
+                            f"multi-timeframe confirmation")
         return reasons[:4]
 
     def _what_missing(self, r: StockResult, gate: int) -> List[str]:
@@ -894,7 +911,7 @@ class AgentOrchestrator:
         if r.rs_percentile < 60:
             missing.append(f"RS {r.rs_percentile:.0f}th pct - stronger RS needed")
         if r.rvol < 1.3:
-            missing.append(f"Volume {r.rvol:.1f}x - needs breakout volume >= 1.5x")
+            missing.append(f"Volume {r.rvol:.1f}x (EOD) - needs breakout volume >= 1.5x")
         if r.regime in ["C", "D", "E"]:
             missing.append(f"Regime {r.regime} penalty applied")
         return missing[:3]
@@ -929,4 +946,7 @@ class AgentOrchestrator:
             risks.append(f"Circuit limit {r.circuit_limit} detected at scan time")
         if r.regime_confidence == "LOW":
             risks.append("Regime LOW_CONFIDENCE — verify breadth data before acting")
+        if r.weekly_trend_weeks >= 30 and r.weekly_trend_bonus <= -1.0:
+            risks.append(f"Weekly trend not aligned ({r.weekly_trend_bonus:.1f}) - "
+                         f"daily breakout against the larger trend")
         return risks[:3]

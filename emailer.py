@@ -94,6 +94,7 @@ def send_email_report(tiers: dict):
     macro_state  = tiers.get("macro_state", "MIXED")
     event_risk   = tiers.get("event_risk", "NORMAL")
     t1_cap       = tiers.get("t1_cap", 15)
+    dhan_status  = tiers.get("dhan_status", {})   # [NEW] see data_fetcher.get_dhan_status()
 
     rlbl, rcol, rbg, rborder, rnote = REGIME_META.get(regime, REGIME_META["C"])
     date_str = datetime.today().strftime("%d %b %Y")
@@ -102,7 +103,7 @@ def send_email_report(tiers: dict):
     html = _build_html(t1, t2, t3, all_r, near_bo, defensive,
                        regime, rlbl, rcol, rbg, rborder, rnote,
                        brdth, bd, date_str, penalty,
-                       macro_state, event_risk, t1_cap)
+                       macro_state, event_risk, t1_cap, dhan_status)
 
     msg = MIMEMultipart("alternative")
     msg["Subject"] = (f"NSE Momentum v6.2 - {date_str} - "
@@ -211,8 +212,8 @@ def _tier_card(r, tier_label: str, tier_color: str) -> str:
     <div style="display:flex;gap:16px;flex-wrap:wrap;color:#9AAFC4">
       <span>{r.pattern}</span>
       <span>RS {r.rs_percentile:.0f}th%</span>
-      <span>RVOL {r.rvol:.1f}x</span>
-      <span>RSI {r.rsi_val:.0f}</span>
+      <span title="End-of-day RVOL: today's closed daily volume vs 20-day average. Not the same metric as the 10am confirmation email's intraday RVOL.">RVOL {r.rvol:.1f}x (EOD)</span>
+      <span title="Daily-close RSI(14)">RSI {r.rsi_val:.0f} (D)</span>
       <span>Del {r.del_pct:.0f}%</span>
     </div>
     <div style="margin-top:8px;display:flex;gap:14px;flex-wrap:wrap;font-size:12px">
@@ -357,10 +358,26 @@ def _defensive_section(defensive: list, regime: str) -> str:
 def _build_html(t1, t2, t3, all_r, near_bo, defensive,
                 regime, rlbl, rcol, rbg, rborder, rnote,
                 breadth, bd, date_str, penalty,
-                macro_state, event_risk, t1_cap) -> str:
+                macro_state, event_risk, t1_cap, dhan_status=None) -> str:
 
     mcol = MACRO_COLOR.get(macro_state, "#FFB300")
     ecol = EVENT_COLOR.get(event_risk,  "#5E7A96")
+
+    # [NEW] Dhan status banner — only rendered when Dhan was unavailable
+    # this run (expired/missing token, network error). See
+    # data_fetcher.get_dhan_status() and its module docstring for why this
+    # is deliberately an ACTIVE daily reminder rather than a silent
+    # fallback: Dhan tokens expire every 24h and this system does not
+    # auto-refresh them by design.
+    dhan_status = dhan_status or {}
+    dhan_banner = ""
+    if dhan_status.get("checked") and not dhan_status.get("available"):
+        dhan_banner = f"""
+  <div style="background:rgba(255,82,82,0.08);border:1px solid rgba(255,82,82,0.3);
+              border-radius:8px;padding:10px 14px;margin-bottom:16px;font-size:12px;color:#FF5252">
+    <strong>⚠ Dhan unavailable this run:</strong> {dhan_status.get("message", "reason unknown")}
+    <span style="color:#9AAFC4"> — running on tvDatafeed/Yahoo fallback. Refresh at web.dhan.co.</span>
+  </div>"""
 
     # Section 1: trade cards
     tier_cards = ""
@@ -472,6 +489,7 @@ def _build_html(t1, t2, t3, all_r, near_bo, defensive,
     <strong>Regime {regime}:</strong> {rnote}
     {"" if penalty == 0 else f'<span style="color:#9AAFC4"> - Score penalty: {penalty} pts applied.</span>'}
   </div>
+  {dhan_banner}
 
   <div style="font-family:monospace;font-size:9px;letter-spacing:0.2em;color:#5E7A96;
               text-transform:uppercase;margin-bottom:10px">
@@ -492,7 +510,7 @@ def _build_html(t1, t2, t3, all_r, near_bo, defensive,
         <th style="padding:8px 10px;text-align:left;color:#5E7A96;font-size:9px">PATTERN</th>
         <th style="padding:8px 10px;text-align:left;color:#5E7A96;font-size:9px">SCORE</th>
         <th style="padding:8px 10px;text-align:left;color:#5E7A96;font-size:9px">RS</th>
-        <th style="padding:8px 10px;text-align:left;color:#5E7A96;font-size:9px">RVOL</th>
+        <th style="padding:8px 10px;text-align:left;color:#5E7A96;font-size:9px" title="End-of-day RVOL — see tier cards above">RVOL (EOD)</th>
         <th style="padding:8px 10px;text-align:left;color:#5E7A96;font-size:9px">ENTRY</th>
         <th style="padding:8px 10px;text-align:left;color:#5E7A96;font-size:9px">SL</th>
         <th style="padding:8px 10px;text-align:left;color:#5E7A96;font-size:9px">T1</th>

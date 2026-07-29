@@ -1,12 +1,42 @@
 """
-NSE Momentum v5.4 — Data Fetcher
+NSE Momentum v5.5 — Data Fetcher
 
-ARCHITECTURE: Three-tier price source hierarchy
-  TIER 1 (PRIMARY):   tvDatafeed  — TradingView data, same prices trader sees
-  TIER 2 (OVERRIDE):  Bhavcopy    — NSE official close, injected into SQLite daily
+ARCHITECTURE: Four-tier price source hierarchy
+  TIER 0 (PREFERRED): Dhan       — real broker data via DhanHQ v2 API, used
+                                    when a live access token is available
+  TIER 1 (PRIMARY):   tvDatafeed — TradingView data, same prices trader sees
+  TIER 2 (OVERRIDE):  Bhavcopy   — NSE official close, injected into SQLite
   TIER 3 (HISTORY):   Yahoo Finance — 2yr backfill only, never used for CMP
 
-WHY THIS ORDER:
+WHY DHAN IS TIER 0, NOT A REPLACEMENT FOR TIERS 1-3:
+  Dhan access tokens expire in exactly 24 hours (SEBI-mandated, no
+  exceptions, confirmed 2026-07-29) and this system deliberately does NOT
+  auto-refresh them (the PIN+TOTP headless flow was tried and abandoned —
+  storing trading-capable credentials in CI secrets for a read-only data
+  need was judged not worth the blast radius). That means Dhan WILL go
+  stale on days the token isn't manually regenerated, and the system must
+  keep working on those days, just with lower data quality — hence Dhan
+  is tried first, opportunistically, with automatic fallback to the
+  existing tvDatafeed -> Yahoo chain on ANY failure (expired token,
+  missing security_id mapping, network error). See _check_dhan_auth() and
+  get_dhan_status() — the latter is meant to be surfaced in the evening
+  email so a stale token is an active daily reminder, not a silent
+  degradation.
+
+  v2.0 scrip master column names are not fully consistent across Dhan's
+  own documentation (SEM_SMST_SECURITY_ID/SEM_TRADING_SYMBOL in some
+  real-world examples, SECURITY_ID/UNDERLYING_SYMBOL in Dhan's own release
+  notes) -- _load_dhan_scrip_master() below searches multiple candidate
+  names defensively, the same pattern BhavcopyFetcher._parse() already
+  uses for NSE's own column-name drift, and logs the actual columns found
+  if none match rather than silently mis-mapping tickers.
+
+  UNVERIFIED: none of the Dhan-tier code below has been run against a
+  live token from this environment (no network path to api.dhan.co here).
+  Test with a small ticker set before trusting it in a real scan -- same
+  discipline as scanner.py's own --dry-run --max-tickers flags.
+
+WHY THE ORIGINAL THREE-TIER ORDER (unchanged, still applies below Dhan):
   Yahoo Finance for NSE: 15-min delayed, cache has no staleness check,
   adjusted prices have errors. POLYCAB showed Rs.10,083 vs actual Rs.9,531
   (5.8% error) — every downstream number (entry, SL, target, R:R) was wrong.
@@ -40,7 +70,7 @@ BUG FIXES (v5.4):
          near_breakout.py accepts this and uses it for price instead of df[-1].
 """
 
-import logging, sqlite3, requests
+import logging, sqlite3, requests, os, time
 from pathlib import Path
 from datetime import datetime, timedelta, date
 from typing import Dict, List, Optional
@@ -135,13 +165,273 @@ def _is_cache_fresh(df: pd.DataFrame) -> bool:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# TIER 1: tvDatafeed — primary OHLCV source
+# TIER 0: Dhan — preferred, opportunistic, never a hard dependency
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _symbol_from_ticker(ticker: str) -> str:
     """POLYCAB.NS  →  POLYCAB"""
     return ticker.replace(".NS", "").replace(".BO", "")
 
+
+DHAN_SCRIP_MASTER_URL = "https://images.dhan.co/api-data/api-scrip-master.csv"
+DHAN_HISTORICAL_URL   = "https://api.dhan.co/v2/charts/historical"
+DHAN_SCRIP_CACHE      = DATA_DIR / "dhan_scrip_master.csv"
+
+# Module-level status, populated once per process by _check_dhan_auth().
+# Read via get_dhan_status() by scanner.py/emailer.py so a stale token is
+# an ACTIVE reminder in the daily email, not a silent degradation.
+_dhan_status = {
+    "checked":            False,
+    "available":          False,
+    "message":            "Not checked yet",
+    "tickers_from_dhan":  0,
+}
+
+
+def get_dhan_status() -> dict:
+    """Public accessor for scanner.py/emailer.py to surface Dhan's health
+    for this run — see module docstring for why this matters."""
+    return dict(_dhan_status)
+
+
+def _dhan_credentials() -> Optional[tuple]:
+    client_id = os.environ.get("DHAN_CLIENT_ID")
+    token     = os.environ.get("DHAN_ACCESS_TOKEN")
+    if not client_id or not token:
+        return None
+    return client_id, token
+
+
+def _normalize_dhan_scrip_master(raw: pd.DataFrame) -> pd.DataFrame:
+    """
+    Defensive column matching, factored out so it runs identically whether
+    the scrip master came from a fresh download or the on-disk cache —
+    an earlier version of this function only normalized on fresh download,
+    which meant a cache HIT silently returned raw, un-normalized columns
+    and would have crashed downstream in _dhan_symbol_map() the very first
+    time this ran twice in a row. Caught by testing against a deliberately
+    malformed cached CSV before shipping, not found live.
+    """
+    if raw.empty:
+        return pd.DataFrame()
+
+    cols = list(raw.columns)
+    sec_id_col = next((c for c in cols if c in
+                       ("SEM_SMST_SECURITY_ID", "SECURITY_ID", "SEM_SECURITY_ID")), None)
+    symbol_col = next((c for c in cols if c in
+                       ("SEM_TRADING_SYMBOL", "UNDERLYING_SYMBOL", "SYMBOL_NAME",
+                        "TRADING_SYMBOL", "SEM_CUSTOM_SYMBOL")), None)
+    exch_col   = next((c for c in cols if c in
+                       ("SEM_EXM_EXCH_ID", "EXCH_ID", "EXCHANGE")), None)
+    seg_col    = next((c for c in cols if c in
+                       ("SEM_SEGMENT", "SEGMENT")), None)
+    inst_col   = next((c for c in cols if c in
+                       ("SEM_INSTRUMENT_NAME", "INSTRUMENT_TYPE", "INSTRUMENT")), None)
+
+    if not sec_id_col or not symbol_col:
+        log.warning(
+            f"Dhan scrip master: cannot find security_id/symbol columns. "
+            f"Found: {cols[:20]}. Dhan tier will be skipped this run — "
+            f"falling back to tvDatafeed/Yahoo."
+        )
+        return pd.DataFrame()
+
+    df = raw.copy()
+    if exch_col:
+        df = df[df[exch_col].astype(str).str.upper().isin(["NSE"])]
+    if seg_col:
+        df = df[df[seg_col].astype(str).str.upper().isin(["E", "EQ", "EQUITY"])]
+    if inst_col:
+        df = df[df[inst_col].astype(str).str.upper().str.contains("EQUITY", na=False)]
+
+    out = df[[sec_id_col, symbol_col]].rename(
+        columns={sec_id_col: "security_id", symbol_col: "trading_symbol"}
+    ).dropna()
+    out["security_id"] = out["security_id"].astype(str)
+    out["trading_symbol"] = out["trading_symbol"].astype(str).str.strip().str.upper()
+    return out.drop_duplicates(subset=["trading_symbol"])
+
+
+def _load_dhan_scrip_master(force_refresh: bool = False) -> pd.DataFrame:
+    """
+    Downloads (or loads cached) Dhan's scrip master CSV and returns a
+    normalized DataFrame with columns ['security_id', 'trading_symbol']
+    for NSE equity instruments only. Normalization (_normalize_dhan_scrip_master)
+    runs identically on both the cache-hit and fresh-download paths.
+
+    UNVERIFIED against a live download from this environment (no network
+    path to images.dhan.co here) -- first real run should log and be
+    checked, same as any new data source in this codebase.
+    """
+    if not force_refresh and DHAN_SCRIP_CACHE.exists():
+        age_hours = (datetime.now().timestamp() - DHAN_SCRIP_CACHE.stat().st_mtime) / 3600
+        if age_hours < 20:   # refresh at least once within the token's 24h life
+            try:
+                return _normalize_dhan_scrip_master(pd.read_csv(DHAN_SCRIP_CACHE, low_memory=False))
+            except Exception as e:
+                log.warning(f"Dhan scrip master cache unreadable ({e}), re-downloading")
+
+    try:
+        r = requests.get(DHAN_SCRIP_MASTER_URL, timeout=30)
+        r.raise_for_status()
+        DHAN_SCRIP_CACHE.write_bytes(r.content)
+        raw = pd.read_csv(DHAN_SCRIP_CACHE, low_memory=False)
+    except Exception as e:
+        log.warning(f"Dhan scrip master download failed: {e}")
+        if DHAN_SCRIP_CACHE.exists():
+            log.warning("Falling back to stale cached scrip master")
+            raw = pd.read_csv(DHAN_SCRIP_CACHE, low_memory=False)
+            return _normalize_dhan_scrip_master(raw)
+        return pd.DataFrame()
+
+    return _normalize_dhan_scrip_master(raw)
+
+
+_dhan_symbol_map_cache: Optional[Dict[str, str]] = None
+
+
+def _dhan_symbol_map() -> Dict[str, str]:
+    """{bare symbol (no .NS): dhan security_id}, built once per process."""
+    global _dhan_symbol_map_cache
+    if _dhan_symbol_map_cache is not None:
+        return _dhan_symbol_map_cache
+    master = _load_dhan_scrip_master()
+    if master.empty:
+        _dhan_symbol_map_cache = {}
+    else:
+        _dhan_symbol_map_cache = dict(zip(master["trading_symbol"], master["security_id"]))
+    return _dhan_symbol_map_cache
+
+
+def _check_dhan_auth() -> bool:
+    """
+    ONE cheap test call at the start of a batch run to verify the token is
+    still alive, rather than discovering it's dead on ticker #1 of 500
+    (or worse, ticker #250, after 249 wasted calls). Uses RELIANCE
+    (security_id 2885, a stable, always-listed large-cap) as the canary.
+    Sets module-level _dhan_status so get_dhan_status() reflects this run.
+    """
+    global _dhan_status
+    creds = _dhan_credentials()
+    if not creds:
+        _dhan_status = {"checked": True, "available": False,
+                         "message": "DHAN_CLIENT_ID/DHAN_ACCESS_TOKEN not set — skipping Dhan tier",
+                         "tickers_from_dhan": 0}
+        log.info(f"  Dhan: {_dhan_status['message']}")
+        return False
+
+    client_id, token = creds
+    to_date   = get_last_trading_day()
+    from_date = to_date - timedelta(days=10)
+    try:
+        resp = requests.post(
+            DHAN_HISTORICAL_URL,
+            headers={"Content-Type": "application/json", "access-token": token},
+            json={
+                "securityId": "2885",   # RELIANCE — canary probe, not used for data
+                "exchangeSegment": "NSE_EQ",
+                "instrument": "EQUITY",
+                "expiryCode": 0,
+                "fromDate": from_date.isoformat(),
+                "toDate": to_date.isoformat(),
+            },
+            timeout=15,
+        )
+        if resp.status_code == 200:
+            _dhan_status = {"checked": True, "available": True,
+                             "message": "Dhan token valid", "tickers_from_dhan": 0}
+            log.info("  Dhan: token valid, using as preferred data source this run")
+            return True
+        else:
+            _dhan_status = {
+                "checked": True, "available": False,
+                "message": f"Dhan auth check failed: HTTP {resp.status_code} "
+                           f"— {resp.text[:200]}. Falling back to tvDatafeed/Yahoo "
+                           f"for this entire run. Refresh the token at web.dhan.co.",
+                "tickers_from_dhan": 0,
+            }
+            log.warning(f"  ⚠ {_dhan_status['message']}")
+            return False
+    except Exception as e:
+        _dhan_status = {
+            "checked": True, "available": False,
+            "message": f"Dhan auth check errored: {type(e).__name__}: {e}. "
+                       f"Falling back to tvDatafeed/Yahoo for this entire run.",
+            "tickers_from_dhan": 0,
+        }
+        log.warning(f"  ⚠ {_dhan_status['message']}")
+        return False
+
+
+def fetch_dhan(ticker: str, n_bars: int = 520) -> pd.DataFrame:
+    """
+    Fetch daily OHLCV from Dhan for one ticker. Returns empty DataFrame
+    on ANY failure (missing security_id mapping, HTTP error, malformed
+    response) — callers must treat this identically to fetch_tv()
+    returning empty, i.e. fall through to the next tier. Never raises.
+    """
+    creds = _dhan_credentials()
+    if not creds or not _dhan_status.get("available"):
+        return pd.DataFrame()
+    client_id, token = creds
+
+    symbol = _symbol_from_ticker(ticker)
+    sec_id = _dhan_symbol_map().get(symbol)
+    if not sec_id:
+        log.debug(f"Dhan: no security_id mapping for {symbol} — falling back")
+        return pd.DataFrame()
+
+    to_date   = get_last_trading_day()
+    # Daily bars, ~n_bars trading days back; padded to calendar days since
+    # weekends/holidays aren't trading days.
+    from_date = to_date - timedelta(days=int(n_bars * 1.55) + 10)
+
+    try:
+        resp = requests.post(
+            DHAN_HISTORICAL_URL,
+            headers={"Content-Type": "application/json", "access-token": token},
+            json={
+                "securityId": sec_id,
+                "exchangeSegment": "NSE_EQ",
+                "instrument": "EQUITY",
+                "expiryCode": 0,
+                "fromDate": from_date.isoformat(),
+                "toDate": to_date.isoformat(),
+            },
+            timeout=20,
+        )
+        if resp.status_code == 429:
+            log.debug(f"Dhan fetch {ticker}: rate-limited (429) — falling back this ticker")
+            return pd.DataFrame()
+        if resp.status_code != 200:
+            log.debug(f"Dhan fetch {ticker}: HTTP {resp.status_code} — {resp.text[:150]}")
+            return pd.DataFrame()
+        data = resp.json()
+        required = ("open", "high", "low", "close", "volume", "timestamp")
+        if not all(k in data for k in required):
+            log.debug(f"Dhan fetch {ticker}: response missing expected keys, "
+                       f"got {list(data.keys())[:10]}")
+            return pd.DataFrame()
+
+        df = pd.DataFrame({
+            "Open":   data["open"],
+            "High":   data["high"],
+            "Low":    data["low"],
+            "Close":  data["close"],
+            "Volume": data["volume"],
+        })
+        df.index = pd.to_datetime(data["timestamp"], unit="s")
+        df = df.sort_index()
+        return df if len(df) >= 20 else pd.DataFrame()
+    except Exception as e:
+        log.debug(f"Dhan fetch {ticker} error: {type(e).__name__}: {e}")
+        return pd.DataFrame()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# TIER 1: tvDatafeed — primary fallback OHLCV source (used when Dhan
+# unavailable or doesn't have a given ticker)
+# ─────────────────────────────────────────────────────────────────────────────
 
 def fetch_tv(ticker: str, n_bars: int = 520) -> pd.DataFrame:
     """
@@ -174,14 +464,16 @@ def fetch_tv(ticker: str, n_bars: int = 520) -> pd.DataFrame:
 
 def fetch_batch_tv(tickers: List[str], n_bars: int = 520) -> Dict[str, pd.DataFrame]:
     """
-    Fetch OHLCV for multiple tickers via tvDatafeed.
-    Stores each result in SQLite so future runs use cache.
-    Falls back to Yahoo for any ticker tvDatafeed fails on.
+    Fetch OHLCV for multiple tickers. Tries Dhan first (if a live token is
+    available — checked ONCE per batch, not per ticker), then tvDatafeed
+    for anything Dhan didn't provide, then Yahoo for anything tvDatafeed
+    didn't provide either. Stores each result in SQLite so future runs use
+    cache regardless of which tier provided it.
     """
     result      = {}
     tv_failed   = []
 
-    # Check cache freshness first — avoids unnecessary TV calls
+    # Check cache freshness first — avoids unnecessary fetch calls of any kind
     for ticker in tickers:
         cached = _load_ohlcv_from_db(ticker)
         if _is_cache_fresh(cached):
@@ -192,6 +484,36 @@ def fetch_batch_tv(tickers: List[str], n_bars: int = 520) -> Dict[str, pd.DataFr
     if not tv_failed:
         log.info(f"      All {len(tickers)} tickers fresh in cache — no fetch needed")
         return result
+
+    # [NEW] TIER 0: Dhan — one auth check for the whole batch, not per ticker
+    dhan_ok = _check_dhan_auth()
+    if dhan_ok:
+        log.info(f"      Fetching {len(tv_failed)} tickers via Dhan...")
+        dhan_success = 0
+        dhan_still_failed = []
+        for ticker in tv_failed:
+            # [FIX] Dhan's historical endpoint caps at 5 req/sec. All 500
+            # tickers mapped correctly (confirmed via diagnose_dhan_mapping.py)
+            # yet only 219/500 succeeded in an unthrottled run — the gap was
+            # rate-limiting, not missing security_ids. 0.25s/call keeps this
+            # at 4/sec, safely under the cap.
+            time.sleep(0.25)
+            df = fetch_dhan(ticker, n_bars=n_bars)
+            if not df.empty and len(df) >= 20:
+                _store_ohlcv(ticker, df)
+                result[ticker] = df
+                dhan_success += 1
+            else:
+                dhan_still_failed.append(ticker)
+        _dhan_status["tickers_from_dhan"] = dhan_success
+        if dhan_success:
+            log.info(f"      Dhan: {dhan_success} fetched successfully")
+        tv_failed = dhan_still_failed
+        if not tv_failed:
+            return result   # Dhan covered everything — no need to touch tvDatafeed/Yahoo
+        log.info(f"      {len(tv_failed)} tickers not covered by Dhan "
+                 f"(missing security_id mapping or per-ticker error) — "
+                 f"falling through to tvDatafeed")
 
     log.info(f"      Fetching {len(tv_failed)} tickers via tvDatafeed...")
 
