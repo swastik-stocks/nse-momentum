@@ -20,7 +20,8 @@ log = logging.getLogger(__name__)
 RS_GATE = 30   # v5: lowered from 40 to catch recovering leaders like Polycab
 
 
-def compute_sector_relative_ranks(data_dict: Dict, universe_meta: Dict[str, str]) -> Dict[str, float]:
+def compute_sector_relative_ranks(data_dict: Dict, universe_meta: Dict[str, str],
+                                   bars_per_day: float = 1.0) -> Dict[str, float]:
     """
     Mansfield-style sector-relative RS — stock's return vs its OWN sector's
     peer-average return, expressed as a percentile WITHIN that sector's stock
@@ -41,6 +42,11 @@ def compute_sector_relative_ranks(data_dict: Dict, universe_meta: Dict[str, str]
     ("Added rs_sector: stock vs sector peers") but never actually built —
     this is that implementation.
 
+    [NEW] bars_per_day=1 (default) is exactly the original daily behavior —
+    the live scanner never passes this, unaffected. The hourly replay
+    passes bars_per_day=7 (see hourly_scaling.py), which scales the 20/60/
+    130-bar (4wk/12wk/26wk) windows below to their hourly equivalents.
+
     Args:
         data_dict: same dict passed to compute_universe_ranks (needs
             'stock_data' and ideally 'nifty500_data' or 'nifty50_data')
@@ -56,6 +62,10 @@ def compute_sector_relative_ranks(data_dict: Dict, universe_meta: Dict[str, str]
     stock_data = data_dict.get("stock_data", {})
     if not stock_data or not universe_meta:
         return {}
+
+    w4  = max(2, round(20  * bars_per_day))
+    w12 = max(2, round(60  * bars_per_day))
+    w26 = max(2, round(130 * bars_per_day))
 
     # Group tickers by sector first
     sector_members: Dict[str, list] = {}
@@ -75,7 +85,7 @@ def compute_sector_relative_ranks(data_dict: Dict, universe_meta: Dict[str, str]
         sector_scores = {}
         for ticker in tickers:
             df = stock_data.get(ticker)
-            if df is None or df.empty or len(df) < 60:
+            if df is None or df.empty or len(df) < w12:
                 continue
             c = df["Close"].squeeze().to_numpy(dtype=float)
 
@@ -83,7 +93,7 @@ def compute_sector_relative_ranks(data_dict: Dict, universe_meta: Dict[str, str]
                 return float(c[-1] / c[-bars] - 1) if len(c) >= bars and c[-bars] > 0 else 0.0
 
             # Same 40/40/20 weighting as the universe-wide calc, for consistency
-            s4, s12, s26 = _ret(20), _ret(60), _ret(130) if len(c) >= 130 else _ret(60)
+            s4, s12, s26 = _ret(w4), _ret(w12), _ret(w26) if len(c) >= w26 else _ret(w12)
             sector_scores[ticker] = 0.40 * s4 + 0.40 * s12 + 0.20 * s26
 
         if not sector_scores:
@@ -105,21 +115,30 @@ def compute_sector_relative_ranks(data_dict: Dict, universe_meta: Dict[str, str]
     return result
 
 
-def compute_universe_ranks(data_dict: Dict) -> Dict[str, float]:
+def compute_universe_ranks(data_dict: Dict, bars_per_day: float = 1.0) -> Dict[str, float]:
     """
     Pre-compute RS percentile for every ticker. Called ONCE per scan.
     Returns {ticker: percentile_0_to_100}.
+
+    [NEW] bars_per_day=1 (default) is exactly the original daily behavior —
+    unaffected for the live scanner. bars_per_day=7 (hourly replay) scales
+    every window below to its hourly equivalent.
     """
     scores     = {}
     nifty      = data_dict.get("nifty50_data", pd.DataFrame())
     stock_data = data_dict.get("stock_data", {})
 
-    if nifty.empty or len(nifty) < 65:
+    w4       = max(2, round(20  * bars_per_day))
+    w12      = max(2, round(60  * bars_per_day))
+    w26      = max(2, round(130 * bars_per_day))
+    min_hist = max(2, round(65  * bars_per_day))
+
+    if nifty.empty or len(nifty) < min_hist:
         # No benchmark — rank stocks vs each other on 12-week return
         for ticker, df in stock_data.items():
-            if not df.empty and len(df) >= 60:
+            if not df.empty and len(df) >= w12:
                 c   = df["Close"].squeeze().to_numpy(dtype=float)
-                ret = float(c[-1] / c[-60] - 1) if c[-60] > 0 else 0.0
+                ret = float(c[-1] / c[-w12] - 1) if c[-w12] > 0 else 0.0
                 scores[ticker] = ret
     else:
         nifty_c = nifty["Close"].squeeze().to_numpy(dtype=float)
@@ -128,12 +147,12 @@ def compute_universe_ranks(data_dict: Dict) -> Dict[str, float]:
             return float(nifty_c[-1] / nifty_c[-bars] - 1) \
                    if len(nifty_c) >= bars and nifty_c[-bars] > 0 else 0.0
 
-        n4  = _nret(20)
-        n12 = _nret(60)
-        n26 = _nret(130)
+        n4  = _nret(w4)
+        n12 = _nret(w12)
+        n26 = _nret(w26)
 
         for ticker, df in stock_data.items():
-            if df.empty or len(df) < 20:
+            if df.empty or len(df) < w4:
                 continue
             c = df["Close"].squeeze().to_numpy(dtype=float)
 
@@ -141,9 +160,9 @@ def compute_universe_ranks(data_dict: Dict) -> Dict[str, float]:
                 return float(c[-1] / c[-bars] - 1) \
                        if len(c) >= bars and c[-bars] > 0 else 0.0
 
-            s4  = _ret(20)
-            s12 = _ret(60)
-            s26 = _ret(130) if len(c) >= 130 else s12
+            s4  = _ret(w4)
+            s12 = _ret(w12)
+            s26 = _ret(w26) if len(c) >= w26 else s12
 
             # 40% on 4w, 40% on 12w, 20% on 26w
             rs_raw = 0.40 * (s4 - n4) + 0.40 * (s12 - n12) + 0.20 * (s26 - n26)
@@ -164,17 +183,25 @@ def compute_universe_ranks(data_dict: Dict) -> Dict[str, float]:
 
 
 def compute_rs_persistence(close: np.ndarray, nifty_close: np.ndarray,
-                            weeks: int = 13) -> int:
+                            weeks: int = 13, bars_per_day: float = 1.0) -> int:
     """
     Count weeks spent in top quartile (75th+ percentile) over last N weeks.
     Returns 0-13. Higher = more persistent leader.
+
+    [NEW] bars_per_day=1 (default) is exactly the original daily behavior —
+    unaffected for the live scanner. bars_per_day=7 (hourly replay) scales
+    the "5 trading days/week" and "20-bar return window" constants below
+    to their hourly equivalents (35 bars/week, 140-bar window).
     """
-    if len(close) < weeks * 5 + 5 or len(nifty_close) < weeks * 5 + 5:
+    bars_per_week = max(1, round(5  * bars_per_day))
+    ret_window    = max(1, round(20 * bars_per_day))
+
+    if len(close) < weeks * bars_per_week + bars_per_week or len(nifty_close) < weeks * bars_per_week + bars_per_week:
         return 0
     count = 0
     for w in range(weeks):
-        end   = -(w * 5) if w > 0 else len(close)
-        start = end - 20 if w > 0 else -20
+        end   = -(w * bars_per_week) if w > 0 else len(close)
+        start = end - ret_window if w > 0 else -ret_window
         try:
             s_ret = close[end-1] / close[start] - 1 if close[start] > 0 else 0
             n_ret = nifty_close[end-1] / nifty_close[start] - 1 if nifty_close[start] > 0 else 0
@@ -192,12 +219,19 @@ class RSAgent:
                  nifty500_df: pd.DataFrame = None,
                  universe_ranks: Dict[str, float] = None,
                  sector_ranks: Dict[str, float] = None,
-                 ticker: str = ""):
+                 ticker: str = "", bars_per_day: float = 1.0):
         self.df     = df
         self.nifty  = nifty_df
         self.ticker = ticker
         self.ranks  = universe_ranks or {}
         self.sector_pcts = sector_ranks or {}   # NEW — Mansfield sector-relative percentile
+        # [NEW] bars_per_day=1 (default) is exactly the original daily
+        # behavior — the live scanner never passes this, unaffected.
+        # The hourly replay passes bars_per_day=7 (see hourly_scaling.py).
+        self.bars_per_day = bars_per_day
+        self._w4  = max(2, round(20  * bars_per_day))
+        self._w12 = max(2, round(60  * bars_per_day))
+        self._w26 = max(2, round(130 * bars_per_day))
         self._pct         = 50.0
         self._sector_pct  = 50.0
         self._persistence = 0
@@ -206,7 +240,7 @@ class RSAgent:
     def _compute(self):
         if self.ticker and self.ticker in self.ranks:
             self._pct = self.ranks[self.ticker]
-        elif not self.df.empty and not self.nifty.empty and len(self.nifty) >= 20:
+        elif not self.df.empty and not self.nifty.empty and len(self.nifty) >= self._w4:
             c = self.df["Close"].squeeze().to_numpy(dtype=float)
             n = self.nifty["Close"].squeeze().to_numpy(dtype=float)
 
@@ -214,9 +248,9 @@ class RSAgent:
                 return float(arr[-1] / arr[-bars] - 1) \
                        if len(arr) >= bars and arr[-bars] > 0 else 0.0
 
-            rs4  = _ret(c, 20)  - _ret(n, 20)
-            rs12 = _ret(c, 60)  - _ret(n, 60)
-            rs26 = _ret(c, 130) - _ret(n, 130)
+            rs4  = _ret(c, self._w4)  - _ret(n, self._w4)
+            rs12 = _ret(c, self._w12) - _ret(n, self._w12)
+            rs26 = _ret(c, self._w26) - _ret(n, self._w26)
             composite = 0.40 * rs4 + 0.40 * rs12 + 0.20 * rs26
             self._pct = 65.0 if composite > 0.02 else (
                 55.0 if composite > 0 else (
@@ -228,7 +262,7 @@ class RSAgent:
         if not self.df.empty and not self.nifty.empty:
             c = self.df["Close"].squeeze().to_numpy(dtype=float)
             n = self.nifty["Close"].squeeze().to_numpy(dtype=float)
-            self._persistence = compute_rs_persistence(c, n)
+            self._persistence = compute_rs_persistence(c, n, bars_per_day=self.bars_per_day)
 
         # NEW — Mansfield sector-relative percentile (from pre-computed sector_pcts,
         # falls back to universe percentile if this ticker has no sector data —

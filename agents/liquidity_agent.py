@@ -13,10 +13,17 @@ log = logging.getLogger(__name__)
 
 class LiquidityAgent:
     def __init__(self, df: pd.DataFrame, universe: str = "LARGE",
-                 mcap_cr: float = 0.0):
+                 mcap_cr: float = 0.0, bars_per_day: float = 1.0):
         self.df      = df
         self.universe= universe
         self.mcap_cr = mcap_cr
+        # [NEW] bars_per_day=1 (default) is exactly the original daily
+        # behavior — the live scanner never passes this, so it is
+        # unaffected. The hourly replay passes bars_per_day=7 (see
+        # hourly_scaling.py) so the "20-day" ADT/participation window
+        # below becomes a genuine ~20-trading-day (140-hourly-bar) window
+        # instead of silently becoming a 20-HOUR (~3-day) window.
+        self._window = max(1, round(20 * bars_per_day))
         self._adt_cr    = 0.0
         self._part_rate = 0.0
         self._passes    = False
@@ -27,7 +34,8 @@ class LiquidityAgent:
 
     def _compute(self):
         df = self.df
-        if df.empty or len(df) < 20:
+        w = self._window
+        if df.empty or len(df) < w:
             self._reason = "Insufficient data"
             return
 
@@ -35,11 +43,11 @@ class LiquidityAgent:
         close = df["Close"].squeeze().to_numpy(dtype=float)
         vol   = df["Volume"].squeeze().to_numpy(dtype=float)
         daily_turnover = close * vol / 1e7  # crores
-        self._adt_cr = float(np.mean(daily_turnover[-20:]))
+        self._adt_cr = float(np.mean(daily_turnover[-w:]))
 
         # Participation rate: % of days with above-average volume
-        avg20v = float(np.mean(vol[-20:])) if np.mean(vol[-20:]) > 0 else 1
-        self._part_rate = float(np.sum(vol[-20:] > avg20v) / 20 * 100)
+        avg20v = float(np.mean(vol[-w:])) if np.mean(vol[-w:]) > 0 else 1
+        self._part_rate = float(np.sum(vol[-w:] > avg20v) / w * 100)
 
         # Market cap tier
         if self.mcap_cr >= 20000:    self._mcap_tier = "LargeCap"

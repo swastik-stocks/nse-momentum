@@ -30,10 +30,24 @@ MIN_RRR      = {"LARGE": 1.5,  "MID": 1.8,  "SMALL": 2.0}
 class RiskAgent:
     def __init__(self, df: pd.DataFrame, breakout_level: float,
                  entry_low: float = 0.0, entry_high: float = 0.0,
-                 universe: str = "LARGE"):
+                 universe: str = "LARGE", bars_per_day: float = 1.0):
         self.df         = df
         self.bo         = breakout_level
         self.universe   = universe
+        # [NEW] bars_per_day=1 (default) is exactly the original daily
+        # behavior — the live scanner never passes this, unaffected.
+        # The hourly replay passes bars_per_day=7 (see hourly_scaling.py).
+        # Every one of these 5 windows was originally a hardcoded
+        # day-count; scaling them is what makes "14-period ATR" mean the
+        # same ~3 calendar weeks on hourly bars as it does on daily ones,
+        # instead of silently becoming a 14-HOUR (~2 trading day) ATR.
+        self._atr_period       = max(2, round(14  * bars_per_day))
+        self._ema21_period     = max(2, round(21  * bars_per_day))
+        self._stop_lookback    = max(2, round(10  * bars_per_day))
+        self._pattern_lookback = max(2, round(60  * bars_per_day))
+        self._res_3m_window    = max(2, round(65  * bars_per_day))
+        self._res_6m_window    = max(2, round(130 * bars_per_day))
+        self._res_12m_window   = max(2, round(252 * bars_per_day))
         # FIX 3: always sort entry_low < entry_high regardless of what PatternAgent passes
         raw_lo = min(entry_low, entry_high) if (entry_low > 0 and entry_high > 0) else entry_low
         raw_hi = max(entry_low, entry_high) if (entry_low > 0 and entry_high > 0) else entry_high
@@ -53,7 +67,7 @@ class RiskAgent:
 
     def _compute(self):
         df = self.df
-        if df.empty or len(df) < 14 or self.bo <= 0:
+        if df.empty or len(df) < self._atr_period or self.bo <= 0:
             self._reason = "No valid breakout level"
             return
 
@@ -62,7 +76,7 @@ class RiskAgent:
         close = df["Close"].squeeze().to_numpy(dtype=float)
         price = close[-1]
 
-        atr = self._atr(high, low, close, 14)
+        atr = self._atr(high, low, close, self._atr_period)
         if atr <= 0:
             self._reason = "ATR calculation failed"
             return
@@ -78,10 +92,10 @@ class RiskAgent:
             entry = price
 
         # Stop: three candidates, pick tightest valid one
-        ema21    = float(pd.Series(close).ewm(span=21, adjust=False).mean().iloc[-1])
+        ema21    = float(pd.Series(close).ewm(span=self._ema21_period, adjust=False).mean().iloc[-1])
         stop_ema = ema21 * 0.993
 
-        lookback_stop = min(len(low), 10)
+        lookback_stop = min(len(low), self._stop_lookback)
         stop_10d = float(np.min(low[-lookback_stop:])) * 0.997
 
         atr_mult = {"LARGE": 1.5, "MID": 1.8, "SMALL": 2.0}.get(self.universe, 1.5)
@@ -99,13 +113,13 @@ class RiskAgent:
         stop = max(stop, 0.01)
 
         # Targets
-        lookback   = min(len(low), 60)
+        lookback   = min(len(low), self._pattern_lookback)
         base_low   = float(np.min(low[-lookback:]))
         pat_height = max(self.bo - base_low, atr * 2.5)
 
-        res_3m  = float(np.max(high[-65:]))
-        res_6m  = float(np.max(high[-130:])) if len(high) >= 130 else res_3m
-        res_12m = float(np.max(high[-252:])) if len(high) >= 252 else res_6m
+        res_3m  = float(np.max(high[-self._res_3m_window:]))
+        res_6m  = float(np.max(high[-self._res_6m_window:])) if len(high) >= self._res_6m_window else res_3m
+        res_12m = float(np.max(high[-self._res_12m_window:])) if len(high) >= self._res_12m_window else res_6m
 
         raw_t1 = entry + pat_height
         resistance_levels = sorted(

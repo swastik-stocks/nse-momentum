@@ -60,9 +60,12 @@ def _get_profile(w4_pct: float) -> tuple:
     return FALLBACK_PROFILE
 
 
-def _compute_atr14(df: pd.DataFrame) -> float:
-    """Pure-pandas ATR-14 — no external dependency."""
-    if len(df) < 15:
+def _compute_atr14(df: pd.DataFrame, period: int = 14) -> float:
+    """Pure-pandas ATR — no external dependency. Despite the name (kept for
+    backward compatibility with existing callers), period is now a
+    parameter: default 14 is the original daily behavior unchanged; the
+    hourly replay passes a scaled period (see hourly_scaling.py)."""
+    if len(df) < period + 1:
         return 0.0
     high  = df["High"].squeeze().to_numpy(dtype=float)
     low   = df["Low"].squeeze().to_numpy(dtype=float)
@@ -74,7 +77,7 @@ def _compute_atr14(df: pd.DataFrame) -> float:
             np.abs(low[1:]  - close[:-1])
         )
     )
-    return float(np.mean(tr[-14:]))
+    return float(np.mean(tr[-period:]))
 
 
 class AsymmetryGate:
@@ -95,13 +98,20 @@ class AsymmetryGate:
     """
 
     def __init__(self, entry: float, stop: float,
-                 target1: float, universe: str = "LARGE"):
+                 target1: float, universe: str = "LARGE",
+                 bars_per_day: float = 1.0):
         self.entry    = entry
         self.stop     = stop
         self.target1  = target1
         self.universe = universe.upper() if universe else "LARGE"
         if self.universe not in UNIVERSE_CAPS:
             self.universe = "LARGE"
+        # [NEW] bars_per_day=1 (default) is exactly the original daily
+        # behavior — the live scanner never passes this, unaffected.
+        # The hourly replay passes bars_per_day=7 (see hourly_scaling.py).
+        self._atr_period    = max(2, round(14 * bars_per_day))
+        self._ema21_period  = max(2, round(21 * bars_per_day))
+        self._swing_lookback = max(2, round(5  * bars_per_day))
 
     # ── helpers ──────────────────────────────────────────────────────────────
 
@@ -203,7 +213,7 @@ class AsymmetryGate:
             return result
 
         # ── ATR ──────────────────────────────────────────────────────────────
-        atr = _compute_atr14(df)
+        atr = _compute_atr14(df, period=self._atr_period)
         if atr <= 0:
             # Fall back to legacy path if ATR can't be computed
             log.debug("ATR=0 for %s, falling back to legacy check", self.entry)
@@ -221,8 +231,8 @@ class AsymmetryGate:
 
         # EMA21 floor: stop cannot be placed ABOVE EMA21
         close = df["Close"].squeeze().to_numpy(dtype=float)
-        if len(close) >= 21:
-            alpha = 2 / (21 + 1)
+        if len(close) >= self._ema21_period:
+            alpha = 2 / (self._ema21_period + 1)
             ema21 = close[0]
             for c in close[1:]:
                 ema21 = alpha * c + (1 - alpha) * ema21
@@ -230,9 +240,9 @@ class AsymmetryGate:
             if ema21_dist_pct > 0:
                 dynamic_stop_pct = max(dynamic_stop_pct, ema21_dist_pct)
 
-        # Recent swing low floor (last 5 bars)
-        if len(df) >= 5:
-            swing_low = float(df["Low"].squeeze().iloc[-5:].min())
+        # Recent swing low floor
+        if len(df) >= self._swing_lookback:
+            swing_low = float(df["Low"].squeeze().iloc[-self._swing_lookback:].min())
             swing_low_pct = (self.entry - swing_low) / self.entry * 100.0
             if swing_low_pct > 0:
                 dynamic_stop_pct = max(dynamic_stop_pct, swing_low_pct)
