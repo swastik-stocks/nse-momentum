@@ -1,19 +1,6 @@
 name: NSE Momentum - 10am Confirmation
 on:
-  schedule:
-  # [FIX] GitHub's native schedule trigger proved unreliable in practice
-  # (2026-07-30: runs labeled 09:20/09:35 actually fired at 11:44/12:05
-  # IST, 2.5h late) -- removed entirely in favor of cronjob.com for all
-  # four checkpoints, matching the already-proven 09:16 approach.
   workflow_dispatch:
-    # [FIX] External triggers (e.g. cronjob.com's early ~09:16 checkpoint) hit this
-    # path, not the schedule path. github.event.schedule is ALWAYS empty here, so
-    # without explicit inputs the checkpoint-label step below fell through to its
-    # "*" branch: label=manual, final=--final. That silently treated every
-    # externally-triggered early check as the FINAL checkpoint of the day, which
-    # (per the multi-checkpoint terminal-status caching) means the real 09:55 run
-    # would reuse thin, premature classifications instead of re-checking them --
-    # quietly reproducing the "missed" problem via a different mechanism.
     inputs:
       checkpoint_label:
         description: 'Checkpoint label for external/manual triggers (e.g. 09:16). Leave blank for default manual/final behaviour.'
