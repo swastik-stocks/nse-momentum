@@ -49,6 +49,7 @@ from email.mime.text import MIMEText
 from dotenv import load_dotenv
 
 from market_calendar.staleness_check import check_staleness, StaleDataError
+import dhan_rvol
 
 try:
     from loguru import logger as log
@@ -271,13 +272,43 @@ def _rvol_yfinance_fallback(ticker_nse: str, as_of: datetime = None) -> float:
         return -1.0
 
 
+def _rvol_dhan(ticker_raw: str, as_of: datetime = None) -> float:
+    """
+    [NEW] Primary RVOL source — Dhan's paid Data API, elapsed-time-matched
+    (see dhan_rvol.py). Returns rvol as a float, or -1.0 on any failure
+    (too early in session, security_id not mapped, network/API error, no
+    historical data) so it slots into the same fallback chain as the
+    tvDatafeed/yfinance functions below.
+    """
+    symbol = ticker_raw.replace(".NS", "")
+    try:
+        result = dhan_rvol.compute_rvol(symbol, as_of=as_of)
+    except Exception as e:
+        log.warning(f"    [Dhan] {symbol}: RVOL call raised {type(e).__name__}: {e}")
+        return -1.0
+
+    if "error" in result:
+        log.info(f"    [Dhan] {symbol}: {result['error']}")
+        return -1.0
+
+    log.info(f"    [Dhan] {symbol}: RVOL = {result['rvol']:.2f}x "
+             f"({result.get('elapsed_minutes', '?')}min elapsed)")
+    return result["rvol"]
+
+
 def get_rvol(ticker: str, as_of: datetime = None) -> tuple:
     """
     Returns (rvol_float, source_label).
-    Tries tvDatafeed first, falls back to yfinance, then N/A.
+    Tries Dhan first (paid, elapsed-time-matched, most reliable), falls
+    back to tvDatafeed, then yfinance, then N/A.
     """
     ticker_raw = ticker if ticker.endswith(".NS") else ticker + ".NS"
 
+    rvol = _rvol_dhan(ticker_raw, as_of=as_of)
+    if rvol >= 0:
+        return rvol, "Dhan"
+
+    log.info(f"    Dhan failed for {ticker_raw} — trying tvDatafeed fallback")
     rvol = _rvol_tvdatafeed(ticker_raw, as_of=as_of)
     if rvol >= 0:
         return rvol, "tvDatafeed"
@@ -287,7 +318,7 @@ def get_rvol(ticker: str, as_of: datetime = None) -> tuple:
     if rvol >= 0:
         return rvol, "yfinance"
 
-    log.warning(f"    Both RVOL sources failed for {ticker_raw} — returning N/A")
+    log.warning(f"    All RVOL sources failed for {ticker_raw} — returning N/A")
     return -1.0, "N/A"
 
 
@@ -448,8 +479,8 @@ def classify(pick: dict, cmp: float | None, rvol: float, rvol_src: str,
     pivot_extended  = (pivot_ext_pct > max_pivot_extension_pct
                        and rvol >= 0 and rvol < RVOL_CONFIRM_MIN)
 
-    vol_ok_confirm  = (rvol >= RVOL_CONFIRM_MIN) if rvol >= 0 else True
-    vol_ok_low      = (rvol >= RVOL_LOW_VOL_MIN) if rvol >= 0 else True
+    vol_ok_confirm  = rvol >= RVOL_CONFIRM_MIN
+    vol_ok_low      = rvol >= RVOL_LOW_VOL_MIN
 
     # ── BROKEN ───────────────────────────────────────────────────────────────
     if cmp <= sl:
@@ -483,6 +514,22 @@ def classify(pick: dict, cmp: float | None, rvol: float, rvol_src: str,
     # ── Above pivot ───────────────────────────────────────────────────────────
     if cmp >= pivot:
         rvol_disp = f"{rvol:.1f}x" if rvol >= 0 else "N/A"
+
+        # [FIX-4] RVOL genuinely unresolved (both sources failed) — do NOT
+        # fail open into CONFIRMED. Stay non-terminal so this ticker gets
+        # re-checked at the next checkpoint instead of being locked in on
+        # a guess.
+        if rvol < 0:
+            return {
+                "status": "CONFIRMED_PENDING_RVOL",
+                "ltp": cmp, "gap_pct": gap_pct, "rvol": rvol, "rvol_src": rvol_src,
+                "drift_pct": drift_pct, "is_chasing": False,
+                "action": (f"Above pivot (CMP ₹{cmp:,.1f}) but RVOL not yet "
+                           f"available — price confirmed, volume unconfirmed. "
+                           f"Will re-check next checkpoint."),
+                "label":  "PRICE OK — VOL PENDING",
+                "color":  "#ffffff", "bg": "#2563eb",
+            }
 
         if vol_ok_confirm:
             return {
@@ -661,8 +708,9 @@ def build_stale_html(scan_date_str: str, today_iso: str, run_time: str) -> str:
 
 def build_html(results: list, scan_date: str, run_time: str) -> str:
     order = {
-        "CONFIRMED": 0, "CONFIRMED_LOW_VOL": 1, "BREAKOUT_NO_VOLUME": 2,
-        "PENDING": 3, "MISSED": 4, "BROKEN": 5, "DATA_ERROR": 6
+        "CONFIRMED": 0, "CONFIRMED_PENDING_RVOL": 1, "CONFIRMED_LOW_VOL": 2,
+        "BREAKOUT_NO_VOLUME": 3, "PENDING": 4, "MISSED": 5, "BROKEN": 6,
+        "DATA_ERROR": 7
     }
     results = sorted(results,
                      key=lambda r: order.get(r["classification"]["status"], 9))
@@ -671,27 +719,34 @@ def build_html(results: list, scan_date: str, run_time: str) -> str:
     t2 = [r for r in results if r["pick"].get("tier") == 2]
 
     # [BUG-2] Accurate counts per status
-    confirmed_n  = sum(1 for r in results if r["classification"]["status"] == "CONFIRMED")
-    low_vol_n    = sum(1 for r in results if r["classification"]["status"] == "CONFIRMED_LOW_VOL")
-    no_vol_n     = sum(1 for r in results if r["classification"]["status"] == "BREAKOUT_NO_VOLUME")
-    pending_n    = sum(1 for r in results if r["classification"]["status"] == "PENDING")
-    missed_n     = sum(1 for r in results if r["classification"]["status"] == "MISSED")
-    broken_n     = sum(1 for r in results if r["classification"]["status"] == "BROKEN")
-    error_n      = sum(1 for r in results if r["classification"]["status"] == "DATA_ERROR")
+    confirmed_n     = sum(1 for r in results if r["classification"]["status"] == "CONFIRMED")
+    pending_rvol_n  = sum(1 for r in results if r["classification"]["status"] == "CONFIRMED_PENDING_RVOL")
+    low_vol_n       = sum(1 for r in results if r["classification"]["status"] == "CONFIRMED_LOW_VOL")
+    no_vol_n        = sum(1 for r in results if r["classification"]["status"] == "BREAKOUT_NO_VOLUME")
+    pending_n       = sum(1 for r in results if r["classification"]["status"] == "PENDING")
+    missed_n        = sum(1 for r in results if r["classification"]["status"] == "MISSED")
+    broken_n        = sum(1 for r in results if r["classification"]["status"] == "BROKEN")
+    error_n         = sum(1 for r in results if r["classification"]["status"] == "DATA_ERROR")
 
     summary_parts = []
-    if confirmed_n: summary_parts.append(f"<span style='color:#16a34a;font-weight:700;'>{confirmed_n} CONFIRMED</span>")
-    if low_vol_n:   summary_parts.append(f"<span style='color:#ca8a04;font-weight:700;'>{low_vol_n} LOW VOLUME</span>")
-    if no_vol_n:    summary_parts.append(f"<span style='color:#dc2626;font-weight:700;'>{no_vol_n} NO VOLUME</span>")
-    if pending_n:   summary_parts.append(f"<span style='color:#1d4ed8;font-weight:700;'>{pending_n} PENDING</span>")
-    if missed_n:    summary_parts.append(f"<span style='color:#7c3aed;font-weight:700;'>{missed_n} MISSED</span>")
-    if broken_n:    summary_parts.append(f"<span style='color:#dc2626;font-weight:700;'>{broken_n} BROKEN</span>")
-    if error_n:     summary_parts.append(f"<span style='color:#9ca3af;font-weight:700;'>{error_n} DATA ERROR</span>")
+    if confirmed_n:    summary_parts.append(f"<span style='color:#16a34a;font-weight:700;'>{confirmed_n} CONFIRMED</span>")
+    if pending_rvol_n: summary_parts.append(f"<span style='color:#2563eb;font-weight:700;'>{pending_rvol_n} VOL PENDING</span>")
+    if low_vol_n:      summary_parts.append(f"<span style='color:#ca8a04;font-weight:700;'>{low_vol_n} LOW VOLUME</span>")
+    if no_vol_n:       summary_parts.append(f"<span style='color:#dc2626;font-weight:700;'>{no_vol_n} NO VOLUME</span>")
+    if pending_n:      summary_parts.append(f"<span style='color:#1d4ed8;font-weight:700;'>{pending_n} PENDING</span>")
+    if missed_n:       summary_parts.append(f"<span style='color:#7c3aed;font-weight:700;'>{missed_n} MISSED</span>")
+    if broken_n:       summary_parts.append(f"<span style='color:#dc2626;font-weight:700;'>{broken_n} BROKEN</span>")
+    if error_n:        summary_parts.append(f"<span style='color:#9ca3af;font-weight:700;'>{error_n} DATA ERROR</span>")
     summary_html = " &nbsp;|&nbsp; ".join(summary_parts)
 
     # Action box
     action_box = ""
     if confirmed_n:
+        pending_note = (
+            f'<br>{pending_rvol_n} more setup(s) still awaiting volume data — '
+            f'see VOL PENDING rows below, do not enter those yet.'
+            if pending_rvol_n else ""
+        )
         action_box = f"""
         <div style="background:#f0fdf4;border-left:4px solid #16a34a;
             margin:16px 28px 0;padding:14px 16px;border-radius:0 4px 4px 0;">
@@ -699,7 +754,19 @@ def build_html(results: list, scan_date: str, run_time: str) -> str:
             ACTION REQUIRED — {confirmed_n} setup(s) confirmed for entry today
           </div>
           <div style="color:#166534;font-size:13px;margin-top:4px;">
-            Place orders now. RVOL >= 1.5x confirmed. Standard position sizing.
+            Place orders now. RVOL >= 1.5x confirmed. Standard position sizing.{pending_note}
+          </div>
+        </div>"""
+    elif pending_rvol_n and not confirmed_n and not low_vol_n:
+        action_box = f"""
+        <div style="background:#eff6ff;border-left:4px solid #2563eb;
+            margin:16px 28px 0;padding:14px 16px;border-radius:0 4px 4px 0;">
+          <div style="font-weight:700;color:#1d4ed8;font-size:15px;">
+            NO ENTRY YET — {pending_rvol_n} setup(s) above pivot, volume unconfirmed
+          </div>
+          <div style="color:#1e3a8a;font-size:13px;margin-top:4px;">
+            Price cleared the pivot but RVOL data hasn't resolved. Wait for the
+            next checkpoint — do not enter on price alone.
           </div>
         </div>"""
     elif no_vol_n and not confirmed_n and not low_vol_n:
@@ -783,6 +850,7 @@ def build_html(results: list, scan_date: str, run_time: str) -> str:
       font-size:11px;color:#94a3b8;">
     Not SEBI-registered investment advice. All trading involves capital risk.
     SL = hard stop, do not widen. BREAKOUT_NO_VOLUME = breakout trap, skip.
+    VOL PENDING = price confirmed, RVOL not yet resolved — will retry next checkpoint.
   </div>
 </div>
 </body></html>"""
@@ -985,21 +1053,23 @@ def main():
         log.info("  Done.")
         return
 
-    confirmed_n  = sum(1 for r in email_results if r["classification"]["status"] == "CONFIRMED")
-    low_vol_n    = sum(1 for r in email_results if r["classification"]["status"] == "CONFIRMED_LOW_VOL")
-    no_vol_n     = sum(1 for r in email_results if r["classification"]["status"] == "BREAKOUT_NO_VOLUME")
-    missed_n     = sum(1 for r in email_results if r["classification"]["status"] == "MISSED")
-    broken_n     = sum(1 for r in email_results if r["classification"]["status"] == "BROKEN")
-    pending_n    = sum(1 for r in email_results if r["classification"]["status"] == "PENDING")
+    confirmed_n     = sum(1 for r in email_results if r["classification"]["status"] == "CONFIRMED")
+    pending_rvol_n  = sum(1 for r in email_results if r["classification"]["status"] == "CONFIRMED_PENDING_RVOL")
+    low_vol_n       = sum(1 for r in email_results if r["classification"]["status"] == "CONFIRMED_LOW_VOL")
+    no_vol_n        = sum(1 for r in email_results if r["classification"]["status"] == "BREAKOUT_NO_VOLUME")
+    missed_n        = sum(1 for r in email_results if r["classification"]["status"] == "MISSED")
+    broken_n        = sum(1 for r in email_results if r["classification"]["status"] == "BROKEN")
+    pending_n       = sum(1 for r in email_results if r["classification"]["status"] == "PENDING")
 
     parts = []
-    if confirmed_n: parts.append(f"{confirmed_n} CONFIRMED")
-    if low_vol_n:   parts.append(f"{low_vol_n} LOW VOL")
-    if no_vol_n:    parts.append(f"{no_vol_n} NO VOL BREAKOUT")
-    if missed_n:    parts.append(f"{missed_n} MISSED")
-    if broken_n:    parts.append(f"{broken_n} BROKEN")
-    if pending_n:   parts.append(f"{pending_n} PENDING")
-    if not parts:   parts.append("No actionable setups")
+    if confirmed_n:    parts.append(f"{confirmed_n} CONFIRMED")
+    if pending_rvol_n: parts.append(f"{pending_rvol_n} VOL PENDING")
+    if low_vol_n:      parts.append(f"{low_vol_n} LOW VOL")
+    if no_vol_n:       parts.append(f"{no_vol_n} NO VOL BREAKOUT")
+    if missed_n:       parts.append(f"{missed_n} MISSED")
+    if broken_n:       parts.append(f"{broken_n} BROKEN")
+    if pending_n:      parts.append(f"{pending_n} PENDING")
+    if not parts:      parts.append("No actionable setups")
 
     subject = f"[NSE Momentum {checkpoint_label} {scope_label}] {' | '.join(parts)} | {today_str}"
 

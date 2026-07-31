@@ -20,11 +20,22 @@ import os
 import time
 from datetime import date, datetime, timedelta
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 import requests
 from dotenv import load_dotenv
 
 load_dotenv()
+
+# [FIX] datetime.fromtimestamp(ts) with no tz arg converts to the HOST
+# MACHINE's local timezone. That's fine on a local Windows box set to IST,
+# but GitHub Actions runners default to UTC -- every candle's wall-clock
+# time would silently shift by 5.5 hours there, so the 09:15-10:00 window
+# comparison would never match anything and this would always return
+# "no historical volume data available" in CI, even though it looked fine
+# in local testing. Always convert explicitly to IST instead of relying on
+# host-local time.
+IST = ZoneInfo("Asia/Kolkata")
 
 DHAN_ACCESS_TOKEN = os.environ["DHAN_ACCESS_TOKEN"]
 DHAN_CLIENT_ID = os.environ["DHAN_CLIENT_ID"]
@@ -127,7 +138,12 @@ def _fetch_intraday_candles(security_id: str, from_date: str, to_date: str,
         # deprecated v1 API only -- using it here shifted every date
         # exactly 10 years into the future (confirmed by decoded dates
         # landing in 2036 instead of 2026).
-        candle_dt = datetime.fromtimestamp(ts)
+        #
+        # [FIX] Convert explicitly to IST, then drop tzinfo for naive
+        # comparison against the naive IST wall-clock windows built below --
+        # do NOT use fromtimestamp(ts) with no tz, which uses host-local
+        # time and breaks on UTC CI runners (see IST comment above).
+        candle_dt = datetime.fromtimestamp(ts, tz=IST).replace(tzinfo=None)
         candles.append({
             "datetime": candle_dt,
             "volume": vol,
@@ -135,14 +151,40 @@ def _fetch_intraday_candles(security_id: str, from_date: str, to_date: str,
     return candles
 
 
-def _sum_first_45min_volume(candles: list, target_date: date) -> float:
-    """Sum volume for candles falling within 09:15-10:00 IST on target_date."""
-    window_start_dt = datetime.combine(
-        target_date, datetime.strptime(WINDOW_START, "%H:%M").time()
-    )
-    window_end_dt = datetime.combine(
-        target_date, datetime.strptime(WINDOW_END, "%H:%M").time()
-    )
+# [FIX] Elapsed-time-matched window, replacing the old fixed 09:15-10:00
+# window. The scheduled checkpoints (09:16/09:20/09:35/09:55) all fall
+# BEFORE 10:00 -- a fixed 45-min window meant "today" would always have
+# less volume summed than the historical 20-day average (which used the
+# FULL 45 minutes every time), artificially depressing RVOL at every real
+# checkpoint. This mirrors the same elapsed-matching approach already used
+# by _rvol_tvdatafeed/_rvol_yfinance_fallback in confirm_picks.py, so all
+# three RVOL sources are apples-to-apples regardless of what time a
+# checkpoint runs.
+MIN_ELAPSED_MINUTES = 5  # matches the "too early" guard used elsewhere
+
+
+def _elapsed_window(as_of: datetime, target_date: date) -> tuple:
+    """
+    Returns (window_start_dt, window_end_dt) for target_date, spanning from
+    market open to the SAME number of elapsed minutes as `as_of` is past
+    market open today. Used for both today and each historical day, so the
+    comparison is always minutes-elapsed vs minutes-elapsed, never a full
+    45-min historical window vs a partial today window.
+    """
+    market_open_time = datetime.strptime(WINDOW_START, "%H:%M").time()
+    open_dt_today     = datetime.combine(as_of.date(), market_open_time)
+    elapsed           = as_of - open_dt_today
+    if elapsed.total_seconds() < 0:
+        elapsed = timedelta(0)
+
+    window_start_dt = datetime.combine(target_date, market_open_time)
+    window_end_dt   = window_start_dt + elapsed
+    return window_start_dt, window_end_dt
+
+
+def _sum_elapsed_volume(candles: list, window_start_dt: datetime,
+                         window_end_dt: datetime) -> float:
+    """Sum volume for candles falling within [window_start_dt, window_end_dt]."""
     total = 0.0
     for c in candles:
         if window_start_dt <= c["datetime"] <= window_end_dt:
@@ -163,9 +205,11 @@ def _get_trading_days_back(n: int) -> list:
     return days
 
 
-def compute_rvol(symbol: str, security_id: str = None, exchange_segment: str = "NSE_EQ") -> dict:
+def compute_rvol(symbol: str, security_id: str = None, exchange_segment: str = "NSE_EQ",
+                  as_of: datetime = None) -> dict:
     """
-    Compute RVOL for one symbol.
+    Compute RVOL for one symbol, elapsed-time-matched against `as_of`
+    (defaults to now, IST).
 
     Returns:
         {
@@ -174,9 +218,14 @@ def compute_rvol(symbol: str, security_id: str = None, exchange_segment: str = "
             "avg_20d_volume": float,
             "rvol": float,       # e.g. 1.8 means 1.8x normal volume
             "source": "dhan",
+            "elapsed_minutes": float,
         }
-    or {"symbol": ..., "error": "..."} if data was unavailable.
+    or {"symbol": ..., "error": "..."} if data was unavailable or it's too
+    early in the session for a meaningful comparison.
     """
+    if as_of is None:
+        as_of = datetime.now(IST).replace(tzinfo=None)
+
     if security_id is None:
         instrument_map = _load_instrument_map()
         clean_symbol = symbol.replace(".NS", "")
@@ -184,19 +233,27 @@ def compute_rvol(symbol: str, security_id: str = None, exchange_segment: str = "
         if security_id is None:
             return {"symbol": symbol, "error": "security_id not found in instrument map"}
 
-    today = date.today()
+    today = as_of.date()
+    market_open_time = datetime.strptime(WINDOW_START, "%H:%M").time()
+    elapsed_minutes = (as_of - datetime.combine(today, market_open_time)).total_seconds() / 60
 
-    # Today's first-45-min volume
+    if elapsed_minutes < MIN_ELAPSED_MINUTES:
+        return {"symbol": symbol,
+                "error": f"only {elapsed_minutes:.0f}min elapsed since open -- "
+                         f"too early for a meaningful RVOL"}
+
+    # Today's elapsed-window volume
     today_candles = _fetch_intraday_candles(
         security_id,
         from_date=today.strftime("%Y-%m-%d"),
         to_date=today.strftime("%Y-%m-%d"),
         exchange_segment=exchange_segment,
     )
-    today_volume = _sum_first_45min_volume(today_candles, today)
+    today_start_dt, today_end_dt = _elapsed_window(as_of, today)
+    today_volume = _sum_elapsed_volume(today_candles, today_start_dt, today_end_dt)
     time.sleep(0.25)  # stay under 5 req/sec
 
-    # 20-day average of the same window
+    # 20-day average of the SAME elapsed window on each historical day
     trading_days = _get_trading_days_back(20)
     oldest, newest = min(trading_days), max(trading_days)
 
@@ -206,15 +263,12 @@ def compute_rvol(symbol: str, security_id: str = None, exchange_segment: str = "
         to_date=newest.strftime("%Y-%m-%d"),
         exchange_segment=exchange_segment,
     )
-    print(f"DEBUG hist_candles count: {len(hist_candles)}")
-    if hist_candles:
-        print(f"DEBUG first candle: {hist_candles[0]}")
-        print(f"DEBUG last candle: {hist_candles[-1]}")
     time.sleep(0.25)
 
     daily_volumes = []
     for d in trading_days:
-        vol = _sum_first_45min_volume(hist_candles, d)
+        d_start_dt, d_end_dt = _elapsed_window(as_of, d)
+        vol = _sum_elapsed_volume(hist_candles, d_start_dt, d_end_dt)
         if vol > 0:
             daily_volumes.append(vol)
 
@@ -230,6 +284,7 @@ def compute_rvol(symbol: str, security_id: str = None, exchange_segment: str = "
         "avg_20d_volume": avg_20d_volume,
         "rvol": round(rvol, 2),
         "source": "dhan",
+        "elapsed_minutes": round(elapsed_minutes, 1),
     }
 
 
