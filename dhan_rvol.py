@@ -223,8 +223,18 @@ def compute_rvol(symbol: str, security_id: str = None, exchange_segment: str = "
     or {"symbol": ..., "error": "..."} if data was unavailable or it's too
     early in the session for a meaningful comparison.
     """
+    # [FIX] as_of may arrive either naive (e.g. direct/local testing) or
+    # timezone-aware (the real production path: confirm_picks.py's main()
+    # builds now_ist = datetime.now(IST), which IS tz-aware, and passes it
+    # straight through get_rvol() -> _rvol_dhan() -> here). Subtracting that
+    # against the naive datetime.combine(...) below raised:
+    #   TypeError: can't subtract offset-naive and offset-aware datetimes
+    # for every single ticker in production. Always normalize to a naive
+    # IST wall-clock datetime here, regardless of what was passed in.
     if as_of is None:
         as_of = datetime.now(IST).replace(tzinfo=None)
+    elif as_of.tzinfo is not None:
+        as_of = as_of.astimezone(IST).replace(tzinfo=None)
 
     if security_id is None:
         instrument_map = _load_instrument_map()
