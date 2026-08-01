@@ -279,12 +279,24 @@ def main():
         avg_r_ci, pf_ci, p_value_mean_ge_0 = bootstrap_ci(sub, args.n_boot, CONFIDENCE, rng)
         observed, null_mean, null_std, permutation_p_value = permutation_test(sub, pooled_r, args.n_perm, rng)
 
+        # NOTE (patched 2026-08-01): verdict now requires BOTH a bootstrap CI
+        # entirely on one side of zero (pattern has real expectancy on its own)
+        # AND permutation_p_value < 0.05 (pattern is distinguishable from the
+        # pooled gate-chain baseline) before claiming SIGNIFICANT. Previously
+        # only the CI was checked, so a pattern like VCP (CI above zero, but
+        # permutation p=0.10) printed "SIGNIFICANT" right next to a p-value
+        # that contradicted it — technically defensible (two different
+        # questions) but misleading given the two numbers sit in the same row.
         if len(sub) < 20:
             verdict = f"TOO THIN TO TEST (N={len(sub)} < min 20) — do not draw conclusions"
+        elif avg_r_ci[0] > 0 and permutation_p_value < 0.05:
+            verdict = "SIGNIFICANT: positive expectancy, distinct from pooled baseline (p<0.05)"
+        elif avg_r_ci[1] < 0 and permutation_p_value < 0.05:
+            verdict = "SIGNIFICANT: negative expectancy, distinct from pooled baseline (p<0.05)"
         elif avg_r_ci[0] > 0:
-            verdict = "SIGNIFICANT: positive expectancy — 95% CI entirely above zero"
+            verdict = "POSITIVE BUT NOT DISTINCT: CI above zero, but indistinguishable from gate-chain baseline (p>=0.05)"
         elif avg_r_ci[1] < 0:
-            verdict = "SIGNIFICANT: negative expectancy — 95% CI entirely below zero"
+            verdict = "NEGATIVE BUT NOT DISTINCT: CI below zero, but indistinguishable from gate-chain baseline (p>=0.05)"
         elif p_value_mean_ge_0 >= 0.90 and avg_r > 0:
             verdict = "LIKELY POSITIVE: CI straddles zero but most resamples stay positive"
         elif p_value_mean_ge_0 <= 0.10 and avg_r < 0:
