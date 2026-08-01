@@ -97,18 +97,26 @@ except ImportError:
 log = logging.getLogger(__name__)
 
 # ── Pattern weights (v6.2 — EVIDENCE-BASED, see docstring) ────────────────────────
-# Rebuilt 2026-07-27 from validation/pipeline_replay_deep.py --all-patterns
-# --fresh (real gate chain, 10yr point-in-time universe, real NSE costs)
-# + validation/monte_carlo_significance.py (bootstrap CI + permutation test
-# vs. the full 6,106-trade pooled pool). See module docstring for the full
-# evidence chain and numbers. Weight is roughly proportional to statistical
-# conviction, not raw avg R alone — VCP is weighted well below its avg R
-# would suggest because its edge, while plausible, is not yet statistically
-# distinguishable from noise (permutation p=0.1455, N=70).
+# Rebuilt 2026-07-27, RE-VERIFIED 2026-08-01 from validation/pipeline_replay_deep.py
+# --all-patterns --fresh (real gate chain, point-in-time universe covering
+# 2019-01-28 to 2026-03-31 across 25 snapshots, real NSE costs) +
+# validation/monte_carlo_significance.py (bootstrap CI + permutation test vs.
+# the full 4,310-trade pooled pool). See module docstring for the full evidence
+# chain and numbers. Note: the 27 Jul run's own results tables were found
+# empty on 01 Aug (root cause: price_history_deep/universe_snapshots had not
+# been loaded into the live DB) — this run is the first one that is actually
+# reproducible from tables that exist. Figures below are near-identical to
+# the original 27 Jul comments (ratios, not raw counts, since the point-in-time
+# universe file used on 01 Aug has 25 snapshots vs. an intended ~47), which
+# supports the original rebuild's conclusions rather than contradicting them.
+# Weight is roughly proportional to statistical conviction, not raw avg R
+# alone — VCP is weighted well below its avg R would suggest because its
+# edge, while plausible (CI entirely above zero), is not yet distinguishable
+# from the gate chain's own baseline edge (permutation p=0.1019, N=50).
 DEFAULT_WEIGHTS = {
-    "Cup & Handle":        20,   # N=1119, net avg R=1.06, PF=2.73, p=0.0000 — strong
-    "Swing High Breakout": 16,   # N=1456, net avg R=0.67, PF=1.98, p=0.0000 — strong
-    "VCP":                  8,   # N=70,   net avg R=0.50, PF=1.78, p=0.1455 — inconclusive, low conviction
+    "Cup & Handle":        20,   # N=847,  net avg R=1.06, PF=2.69, p=0.0000 — strong, verified 01 Aug
+    "Swing High Breakout": 16,   # N=1033, net avg R=0.69, PF=1.98, p=0.0000 — strong, verified 01 Aug
+    "VCP":                  8,   # N=50, net avg R=0.68, PF=2.16, p=0.1019 — positive but not distinct from baseline, verified 01 Aug
 }
 
 # Pruned patterns — detected but weight=0 so never selected as best pattern.
