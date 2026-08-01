@@ -129,7 +129,7 @@ def _print_cost_model() -> None:
     print(f"  Stamp duty (buy only)   : {STAMP_DUTY_RATE*100:.4f}%")
     print(f"  Exchange txn charge     : {EXCHANGE_TXN_RATE*100:.5f}% x2 legs")
     print(f"  SEBI fee                : {SEBI_FEE_RATE*100:.6f}% x2 legs")
-    print(f"  Brokerage               : {BROKERAGE_RATE*100:.4f}% (assumed zero-brokerage delivery)")
+    print(f"  Brokerage               : {BROKERAGE_RATE*100:.4f}% (real Yes Bank contract rate)")
     print(f"  GST                     : {GST_RATE*100:.0f}% on (brokerage + exchange charges)")
     print(f"  DP charge (flat)        : Rs.{DP_CHARGE_INR:.0f}/scrip/sell-day "
           f"(modeled as {DP_CHARGE_INR/ASSUMED_TRADE_VALUE_INR*100:.4f}% "
