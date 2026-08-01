@@ -1,6 +1,6 @@
 """
 Full pipeline trace for POLYCAB in the context of the real universe.
-Run from: C:\Users\User\Desktop\nse_momentum\
+Run from: F:\nse_momentum\
 """
 import warnings
 warnings.filterwarnings('ignore')

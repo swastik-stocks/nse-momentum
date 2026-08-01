@@ -1,6 +1,6 @@
 """
 Shows exactly what the new RiskAgent computes for 10 real stocks.
-Run from: C:\Users\User\Desktop\nse_momentum\
+Run from: F:\nse_momentum\
 """
 import sys, warnings
 warnings.filterwarnings('ignore')
