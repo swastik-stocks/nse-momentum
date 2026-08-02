@@ -195,15 +195,71 @@ def publish_signals(results, regime: str, scan_date: str = None):
     return published
 
 
+def get_holdings() -> dict:
+    """
+    P1-04: read current holdings from Turso, consolidated by symbol across
+    accounts — deliberately mirrors Portfolio Dashboard's own
+    get_consolidated() in db.py, so the scanner sees the same "what do I
+    own" picture the dashboard shows you, not a re-derived one that could
+    drift out of sync.
+
+    Returns {ticker: {"qty": float, "avg_price": float, "company_name": str,
+    "accounts": [str, ...]}}, keyed by ticker (e.g. "RELIANCE.NS") for O(1)
+    lookup during a scan. Empty dict on any failure — never raises, since a
+    holdings-read failure must not be able to break the scan (P1-06).
+    """
+    try:
+        client = get_client()
+    except SystemExit:
+        return {}
+
+    try:
+        rs = client.execute("SELECT symbol, company_name, account, qty, avg_price FROM holdings")
+        rows = rs.rows
+    except Exception as e:
+        print(f"  [turso_sync] get_holdings failed: {e}")
+        return {}
+    finally:
+        client.close()
+
+    by_symbol = {}
+    for symbol, company_name, account, qty, avg_price in rows:
+        if symbol not in by_symbol:
+            by_symbol[symbol] = {"company_name": company_name, "qty": 0.0,
+                                  "total_invested": 0.0, "accounts": []}
+        entry = by_symbol[symbol]
+        entry["qty"] += qty
+        entry["total_invested"] += qty * avg_price
+        entry["accounts"].append(account)
+
+    holdings = {}
+    for symbol, entry in by_symbol.items():
+        weighted_avg = entry["total_invested"] / entry["qty"] if entry["qty"] else 0
+        holdings[symbol] = {
+            "qty": entry["qty"],
+            "avg_price": weighted_avg,
+            "company_name": entry["company_name"],
+            "accounts": sorted(set(entry["accounts"])),
+        }
+    return holdings
+
+
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--test", action="store_true", help="Verify credentials/connection only, no writes")
     ap.add_argument("--init-schema", action="store_true", help="Create the P1-01 bridge tables (idempotent)")
+    ap.add_argument("--holdings", action="store_true", help="Fetch and print current holdings from Turso")
     args = ap.parse_args()
 
     if args.test:
         test_connection()
     elif args.init_schema:
         init_schema()
+    elif args.holdings:
+        h = get_holdings()
+        print(f"{len(h)} distinct tickers held:")
+        for ticker, info in sorted(h.items()):
+            print(f"   {ticker:<15} qty={info['qty']:>8.1f}  avg={info['avg_price']:>9.2f}  "
+                  f"accounts={','.join(info['accounts'])}")
     else:
         print("Nothing to do. Use --test or --init-schema.")
