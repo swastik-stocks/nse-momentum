@@ -79,6 +79,20 @@ def run_scan(dry_run: bool = False, max_tickers: int = None):
     loaded     = sum(1 for df in stock_data.values() if not df.empty)
     log.info(f"      {loaded}/{len(tickers)} tickers loaded")
 
+    # Holdings from Portfolio Dashboard (P1-04, via Turso bridge) — "what do
+    # I currently own". Non-fatal on failure per P1-06: a bridge read must
+    # never be able to break the scan. Not yet acted on anywhere (that's
+    # Phase 2's job) — this just makes it available on data_dict for when
+    # Phase 2 needs it.
+    log.info("\n      Fetching current holdings from Turso (Portfolio Dashboard bridge)...")
+    try:
+        from turso_sync import get_holdings
+        holdings = get_holdings()
+        log.info(f"      {len(holdings)} tickers currently held")
+    except Exception as e:
+        log.warning(f"      Holdings fetch failed (non-fatal): {e}")
+        holdings = {}
+
     # Prepare data_dict for orchestrator
     data_dict = {
         "stock_data":       stock_data,
@@ -90,6 +104,7 @@ def run_scan(dry_run: bool = False, max_tickers: int = None):
         "universe_meta":    {item[0]: item[2] for item in universe},
         "bhavcopy_full_df": bhavcopy_full_df,
         "bhavcopy_cmp_map": bhavcopy_cmp_map,
+        "holdings":         holdings,
     }
 
     #      CMP cross-validation (BUG-5 FIX)
@@ -104,7 +119,7 @@ def run_scan(dry_run: bool = False, max_tickers: int = None):
     log.info(f"      Regime: {orc.regime} ({orc.regime_name}) | "
              f"Breadth: {orc.breadth_score}/10")
 
-    tiers = orc.run_universe(universe, stock_data, delivery)
+    tiers = orc.run_universe(universe, stock_data, delivery, dry_run=dry_run)
     t1, t2, t3, all_r = tiers["tier1"], tiers["tier2"], tiers["tier3"], tiers["all_results"]
 
     log.info(f"\n[5/6] Scoring complete:")

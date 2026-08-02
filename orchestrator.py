@@ -661,7 +661,7 @@ class AgentOrchestrator:
     # ── universe scan (unchanged from v5.2) ──────────────────────────────────
 
     def run_universe(self, universe_items: list,
-                     stock_data: dict, delivery_data: dict) -> dict:
+                     stock_data: dict, delivery_data: dict, dry_run: bool = False) -> dict:
         all_results    = []
         reject_reasons = {}
 
@@ -787,12 +787,19 @@ class AgentOrchestrator:
         # Publish today's T1+T2 picks to Turso (P1-03) — Portfolio Dashboard bridge.
         # Same failure-isolation pattern as auto_log_t1_picks above: never
         # allowed to break the scan or block the evening email (P1-06).
-        try:
-            from turso_sync import publish_signals
-            published = publish_signals(t1_accepted + t2, regime=self.regime)
-            log.info(f"  Published {published} signals to Turso (scanner_signals)")
-        except Exception as e:
-            log.warning(f"  Turso publish failed (non-fatal): {e}")
+        # Skipped entirely on --dry-run, same as the email send below in
+        # scanner.py — a test run must never write test data into the shared
+        # production Turso table Portfolio Dashboard reads from.
+        if dry_run:
+            log.info("  [DRY RUN] Skipping Turso publish (would publish "
+                      f"{len(t1_accepted) + len(t2)} signals)")
+        else:
+            try:
+                from turso_sync import publish_signals
+                published = publish_signals(t1_accepted + t2, regime=self.regime)
+                log.info(f"  Published {published} signals to Turso (scanner_signals)")
+            except Exception as e:
+                log.warning(f"  Turso publish failed (non-fatal): {e}")
 
         # Near-breakout watchlist
         existing      = {r.ticker for r in all_results}
