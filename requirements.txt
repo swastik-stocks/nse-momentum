@@ -12,3 +12,7 @@ lxml
 loguru
 nsepython
 # tvDatafeed installed separately
+
+libsql-client
+
+python-dotenv

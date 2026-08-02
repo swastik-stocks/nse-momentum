@@ -784,6 +784,16 @@ class AgentOrchestrator:
             except Exception as e:
                 log.warning(f"  Auto-log failed: {e}")
 
+        # Publish today's T1+T2 picks to Turso (P1-03) — Portfolio Dashboard bridge.
+        # Same failure-isolation pattern as auto_log_t1_picks above: never
+        # allowed to break the scan or block the evening email (P1-06).
+        try:
+            from turso_sync import publish_signals
+            published = publish_signals(t1_accepted + t2, regime=self.regime)
+            log.info(f"  Published {published} signals to Turso (scanner_signals)")
+        except Exception as e:
+            log.warning(f"  Turso publish failed (non-fatal): {e}")
+
         # Near-breakout watchlist
         existing      = {r.ticker for r in all_results}
         bhavcopy_cmp_map = self.data.get("bhavcopy_cmp_map", {})
