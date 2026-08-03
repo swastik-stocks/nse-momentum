@@ -94,6 +94,19 @@ TRANCHE_RATIOS                       = [1.0, 0.6, 0.4]   # 100/60/40 ladder
 MAX_TRANCHES                         = len(TRANCHE_RATIOS)
 MIN_RRR_FOR_ADD                      = 1.5
 
+# P2-08 GATE — ADD-ON premise is NOT YET VALIDATED. Per the staged research
+# plan (Phase 1: statistical feasibility of "second breakout" as a premise,
+# Phase 2: sensitivity analysis on ladder ratios/timing, Phase 3: full
+# historical simulation of the actual tranche+blended-stop mechanism), real
+# execution stays OFF until Phase 3 confirms AND the accumulating paper
+# stream below doesn't contradict it. While False: recommendations are
+# still COMPUTED and LOGGED (this is the paper stream itself, accumulating
+# real observations for free) but NEVER published to Turso and NEVER
+# surfaced in the email — "observe, don't pay," not "keep running as-is."
+# emailer.py imports this same flag so both places gate off one source of
+# truth. Flip to True only after Phase 3 (see P2-08 in the backlog).
+ADDON_LIVE_EXECUTION = False
+
 # P2-04: blended-cost hard stop uses the SAME per-tier STOP_CAP table
 # (3%/4%/5%) already used everywhere else in this file (compute_holding_stop,
 # RiskAgent) -- NOT the flat 8% used only as an illustrative example in the
@@ -1012,6 +1025,11 @@ class AgentOrchestrator:
                      f"Rs.{current_price:.2f} | blended avg Rs.{blended_before:.2f} -> Rs.{blended_after:.2f} | "
                      f"effective stop Rs.{effective_stop:.2f} | RRR {rrr:.2f}x")
 
+            if not ADDON_LIVE_EXECUTION:
+                log.info(f"  [P2-08] PAPER MODE — {ticker} recommendation logged for research only, "
+                         f"NOT published to Turso, NOT sent in email. See P2-08 in the backlog.")
+                continue
+
             try:
                 published_ok = publish_position_action(
                     ticker=ticker, action_type="ADD_ON", trigger_price=current_price,
@@ -1221,6 +1239,7 @@ class AgentOrchestrator:
             "all_results":        all_results,
             "held_status":        held_status,
             "add_on_candidates":  add_on_candidates,
+            "addon_live_execution": ADDON_LIVE_EXECUTION,
             "exit_alerts":        exit_alerts,
             "trim_signals":       trim_signals,
             "regime":             self.regime,

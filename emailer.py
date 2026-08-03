@@ -123,6 +123,15 @@ def send_email_report(tiers: dict):
     exit_alerts  = tiers.get("exit_alerts", [])
     trim_signals = tiers.get("trim_signals", [])
     add_on       = tiers.get("add_on_candidates", [])
+    # P2-08 gate: ADD-ON premise not yet validated (staged research plan --
+    # see orchestrator.py's ADDON_LIVE_EXECUTION). While False, recommendations
+    # are computed and logged (the paper stream itself) but must never reach
+    # the email -- "observe, don't pay." Read from tiers, not imported from
+    # orchestrator.py, to avoid coupling this file to that one's heavy agent
+    # imports; orchestrator.py is the single source of truth for the flag's
+    # actual value.
+    if not tiers.get("addon_live_execution", False):
+        add_on = []
 
     rlbl, rcol, rbg, rborder, rnote = REGIME_META.get(regime, REGIME_META["C"])
     date_str = datetime.today().strftime("%d %b %Y")
