@@ -83,6 +83,23 @@ T2_CAP = 8
 # Sector cap — max T1 picks in a single sector
 SECTOR_T1_CAP = 3
 
+# P2-03: Tranche sizing ladder for ADD-ONs to held positions, conviction-based.
+# Change these two numbers if capital or risk appetite changes -- everything
+# else (ratios, per-tranche budget) derives from them, same "one constant,
+# one edit" pattern as T2_CAP/SECTOR_T1_CAP above.
+MAX_POSITION_HIGH_CONVICTION_INR     = 100_000   # StockResult.confidence_pct >= threshold below
+MAX_POSITION_MODERATE_CONVICTION_INR = 50_000    # below threshold
+CONVICTION_HIGH_THRESHOLD_PCT        = 65.0
+TRANCHE_RATIOS                       = [1.0, 0.6, 0.4]   # 100/60/40 ladder
+MAX_TRANCHES                         = len(TRANCHE_RATIOS)
+MIN_RRR_FOR_ADD                      = 1.5
+
+# P2-04: blended-cost hard stop uses the SAME per-tier STOP_CAP table
+# (3%/4%/5%) already used everywhere else in this file (compute_holding_stop,
+# RiskAgent) -- NOT the flat 8% used only as an illustrative example in the
+# backlog's own P2-04 rationale. Consistency with the rest of today's build
+# matters more here than matching that one example number exactly.
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Circuit limit pre-filter  (unchanged)
@@ -896,9 +913,6 @@ class AgentOrchestrator:
         # held stock clearing the gate is indistinguishable from any other
         # day's Tier 1/2 pick in the output -- this makes "you already own
         # this, and it just broke out again" visible as its own category.
-        # NOTE: sizing (P2-03), blended-cost stop recompute (P2-04 -- do not
-        # skip per backlog), and actually alerting on this (P2-07) are all
-        # separate, later steps. This only identifies candidates.
         add_on_candidates = [
             h for h in held_status
             if h["status"] == "CLEARED_GATE"
@@ -914,6 +928,102 @@ class AgentOrchestrator:
                 log.info(f"    {h['ticker']:<15} Tier {r.tier} | score {r.total_score} | "
                          f"RVOL {r.rvol:.1f}x | RS {r.rs_percentile:.0f}th | pattern {r.pattern or '(none)'} | "
                          f"entry {r.entry:.1f} SL {r.stop_loss:.1f}")
+
+        # P2-03/P2-04: for each ADD-ON candidate, compute tranche sizing
+        # (conviction-based max position, decreasing 100/60/40 ladder) and
+        # recompute the effective stop against the POST-add blended average
+        # cost -- never the original entry #1 -- so a stop that started 3-5%
+        # below entry #1 can't silently become 15-25% below blended average
+        # after multiple adds (the exact failure mode the backlog flags as
+        # the single most important risk control in Phase 2). Skipped
+        # entirely on --dry-run: recommendations must never be written to
+        # production Turso from a test run, same principle as P1-03's fix.
+        for h in add_on_candidates:
+            h["add_on_recommendation"] = None
+            r = h["result"]
+            ticker = h["ticker"]
+            hold_info = holdings_data.get(ticker)
+            ts = h.get("technical_stop")
+            if not hold_info or not ts:
+                continue
+
+            if dry_run:
+                continue
+
+            try:
+                from turso_sync import get_tranche_count, publish_position_action
+                tranche_number = get_tranche_count(ticker) + 1
+            except Exception as e:
+                log.warning(f"  [P2-03] Tranche lookup failed for {ticker} (non-fatal): {e}")
+                continue
+
+            if tranche_number > MAX_TRANCHES:
+                log.info(f"  [P2-03] {ticker}: already at max {MAX_TRANCHES} tranches — no further adds")
+                continue
+
+            conviction_high = r.confidence_pct >= CONVICTION_HIGH_THRESHOLD_PCT
+            max_position = MAX_POSITION_HIGH_CONVICTION_INR if conviction_high else MAX_POSITION_MODERATE_CONVICTION_INR
+            ratio = TRANCHE_RATIOS[tranche_number - 1]
+            tranche_budget = max_position * (ratio / sum(TRANCHE_RATIOS))
+
+            current_price = ts["current_price"]
+            recommended_qty = int(tranche_budget // current_price) if current_price > 0 else 0
+            if recommended_qty < 1:
+                log.info(f"  [P2-03] {ticker}: tranche {tranche_number} budget "
+                         f"Rs.{tranche_budget:,.0f} can't buy even 1 share at Rs.{current_price:.2f} — skipped")
+                continue
+            recommended_qty_inr = recommended_qty * current_price
+
+            existing_qty   = hold_info["qty"]
+            existing_avg   = hold_info["avg_price"]
+            blended_before = existing_avg
+            blended_after  = ((existing_qty * existing_avg) + (recommended_qty * current_price)) / (existing_qty + recommended_qty)
+
+            cap = STOP_CAP.get(r.universe, 0.03)
+            hard_stop_from_blended = blended_after * (1 - cap)
+            effective_stop = max(hard_stop_from_blended, ts["stop"])
+
+            if effective_stop >= current_price:
+                log.info(f"  [P2-03] {ticker}: computed stop {effective_stop:.2f} >= current price "
+                         f"{current_price:.2f} — skipped (bad math or extreme volatility)")
+                continue
+
+            risk = current_price - effective_stop
+            reward = r.target1 - current_price
+            rrr = round(reward / risk, 2) if risk > 0 else 0.0
+            if rrr < MIN_RRR_FOR_ADD:
+                log.info(f"  [P2-03] {ticker}: RRR {rrr:.2f}x below minimum {MIN_RRR_FOR_ADD}x for an add — skipped")
+                continue
+
+            recommendation = {
+                "tranche_number":       tranche_number,
+                "conviction":           "HIGH" if conviction_high else "MODERATE",
+                "recommended_qty":      recommended_qty,
+                "recommended_qty_inr":  round(recommended_qty_inr, 2),
+                "current_price":        current_price,
+                "blended_avg_before":   round(blended_before, 2),
+                "blended_avg_after":    round(blended_after, 2),
+                "effective_stop":       round(effective_stop, 2),
+                "rrr":                  rrr,
+            }
+            h["add_on_recommendation"] = recommendation
+            log.info(f"  [P2-04] {ticker}: tranche {tranche_number}/{MAX_TRANCHES} ({recommendation['conviction']} "
+                     f"conviction) — buy {recommended_qty} shares (Rs.{recommended_qty_inr:,.0f}) @ "
+                     f"Rs.{current_price:.2f} | blended avg Rs.{blended_before:.2f} -> Rs.{blended_after:.2f} | "
+                     f"effective stop Rs.{effective_stop:.2f} | RRR {rrr:.2f}x")
+
+            try:
+                published_ok = publish_position_action(
+                    ticker=ticker, action_type="ADD_ON", trigger_price=current_price,
+                    blended_cost=blended_after, new_stop=effective_stop,
+                    reason=f"Fresh breakout, RVOL {r.rvol:.1f}x, RS {r.rs_percentile:.0f}th, {r.pattern}",
+                    tranche_number=tranche_number, recommended_qty=recommended_qty,
+                    recommended_qty_inr=recommendation["recommended_qty_inr"],
+                )
+                if not published_ok:
+                    log.warning(f"  [P2-03/04] Publish returned False for {ticker} (non-fatal)")
+            except Exception as e:
+                log.warning(f"  [P2-03/04] Publish failed for {ticker} (non-fatal): {e}")
 
         # Rejection summary
         if reject_reasons:

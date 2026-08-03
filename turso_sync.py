@@ -116,6 +116,29 @@ def get_client():
     return libsql_client.create_client_sync(url, auth_token=TURSO_TOKEN)
 
 
+def migrate_position_actions_columns(client):
+    """
+    P2-03/P2-04: position_actions (created by P1-01) doesn't yet have
+    tranche-sizing columns. Rather than define a second, conflicting table
+    (a real mistake worth avoiding), extend the existing one -- reusing
+    trigger_price/blended_cost/new_stop/reason for concepts that already
+    map cleanly, adding only the 3 genuinely new columns. Same
+    check-before-ALTER pattern trade_logger.py already uses elsewhere in
+    this codebase (SQLite has no "ADD COLUMN IF NOT EXISTS").
+    """
+    rs = client.execute("PRAGMA table_info(position_actions)")
+    existing = {row[1] for row in rs.rows}
+    new_columns = {
+        "tranche_number":          "INTEGER",
+        "recommended_qty":         "INTEGER",
+        "recommended_qty_inr":     "REAL",
+    }
+    for col_name, col_type in new_columns.items():
+        if col_name not in existing:
+            client.execute(f"ALTER TABLE position_actions ADD COLUMN {col_name} {col_type}")
+            print(f"  [turso_sync] Added column position_actions.{col_name}")
+
+
 def test_connection():
     client = get_client()
     try:
@@ -132,6 +155,7 @@ def init_schema():
     try:
         for stmt in SCHEMA_STATEMENTS:
             client.execute(stmt)
+        migrate_position_actions_columns(client)
         print("Schema created (or already existed) — scanner_signals, position_actions, "
               "sector_breadth, industry_breadth.")
     finally:
@@ -159,7 +183,11 @@ def publish_signals(results, regime: str, scan_date: str = None):
 
     scan_date = scan_date or _dt.date.today().isoformat()
     now = _dt.datetime.now().isoformat()
-    client = get_client()
+    try:
+        client = get_client()
+    except SystemExit as e:
+        print(f"  [turso_sync] publish_signals skipped — {e}")
+        return 0
     published = 0
     try:
         for r in results:
@@ -244,17 +272,101 @@ def get_holdings() -> dict:
     return holdings
 
 
+def get_tranche_count(ticker: str) -> int:
+    """
+    P2-03: how many ADD_ON tranches have already been recommended for this
+    ticker, so a fresh candidate knows whether it's tranche 1, 2, or 3 (and
+    whether MAX_TRANCHES has already been hit). Counts existing rows in
+    position_actions with action_type='ADD_ON' for this ticker. Returns 0
+    (never raises) on any failure -- a read failure here should block a new
+    recommendation from firing, not crash the scan; treating it as "no
+    prior tranches" is the conservative choice (worst case: recommends
+    tranche 1 again, which the UNIQUE(ticker, action_date, action_type)
+    constraint plus daily cadence makes harmless, rather than silently
+    skipping a real add-on opportunity).
+    """
+    try:
+        client = get_client()
+    except SystemExit:
+        return 0
+    try:
+        rs = client.execute(
+            "SELECT COUNT(*) FROM position_actions WHERE ticker = ? AND action_type = 'ADD_ON'",
+            [ticker],
+        )
+        return rs.rows[0][0] if rs.rows else 0
+    except Exception as e:
+        print(f"  [turso_sync] get_tranche_count failed for {ticker}: {e}")
+        return 0
+    finally:
+        client.close()
+
+
+def publish_position_action(ticker: str, action_type: str, trigger_price: float,
+                             blended_cost: float, new_stop: float, reason: str,
+                             tranche_number: int = None, recommended_qty: int = None,
+                             recommended_qty_inr: float = None, action_date: str = None):
+    """
+    P2-03/P2-04: publish a position action (ADD_ON/EXIT/TRIM) to the
+    existing position_actions table (schema from P1-01, tranche columns
+    added by migrate_position_actions_columns above). Same failure
+    isolation as publish_signals/get_holdings -- never raises past the
+    caller, returns False on failure so the scan continues regardless.
+    """
+    import datetime as _dt
+    action_date = action_date or _dt.date.today().isoformat()
+    now = _dt.datetime.now().isoformat()
+    try:
+        client = get_client()
+    except SystemExit as e:
+        print(f"  [turso_sync] publish_position_action skipped — {e}")
+        return False
+    try:
+        client.execute(
+            """
+            INSERT INTO position_actions (
+                ticker, action_date, action_type, reason, trigger_price,
+                blended_cost, new_stop, published_at, tranche_number,
+                recommended_qty, recommended_qty_inr
+            ) VALUES (?,?,?,?,?,?,?,?,?,?,?)
+            ON CONFLICT(ticker, action_date, action_type) DO UPDATE SET
+                reason=excluded.reason, trigger_price=excluded.trigger_price,
+                blended_cost=excluded.blended_cost, new_stop=excluded.new_stop,
+                published_at=excluded.published_at, tranche_number=excluded.tranche_number,
+                recommended_qty=excluded.recommended_qty,
+                recommended_qty_inr=excluded.recommended_qty_inr
+            """,
+            [ticker, action_date, action_type, reason, trigger_price,
+             blended_cost, new_stop, now, tranche_number, recommended_qty,
+             recommended_qty_inr],
+        )
+        return True
+    except Exception as e:
+        print(f"  [turso_sync] Failed to publish position_action for {ticker}: {e}")
+        return False
+    finally:
+        client.close()
+
+
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--test", action="store_true", help="Verify credentials/connection only, no writes")
     ap.add_argument("--init-schema", action="store_true", help="Create the P1-01 bridge tables (idempotent)")
     ap.add_argument("--holdings", action="store_true", help="Fetch and print current holdings from Turso")
+    ap.add_argument("--migrate", action="store_true", help="Run position_actions column migration only (P2-03/04)")
     args = ap.parse_args()
 
     if args.test:
         test_connection()
     elif args.init_schema:
         init_schema()
+    elif args.migrate:
+        client = get_client()
+        try:
+            migrate_position_actions_columns(client)
+            print("Migration complete.")
+        finally:
+            client.close()
     elif args.holdings:
         h = get_holdings()
         print(f"{len(h)} distinct tickers held:")
