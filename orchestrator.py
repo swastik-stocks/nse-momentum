@@ -776,6 +776,48 @@ class AgentOrchestrator:
         for symbol in held_symbols - universe_tickers:
             held_status.append({"ticker": symbol, "status": "NOT_IN_UNIVERSE", "result": None, "technical_stop": None})
 
+        # P2-05: EXIT check. Rule: effective_stop = max(hard_stop_from_your_
+        # actual_avg_price, today's technical_stop) -- same ratchet-only
+        # philosophy day5_stop_ratchet.py already applies to trades_v4
+        # positions (stop only ever moves up, never loosens), extended here
+        # to ALL held stocks using your real avg_price from Portfolio
+        # Dashboard, not just scanner-originated trades. hard_stop uses the
+        # same per-tier STOP_CAP as everything else in this file, so a
+        # holding can never be told to accept a worse loss than the tier's
+        # normal risk cap from what you actually paid.
+        holdings_data = self.data.get("holdings", {})
+        for h in held_status:
+            h["exit_check"] = None
+            ts = h.get("technical_stop")
+            if not ts:
+                continue
+            hold_info = holdings_data.get(h["ticker"])
+            if not hold_info:
+                continue
+            avg_price   = hold_info.get("avg_price", 0)
+            uni         = h["result"].universe if h.get("result") else "LARGE"
+            cap         = STOP_CAP.get(uni, 0.03)
+            hard_stop   = avg_price * (1 - cap) if avg_price > 0 else 0
+            eff_stop    = max(hard_stop, ts["stop"])
+            eff_source  = "ENTRY" if hard_stop >= ts["stop"] else "TECHNICAL"
+            breached    = ts["current_price"] < eff_stop
+            h["exit_check"] = {
+                "avg_price":      round(avg_price, 2),
+                "hard_stop":      round(hard_stop, 2),
+                "effective_stop": round(eff_stop, 2),
+                "source":         eff_source,
+                "breached":       breached,
+            }
+
+        exit_alerts = [h for h in held_status if h.get("exit_check") and h["exit_check"]["breached"]]
+        if exit_alerts:
+            log.warning(f"  [P2-05] {len(exit_alerts)} EXIT ALERT(S) — price below effective stop:")
+            for h in exit_alerts:
+                ec = h["exit_check"]
+                log.warning(f"    {h['ticker']:<15} price {h['technical_stop']['current_price']:.2f} < "
+                            f"stop {ec['effective_stop']:.2f} ({ec['source']}) | "
+                            f"avg cost {ec['avg_price']:.2f}")
+
         if held_status:
             n_cleared        = sum(1 for h in held_status if h["status"] == "CLEARED_GATE")
             n_rejected        = sum(1 for h in held_status if h["status"] == "REJECTED")
@@ -1026,6 +1068,7 @@ class AgentOrchestrator:
             "all_results":        all_results,
             "held_status":        held_status,
             "add_on_candidates":  add_on_candidates,
+            "exit_alerts":        exit_alerts,
             "regime":             self.regime,
             "regime_name":        self.regime_name,
             "regime_confidence":  self.regime_confidence,
