@@ -665,13 +665,31 @@ class AgentOrchestrator:
         all_results    = []
         reject_reasons = {}
 
+        # P2-01: held stocks get full-detail tracking regardless of whether
+        # they clear the gate chain — a rejected StockResult was previously
+        # discarded entirely (only its reject_reason string was tallied into
+        # the summary counts below). For a held stock, that detail is exactly
+        # what a future EXIT/TRIM alert needs, so we keep it here. This does
+        # NOT decide ADD-ON/EXIT/TRIM/HOLD yet -- that's P2-02/P2-05/P2-06.
+        held_symbols     = set(self.data.get("holdings", {}).keys())
+        held_status: List[dict] = []
+        universe_tickers = {item[0] for item in universe_items}
+
         for item in universe_items:
             ticker, name, sector, universe = item
             df = stock_data.get(ticker, pd.DataFrame())
             if df.empty:
+                if ticker in held_symbols:
+                    held_status.append({"ticker": ticker, "status": "NO_PRICE_DATA", "result": None})
                 continue
             try:
                 result = self.run(ticker, name, sector, df, delivery_data, universe)
+                if ticker in held_symbols:
+                    held_status.append({
+                        "ticker": ticker,
+                        "status": "REJECTED" if result.rejected else "CLEARED_GATE",
+                        "result": result,
+                    })
                 if not result.rejected:
                     all_results.append(result)
                 else:
@@ -681,6 +699,64 @@ class AgentOrchestrator:
                 log.warning(f"{ticker} CRASH: {type(e).__name__}: {e}")
                 key = f"Exception: {type(e).__name__}"
                 reject_reasons[key] = reject_reasons.get(key, 0) + 1
+                if ticker in held_symbols:
+                    held_status.append({"ticker": ticker, "status": "CRASH", "result": None})
+
+        # P2-01: held stocks with no universe entry at all (e.g. recent IPOs
+        # or ETFs not in nse_universe.py) -- flag explicitly rather than let
+        # them silently have no status.
+        for symbol in held_symbols - universe_tickers:
+            held_status.append({"ticker": symbol, "status": "NOT_IN_UNIVERSE", "result": None})
+
+        if held_status:
+            n_cleared        = sum(1 for h in held_status if h["status"] == "CLEARED_GATE")
+            n_rejected        = sum(1 for h in held_status if h["status"] == "REJECTED")
+            n_no_data         = sum(1 for h in held_status if h["status"] == "NO_PRICE_DATA")
+            n_not_in_universe = sum(1 for h in held_status if h["status"] == "NOT_IN_UNIVERSE")
+            n_crash           = sum(1 for h in held_status if h["status"] == "CRASH")
+            log.info(f"  [P2-01] Held stocks evaluated: {len(held_status)} total | "
+                     f"{n_cleared} cleared gate | {n_rejected} rejected | "
+                     f"{n_no_data} no price data | {n_not_in_universe} not in universe"
+                     + (f" | {n_crash} crashed" if n_crash else ""))
+            for h in sorted(held_status, key=lambda x: x["ticker"]):
+                if h["status"] == "NOT_IN_UNIVERSE":
+                    log.warning(f"    {h['ticker']:<15} NOT IN UNIVERSE — not in nse_universe.py, cannot evaluate")
+                elif h["status"] == "NO_PRICE_DATA":
+                    log.warning(f"    {h['ticker']:<15} NO PRICE DATA")
+                elif h["status"] == "CRASH":
+                    log.warning(f"    {h['ticker']:<15} CRASHED during evaluation — see warning above")
+                elif h["status"] == "REJECTED":
+                    log.info(f"    {h['ticker']:<15} rejected — {h['result'].reject_reason}")
+                else:
+                    log.info(f"    {h['ticker']:<15} cleared gate — score {h['result'].total_score}, "
+                             f"tier {h['result'].tier}, pattern {h['result'].pattern or '(none)'}")
+
+        # P2-02: ADD-ON candidates — held stocks that cleared the gate chain
+        # (Tier 1 or 2) AND show a genuine fresh-breakout signature: RVOL and
+        # RS thresholds reused from _why_working()'s existing "institutional
+        # activity" (RVOL >= 1.5x) and "outperforming" (RS >= 70th) cutoffs,
+        # rather than inventing new numbers. Without this explicit flag, a
+        # held stock clearing the gate is indistinguishable from any other
+        # day's Tier 1/2 pick in the output -- this makes "you already own
+        # this, and it just broke out again" visible as its own category.
+        # NOTE: sizing (P2-03), blended-cost stop recompute (P2-04 -- do not
+        # skip per backlog), and actually alerting on this (P2-07) are all
+        # separate, later steps. This only identifies candidates.
+        add_on_candidates = [
+            h for h in held_status
+            if h["status"] == "CLEARED_GATE"
+            and h["result"].tier in (1, 2)
+            and h["result"].rvol >= 1.5
+            and h["result"].rs_percentile >= 70
+        ]
+        if add_on_candidates:
+            log.info(f"  [P2-02] {len(add_on_candidates)} ADD-ON candidate(s) — held stock(s) with a "
+                     f"fresh breakout (RVOL>=1.5x, RS>=70th):")
+            for h in add_on_candidates:
+                r = h["result"]
+                log.info(f"    {h['ticker']:<15} Tier {r.tier} | score {r.total_score} | "
+                         f"RVOL {r.rvol:.1f}x | RS {r.rs_percentile:.0f}th | pattern {r.pattern or '(none)'} | "
+                         f"entry {r.entry:.1f} SL {r.stop_loss:.1f}")
 
         # Rejection summary
         if reject_reasons:
@@ -876,6 +952,8 @@ class AgentOrchestrator:
             "near_breakout":      near_breakout,
             "defensive_watchlist": defensive_watchlist,
             "all_results":        all_results,
+            "held_status":        held_status,
+            "add_on_candidates":  add_on_candidates,
             "regime":             self.regime,
             "regime_name":        self.regime_name,
             "regime_confidence":  self.regime_confidence,
