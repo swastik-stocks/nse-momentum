@@ -818,6 +818,49 @@ class AgentOrchestrator:
                             f"stop {ec['effective_stop']:.2f} ({ec['source']}) | "
                             f"avg cost {ec['avg_price']:.2f}")
 
+        # P2-06: TRIM signal -- RS percentile computed INDEPENDENTLY of
+        # pattern detection via RSAgent directly (needs only price history +
+        # the pre-computed universe rank tables), NOT read from the
+        # StockResult's rs_percentile field. That field defaults to 0.0 for
+        # any stock rejected before Gate 2 (pattern) -- which was 8 of 11
+        # held stocks today -- so reading it directly would misclassify
+        # "never computed" as "0th percentile, terrible," which is wrong.
+        # EXIT takes priority: a stock already breached is not also flagged
+        # TRIM (mutually exclusive branches per the backlog's own decision
+        # tree, not stacked). Threshold: RS < 40th percentile -- well below
+        # the 70th-percentile "outperforming" bar used elsewhere (P2-02's
+        # ADD-ON, _why_working), so TRIM and ADD-ON can never overlap.
+        exit_tickers = {h["ticker"] for h in exit_alerts}
+        trim_signals = []
+        for h in held_status:
+            h["trim_check"] = None
+            ticker = h["ticker"]
+            if ticker in exit_tickers or h["status"] not in ("REJECTED", "CLEARED_GATE"):
+                continue
+            df = stock_data.get(ticker, pd.DataFrame())
+            if df.empty:
+                continue
+            try:
+                rsa = RSAgent(
+                    df, self.data.get("nifty50_data", pd.DataFrame()),
+                    universe_ranks=self.universe_rs_ranks,
+                    sector_ranks=self.sector_rs_ranks,
+                    ticker=ticker,
+                )
+                rs_pct = rsa.get_percentile()
+            except Exception as e:
+                log.debug(f"  [P2-06] RS computation failed for {ticker}: {e}")
+                continue
+            h["trim_check"] = {"rs_percentile": rs_pct}
+            if rs_pct < 40:
+                trim_signals.append({"ticker": ticker, "rs_percentile": rs_pct})
+
+        if trim_signals:
+            log.info(f"  [P2-06] {len(trim_signals)} TRIM signal(s) — RS deteriorating (< 40th pct), "
+                     f"not yet stopped out:")
+            for t in sorted(trim_signals, key=lambda x: x["rs_percentile"]):
+                log.info(f"    {t['ticker']:<15} RS {t['rs_percentile']:.0f}th percentile")
+
         if held_status:
             n_cleared        = sum(1 for h in held_status if h["status"] == "CLEARED_GATE")
             n_rejected        = sum(1 for h in held_status if h["status"] == "REJECTED")
@@ -1069,6 +1112,7 @@ class AgentOrchestrator:
             "held_status":        held_status,
             "add_on_candidates":  add_on_candidates,
             "exit_alerts":        exit_alerts,
+            "trim_signals":       trim_signals,
             "regime":             self.regime,
             "regime_name":        self.regime_name,
             "regime_confidence":  self.regime_confidence,
