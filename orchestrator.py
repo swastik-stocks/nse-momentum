@@ -59,7 +59,7 @@ from agents.market_breadth_agent       import (
     print_breadth_dashboard,
 )
 from agents.sector_agent               import SectorAgent
-from agents.risk_agent                 import RiskAgent
+from agents.risk_agent               import RiskAgent, STOP_CAP
 from agents.liquidity_agent            import LiquidityAgent
 from agents.conviction_agent           import ConvictionAgent
 from agents.fundamental_proxy_agent    import FundamentalProxyAgent
@@ -184,6 +184,68 @@ class StockResult:
     breadth_source:       str   = ""       # NSE_LIVE_API / BHAVCOPY_FULL / DEFAULT
     weekly_trend_bonus:   float = 0.0
     weekly_trend_weeks:   int   = 0
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# P2-05 support: technical stop-loss for an EXISTING holding
+# ─────────────────────────────────────────────────────────────────────────────
+
+def compute_holding_stop(df: pd.DataFrame, universe: str = "LARGE") -> dict:
+    """
+    Reuses RiskAgent's exact three-candidate stop methodology (EMA21 / 10-day
+    low / ATR-based, whichever is tightest) and its per-tier STOP_CAP table --
+    same risk philosophy as fresh entries. The one deliberate difference:
+    anchored to today's closing price instead of a breakout entry zone, since
+    an existing holding has no "entry" decision left to make -- only "where's
+    my protective stop from here." Does NOT reuse RiskAgent's target/R:R
+    gating -- that logic is about whether a NEW trade is worth taking, not
+    about protecting a position you already hold.
+
+    Returns None if there isn't enough price history to compute (mirrors
+    RiskAgent's own "No valid breakout level" / "ATR calculation failed"
+    guards) -- callers must handle that, same as any other missing-data case
+    in this pipeline.
+    """
+    if df.empty or len(df) < 15:
+        return None
+
+    high  = df["High"].squeeze().to_numpy(dtype=float)
+    low   = df["Low"].squeeze().to_numpy(dtype=float)
+    close = df["Close"].squeeze().to_numpy(dtype=float)
+    price = close[-1]
+
+    atr = RiskAgent._atr(high, low, close, 14)
+    if atr <= 0:
+        return None
+
+    ema21    = float(pd.Series(close).ewm(span=21, adjust=False).mean().iloc[-1])
+    stop_ema = ema21 * 0.993
+
+    lookback_stop = min(len(low), 10)
+    stop_10d = float(np.min(low[-lookback_stop:])) * 0.997
+
+    atr_mult = {"LARGE": 1.5, "MID": 1.8, "SMALL": 2.0}.get(universe, 1.5)
+    stop_atr = price - atr_mult * atr
+
+    candidates = [(s, label) for s, label in
+                  [(stop_ema, "EMA21"), (stop_10d, "10D_LOW"), (stop_atr, "ATR")]
+                  if 0 < s < price]
+    if not candidates:
+        return None
+    stop, method = max(candidates, key=lambda x: x[0])
+
+    cap       = STOP_CAP.get(universe, 0.03)
+    cap_price = price * (1 - cap)
+    if stop < cap_price:
+        stop, method = cap_price, "CAPPED"
+    stop = max(stop, 0.01)
+
+    return {
+        "current_price": round(price, 2),
+        "stop":          round(stop, 2),
+        "stop_pct":      round((price - stop) / price * 100, 1),
+        "method":        method,
+    }
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -680,15 +742,21 @@ class AgentOrchestrator:
             df = stock_data.get(ticker, pd.DataFrame())
             if df.empty:
                 if ticker in held_symbols:
-                    held_status.append({"ticker": ticker, "status": "NO_PRICE_DATA", "result": None})
+                    held_status.append({"ticker": ticker, "status": "NO_PRICE_DATA", "result": None, "technical_stop": None})
                 continue
             try:
                 result = self.run(ticker, name, sector, df, delivery_data, universe)
                 if ticker in held_symbols:
+                    # P2-05 support: compute a real technical stop for this
+                    # holding regardless of today's gate outcome -- most
+                    # held stocks get REJECTED at "No pattern detected"
+                    # before RiskAgent ever runs, so without this an EXIT
+                    # alert would have nothing to check a breach against.
                     held_status.append({
                         "ticker": ticker,
                         "status": "REJECTED" if result.rejected else "CLEARED_GATE",
                         "result": result,
+                        "technical_stop": compute_holding_stop(df, universe),
                     })
                 if not result.rejected:
                     all_results.append(result)
@@ -700,13 +768,13 @@ class AgentOrchestrator:
                 key = f"Exception: {type(e).__name__}"
                 reject_reasons[key] = reject_reasons.get(key, 0) + 1
                 if ticker in held_symbols:
-                    held_status.append({"ticker": ticker, "status": "CRASH", "result": None})
+                    held_status.append({"ticker": ticker, "status": "CRASH", "result": None, "technical_stop": None})
 
         # P2-01: held stocks with no universe entry at all (e.g. recent IPOs
         # or ETFs not in nse_universe.py) -- flag explicitly rather than let
         # them silently have no status.
         for symbol in held_symbols - universe_tickers:
-            held_status.append({"ticker": symbol, "status": "NOT_IN_UNIVERSE", "result": None})
+            held_status.append({"ticker": symbol, "status": "NOT_IN_UNIVERSE", "result": None, "technical_stop": None})
 
         if held_status:
             n_cleared        = sum(1 for h in held_status if h["status"] == "CLEARED_GATE")
@@ -726,10 +794,14 @@ class AgentOrchestrator:
                 elif h["status"] == "CRASH":
                     log.warning(f"    {h['ticker']:<15} CRASHED during evaluation — see warning above")
                 elif h["status"] == "REJECTED":
-                    log.info(f"    {h['ticker']:<15} rejected — {h['result'].reject_reason}")
+                    ts = h.get("technical_stop")
+                    stop_note = f" | stop {ts['stop']:.2f} ({ts['stop_pct']:.1f}% via {ts['method']})" if ts else " | stop N/A"
+                    log.info(f"    {h['ticker']:<15} rejected — {h['result'].reject_reason}{stop_note}")
                 else:
+                    ts = h.get("technical_stop")
+                    stop_note = f" | stop {ts['stop']:.2f} ({ts['stop_pct']:.1f}% via {ts['method']})" if ts else " | stop N/A"
                     log.info(f"    {h['ticker']:<15} cleared gate — score {h['result'].total_score}, "
-                             f"tier {h['result'].tier}, pattern {h['result'].pattern or '(none)'}")
+                             f"tier {h['result'].tier}, pattern {h['result'].pattern or '(none)'}{stop_note}")
 
         # P2-02: ADD-ON candidates — held stocks that cleared the gate chain
         # (Tier 1 or 2) AND show a genuine fresh-breakout signature: RVOL and
