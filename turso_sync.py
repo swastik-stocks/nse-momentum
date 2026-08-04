@@ -348,7 +348,111 @@ def publish_position_action(ticker: str, action_type: str, trigger_price: float,
         client.close()
 
 
-if __name__ == "__main__":
+def publish_holding_stops(held_status: list, dry_run: bool = False) -> int:
+    """
+    P4-03/P4-04: publish each held stock's technical stop (computed by
+    compute_holding_stop() in orchestrator.py) to the existing
+    position_actions table as action_type='HOLD_STOP'. One row per ticker
+    per scan_date (upserts on UNIQUE(ticker, action_date, action_type)), so
+    the dashboard always sees the LATEST stop for each holding without
+    accumulating historical noise.
+
+    Uses existing position_actions columns:
+      ticker          -- the holding
+      action_date     -- today's scan date
+      action_type     -- 'HOLD_STOP' (new, distinct from ADD_ON/EXIT/TRIM)
+      trigger_price   -- current price at scan time
+      new_stop        -- the computed technical stop
+      blended_cost    -- avg_price from holdings (context for heat calc)
+      reason          -- stop method (EMA21/10D_LOW/ATR/CAPPED)
+
+    Never raises past the caller (P1-06 isolation). Returns count published.
+    Skipped entirely on dry_run, same as publish_signals/publish_position_action.
+    """
+    if dry_run or not held_status:
+        return 0
+    import datetime as _dt
+    action_date = _dt.date.today().isoformat()
+    publishable = [
+        h for h in held_status
+        if h.get("technical_stop") and h.get("exit_check")
+    ]
+    if not publishable:
+        return 0
+    try:
+        client = get_client()
+    except SystemExit as e:
+        print(f"  [turso_sync] publish_holding_stops skipped — {e}")
+        return 0
+    published = 0
+    now = _dt.datetime.now().isoformat()
+    try:
+        for h in publishable:
+            ts = h["technical_stop"]
+            ec = h["exit_check"]
+            try:
+                client.execute(
+                    """
+                    INSERT INTO position_actions (
+                        ticker, action_date, action_type, reason,
+                        trigger_price, blended_cost, new_stop, published_at
+                    ) VALUES (?,?,?,?,?,?,?,?)
+                    ON CONFLICT(ticker, action_date, action_type) DO UPDATE SET
+                        reason=excluded.reason,
+                        trigger_price=excluded.trigger_price,
+                        blended_cost=excluded.blended_cost,
+                        new_stop=excluded.new_stop,
+                        published_at=excluded.published_at
+                    """,
+                    [h["ticker"], action_date, "HOLD_STOP",
+                     ts.get("method", ""),
+                     ts["current_price"], ec["avg_price"],
+                     ec["effective_stop"], now]
+                )
+                published += 1
+            except Exception as e:
+                print(f"  [turso_sync] Failed to publish HOLD_STOP for {h['ticker']}: {e}")
+    finally:
+        client.close()
+    return published
+
+
+def get_holding_stops() -> dict:
+    """
+    P4-03/P4-04: read the latest HOLD_STOP rows from position_actions.
+    Returns {ticker: {current_price, stop, avg_price, method, action_date}}.
+    Returns {} gracefully on any failure — a bridge read must never break
+    the dashboard (P1-06).
+    """
+    try:
+        client = get_client()
+    except SystemExit:
+        return {}
+    try:
+        rs = client.execute("""
+            SELECT ticker, trigger_price, new_stop, blended_cost, reason, action_date
+            FROM position_actions
+            WHERE action_type = 'HOLD_STOP'
+            AND action_date = (
+                SELECT MAX(action_date) FROM position_actions
+                WHERE action_type = 'HOLD_STOP'
+            )
+        """)
+        return {
+            row[0]: {
+                "current_price": row[1],
+                "stop":          row[2],
+                "avg_price":     row[3],
+                "method":        row[4],
+                "action_date":   row[5],
+            }
+            for row in rs.rows
+        }
+    except Exception as e:
+        print(f"  [turso_sync] get_holding_stops failed: {e}")
+        return {}
+    finally:
+        client.close()
     ap = argparse.ArgumentParser()
     ap.add_argument("--test", action="store_true", help="Verify credentials/connection only, no writes")
     ap.add_argument("--init-schema", action="store_true", help="Create the P1-01 bridge tables (idempotent)")
