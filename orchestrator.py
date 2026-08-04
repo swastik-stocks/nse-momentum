@@ -76,6 +76,7 @@ from agents.weekly_trend_agent         import WeeklyTrendAgent
 import data_fetcher
 from trade_logger                      import get_dynamic_weight
 from nse_universe                      import UNIVERSE_CONFIG, UNIVERSE_SEED
+from sector_concentration_alert        import compute_sector_concentration  # P4-04
 
 # Hard cap on T2 picks sent to picks_latest.json and confirmation email
 T2_CAP = 8
@@ -891,6 +892,24 @@ class AgentOrchestrator:
             for t in sorted(trim_signals, key=lambda x: x["rs_percentile"]):
                 log.info(f"    {t['ticker']:<15} RS {t['rs_percentile']:.0f}th percentile")
 
+        # P4-04: sector concentration check — independent of held_status above
+        # (doesn't need per-stock gate results, just Turso's holdings +
+        # ticker_sector_map + sector_breadth tables), so it's a single call
+        # rather than a loop. Returns [] on any bridge-read failure or if
+        # portfolio value is zero — same "must never break the scan" rule as
+        # every other Turso read in this pipeline; a failed concentration
+        # check just means Section 6 renders one fewer subsection, not a
+        # crashed evening scan.
+        sector_concentration = compute_sector_concentration()
+        flagged_sectors = [r for r in sector_concentration if r["flag"]]
+        if flagged_sectors:
+            log.info(f"  [P4-04] {len(flagged_sectors)} sector(s) flagged for concentration "
+                     f"(>= 25% of portfolio):")
+            for r in flagged_sectors:
+                severity = "CONCENTRATED+WEAK" if r["flag"] == "concentrated_weak" else "CONCENTRATED"
+                log.info(f"    {r['sector']:<30} {r['pct_of_portfolio']:.1f}% of portfolio "
+                         f"| sector SMA50 breadth {r['sector_sma50']:.1f}% | {severity}")
+
         if held_status:
             n_cleared        = sum(1 for h in held_status if h["status"] == "CLEARED_GATE")
             n_rejected        = sum(1 for h in held_status if h["status"] == "REJECTED")
@@ -1242,6 +1261,7 @@ class AgentOrchestrator:
             "addon_live_execution": ADDON_LIVE_EXECUTION,
             "exit_alerts":        exit_alerts,
             "trim_signals":       trim_signals,
+            "sector_concentration": sector_concentration,
             "regime":             self.regime,
             "regime_name":        self.regime_name,
             "regime_confidence":  self.regime_confidence,

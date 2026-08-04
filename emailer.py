@@ -83,6 +83,30 @@ ADDON_COLOR  = "#00E676"
 ADDON_BG     = "rgba(0,230,118,0.08)"
 ADDON_BORDER = "rgba(0,230,118,0.3)"
 
+# Section 6 (P4-04) — Sector Concentration colors. 🔴-equivalent (concentrated
+# + weak breadth) reuses EXIT's red — same severity as a stop-loss breach,
+# since both mean "this needs a decision now." 🟡-equivalent (concentrated,
+# breadth not yet weak) reuses Regime C's amber, same "watch, don't act yet"
+# meaning it has everywhere else in this file, not TRIM's orange (TRIM means
+# a specific stock is deteriorating; this means a sector-level bet exists,
+# which may be fine if the sector stays strong).
+CONC_WEAK_COLOR  = "#FF5252"
+CONC_WEAK_BG     = "rgba(255,82,82,0.08)"
+CONC_WEAK_BORDER = "rgba(255,82,82,0.3)"
+CONC_COLOR       = "#FFB300"
+CONC_BG          = "rgba(255,179,0,0.08)"
+CONC_BORDER      = "rgba(255,179,0,0.3)"
+
+# Kept identical to PortfolioDashboard/app.py's CONCENTRATION_THRESHOLD_PCT /
+# WEAK_SECTOR_SMA50_PCT (P3-08). Duplicated, not imported -- nse_momentum and
+# PortfolioDashboard are separate repos/deployments with no shared import
+# path today, same reasoning as every other per-file constant in this file
+# (see EXIT/TRIM/ADDON colors above). If you change these, change the
+# matching pair in app.py too -- meant to stay identical, not mechanically
+# linked.
+CONCENTRATION_THRESHOLD_PCT = 25.0
+WEAK_SECTOR_SMA50_PCT = 50.0
+
 
 def _load_recipients() -> list:
     path = BASE_DIR / "recipients.txt"
@@ -123,6 +147,11 @@ def send_email_report(tiers: dict):
     exit_alerts  = tiers.get("exit_alerts", [])
     trim_signals = tiers.get("trim_signals", [])
     add_on       = tiers.get("add_on_candidates", [])
+    # P4-04: sector concentration check, from sector_concentration_alert.py
+    # (orchestrator.py calls compute_sector_concentration() and passes the
+    # result through here — same "compute elsewhere, this file just
+    # renders" pattern as everything else in tiers).
+    sector_concentration = tiers.get("sector_concentration", [])
     # P2-08 gate: ADD-ON premise not yet validated (staged research plan --
     # see orchestrator.py's ADDON_LIVE_EXECUTION). While False, recommendations
     # are computed and logged (the paper stream itself) but must never reach
@@ -141,12 +170,16 @@ def send_email_report(tiers: dict):
                        regime, rlbl, rcol, rbg, rborder, rnote,
                        brdth, bd, date_str, penalty,
                        macro_state, event_risk, t1_cap, dhan_status,
-                       exit_alerts, trim_signals, add_on)
+                       exit_alerts, trim_signals, add_on,
+                       sector_concentration)
 
     msg = MIMEMultipart("alternative")
     exit_subject_flag = f" - ⚠{len(exit_alerts)} EXIT ALERT" + ("S" if len(exit_alerts) != 1 else "") if exit_alerts else ""
+    weak_concentration = [r for r in sector_concentration if r.get("flag") == "concentrated_weak"]
+    conc_subject_flag = (f" - ⚖{len(weak_concentration)} SECTOR CONCENTRATION"
+                         if weak_concentration else "")
     msg["Subject"] = (f"NSE Momentum v6.2 - {date_str} - "
-                      f"Regime {regime} ({rlbl}) - {len(t1)} picks{exit_subject_flag}")
+                      f"Regime {regime} ({rlbl}) - {len(t1)} picks{exit_subject_flag}{conc_subject_flag}")
     msg["From"] = GMAIL_ADDRESS
     msg["To"]   = ", ".join(recipients)
     msg.attach(MIMEText(html, "html"))
@@ -540,17 +573,92 @@ def _position_alerts_section(exit_alerts: list, trim_signals: list, add_on: list
     return section_header + exit_html + trim_html + addon_html
 
 
+def _sector_concentration_section(sector_concentration: list) -> str:
+    """
+    Section 6, fourth subsection (P4-04) — "are you unknowingly making one
+    big sector bet?" Email-alert version of Portfolio Dashboard's Sector
+    Concentration view (P3-08, app.py). sector_concentration items come
+    from sector_concentration_alert.compute_sector_concentration():
+    {sector, invested_value, pct_of_portfolio, sector_sma50, flag} where
+    flag is "" / "concentrated" / "concentrated_weak".
+
+    Same "render nothing if empty" rule as exit/trim/add-on above -- but
+    here "empty" specifically means no FLAGGED sector, not zero rows.
+    Showing every held sector's weight every day (most of which are well
+    under the threshold) would be noise; this only surfaces when there's
+    something worth a decision, same principle as EXIT/TRIM only firing
+    on an actual breach/deterioration rather than listing every holding's
+    status daily.
+    """
+    flagged = [r for r in sector_concentration if r["flag"]]
+    if not flagged:
+        return ""
+
+    weak = [r for r in flagged if r["flag"] == "concentrated_weak"]
+    mild = [r for r in flagged if r["flag"] == "concentrated"]
+
+    rows = ""
+    for r in sorted(flagged, key=lambda x: -x["pct_of_portfolio"]):
+        is_weak = r["flag"] == "concentrated_weak"
+        row_color = CONC_WEAK_COLOR if is_weak else CONC_COLOR
+        sma50_str = f"{r['sector_sma50']:.1f}%" if r["sector_sma50"] is not None else "—"
+        rows += f"""
+<tr style="border-bottom:1px solid #1F3046">
+  <td style="padding:7px 10px;font-weight:600;color:#E8F0F8">{r['sector']}</td>
+  <td style="padding:7px 10px;font-family:monospace;color:{row_color}">Rs.{r['invested_value']:,.0f}</td>
+  <td style="padding:7px 10px;font-family:monospace;color:{row_color}">{r['pct_of_portfolio']:.1f}%</td>
+  <td style="padding:7px 10px;font-family:monospace;color:#9AAFC4">{sma50_str}</td>
+</tr>"""
+
+    header_color = CONC_WEAK_COLOR if weak else CONC_COLOR
+    header_bg = CONC_WEAK_BG if weak else CONC_BG
+    header_border = CONC_WEAK_BORDER if weak else CONC_BORDER
+    label_bits = []
+    if weak:
+        label_bits.append(f"{len(weak)} concentrated + weak sector{'s' if len(weak) != 1 else ''}")
+    if mild:
+        label_bits.append(f"{len(mild)} concentrated sector{'s' if len(mild) != 1 else ''}")
+
+    return f"""
+  <div style="background:{header_bg};border:1px solid {header_border};border-radius:8px;
+              padding:12px 14px;margin-bottom:14px">
+    <div style="font-size:12px;font-weight:700;color:{header_color};margin-bottom:6px">
+      ⚖ {" + ".join(label_bits)} — ≥{CONCENTRATION_THRESHOLD_PCT:.0f}% of portfolio in one sector
+    </div>
+    <div style="font-size:11px;color:#9AAFC4;margin-bottom:10px">
+      🔴 rows are also below {WEAK_SECTOR_SMA50_PCT:.0f}% of that sector's stocks above SMA50 —
+      concentrated AND the sector itself is currently weak. 🟡 rows are concentrated but the
+      sector's breadth hasn't turned weak yet. Not an instruction to sell or rebalance —
+      just visibility into a bet you may not have noticed, same caution as everywhere else
+      in this email.
+    </div>
+    <table style="width:100%;border-collapse:collapse;font-size:12px">
+      <thead>
+        <tr style="background:#0A1018;border-bottom:1px solid #1F3046">
+          <th style="padding:7px 10px;text-align:left;color:#5E7A96;font-size:9px">SECTOR</th>
+          <th style="padding:7px 10px;text-align:left;color:#5E7A96;font-size:9px">INVESTED</th>
+          <th style="padding:7px 10px;text-align:left;color:#5E7A96;font-size:9px">% OF PORTFOLIO</th>
+          <th style="padding:7px 10px;text-align:left;color:#5E7A96;font-size:9px">SECTOR SMA50 BREADTH</th>
+        </tr>
+      </thead>
+      <tbody>{rows}</tbody>
+    </table>
+  </div>"""
+
+
 def _build_html(t1, t2, t3, all_r, near_bo, defensive,
                 regime, rlbl, rcol, rbg, rborder, rnote,
                 breadth, bd, date_str, penalty,
                 macro_state, event_risk, t1_cap, dhan_status=None,
-                exit_alerts=None, trim_signals=None, add_on=None) -> str:
+                exit_alerts=None, trim_signals=None, add_on=None,
+                sector_concentration=None) -> str:
 
     mcol = MACRO_COLOR.get(macro_state, "#FFB300")
     ecol = EVENT_COLOR.get(event_risk,  "#5E7A96")
     exit_alerts  = exit_alerts or []
     trim_signals = trim_signals or []
     add_on       = add_on or []
+    sector_concentration = sector_concentration or []
 
     # [NEW] Dhan status banner — only rendered when Dhan was unavailable
     # this run (expired/missing token, network error). See
@@ -624,7 +732,8 @@ def _build_html(t1, t2, t3, all_r, near_bo, defensive,
 
     near_section       = _near_breakout_section(near_bo)
     defensive_section  = _defensive_section(defensive, regime)   # NEW
-    position_section   = _position_alerts_section(exit_alerts, trim_signals, add_on)   # NEW P2-07
+    position_section   = (_position_alerts_section(exit_alerts, trim_signals, add_on)   # NEW P2-07
+                           + _sector_concentration_section(sector_concentration))       # NEW P4-04
 
     exit_badge = ""
     if exit_alerts:
