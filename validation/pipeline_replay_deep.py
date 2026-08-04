@@ -86,11 +86,22 @@ from validation.backtest import ROUND_TRIP_COST_PCT, _print_cost_model
 from load_deep_history import get_point_in_time_universe
 
 log = logging.getLogger(__name__)
+
+# P4-09: file logging — deep replay runs can take hours; dated log in logs/
+# lets you review progress after the fact without re-running.
+_LOG_DIR = BASE_DIR / "logs"
+_LOG_DIR.mkdir(parents=True, exist_ok=True)
+_log_file = _LOG_DIR / f"pipeline_replay_deep_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}.log"
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
-    handlers=[logging.StreamHandler(sys.stdout)]
+    handlers=[
+        logging.StreamHandler(sys.stdout),
+        logging.FileHandler(_log_file, encoding="utf-8"),
+    ]
 )
+log.info(f"Log file: {_log_file}")
 
 FORWARD_BARS = 20
 WIN_THRESHOLD = 0.05

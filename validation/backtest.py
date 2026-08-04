@@ -67,11 +67,24 @@ from agents.pattern_agent import PatternAgent, DEFAULT_WEIGHTS
 from nse_universe import NSE_UNIVERSE
 
 log = logging.getLogger(__name__)
+
+# P4-09: file logging — writes a dated log alongside stdout so long-running
+# backtests are auditable after the fact without re-running. Log dir is
+# logs/ relative to the project root (same convention as orchestrator.py's
+# own daily log). File is dated so reruns don't overwrite earlier sessions.
+_LOG_DIR = BASE_DIR / "logs"
+_LOG_DIR.mkdir(parents=True, exist_ok=True)
+_log_file = _LOG_DIR / f"backtest_{datetime.today().strftime('%Y-%m-%d_%H%M%S')}.log"
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
-    handlers=[logging.StreamHandler(sys.stdout)]
+    handlers=[
+        logging.StreamHandler(sys.stdout),
+        logging.FileHandler(_log_file, encoding="utf-8"),
+    ]
 )
+log.info(f"Log file: {_log_file}")
 
 # Forward-test window: 20 bars after pattern detection
 FORWARD_BARS = 20

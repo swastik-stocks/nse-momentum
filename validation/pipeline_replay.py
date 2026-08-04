@@ -74,11 +74,22 @@ from nse_universe import NSE_UNIVERSE, UNIVERSE_CONFIG
 from validation.backtest import ROUND_TRIP_COST_PCT, _print_cost_model
 
 log = logging.getLogger(__name__)
+
+# P4-09: file logging — same convention as backtest.py (P4-09): dated log
+# in logs/ so multi-hour replay runs are auditable without re-running.
+_LOG_DIR = BASE_DIR / "logs"
+_LOG_DIR.mkdir(parents=True, exist_ok=True)
+_log_file = _LOG_DIR / f"pipeline_replay_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}.log"
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
-    handlers=[logging.StreamHandler(sys.stdout)]
+    handlers=[
+        logging.StreamHandler(sys.stdout),
+        logging.FileHandler(_log_file, encoding="utf-8"),
+    ]
 )
+log.info(f"Log file: {_log_file}")
 
 FORWARD_BARS = 20
 WIN_THRESHOLD = 0.05
