@@ -77,6 +77,22 @@ import data_fetcher
 from trade_logger                      import get_dynamic_weight
 from nse_universe                      import UNIVERSE_CONFIG, UNIVERSE_SEED
 from sector_concentration_alert        import compute_sector_concentration  # P4-04
+from signal_attribution                import compute_signal_attribution    # P4-02
+
+
+def _compute_signal_attribution() -> dict:
+    """
+    P4-02: wrapper that calls compute_signal_attribution() and returns {}
+    on any failure — a bridge read must never crash the scan or block the
+    evening email, same P1-06 isolation principle as every other Turso
+    read in this pipeline. Returns {} if no matched trades yet (e.g.
+    trades_v4 still empty on the first real scan after a dry-run session).
+    """
+    try:
+        return compute_signal_attribution()
+    except Exception as e:
+        log.warning(f"  [P4-02] signal_attribution failed (non-fatal): {e}")
+        return {}
 
 # Hard cap on T2 picks sent to picks_latest.json and confirmation email
 T2_CAP = 8
@@ -1273,6 +1289,7 @@ class AgentOrchestrator:
             "exit_alerts":        exit_alerts,
             "trim_signals":       trim_signals,
             "sector_concentration": sector_concentration,
+            "signal_attribution": _compute_signal_attribution(),
             "regime":             self.regime,
             "regime_name":        self.regime_name,
             "regime_confidence":  self.regime_confidence,

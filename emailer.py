@@ -154,6 +154,11 @@ def send_email_report(tiers: dict):
     sector_concentration = tiers.get("sector_concentration", [])
     held_status  = tiers.get("held_status", [])
     holding_heat = _compute_portfolio_heat(held_status)   # P4-04 heat alert
+    # P4-02: signal→outcome attribution, computed by signal_attribution.py
+    # and passed through tiers by orchestrator.py — same pattern as everything
+    # else. Returns {} if no matched trades yet (e.g. trades_v4 empty after a
+    # dry-run scan) — _signal_attribution_section renders nothing in that case.
+    signal_attribution = tiers.get("signal_attribution", {})
     # P2-08 gate: ADD-ON premise not yet validated (staged research plan --
     # see orchestrator.py's ADDON_LIVE_EXECUTION). While False, recommendations
     # are computed and logged (the paper stream itself) but must never reach
@@ -173,7 +178,8 @@ def send_email_report(tiers: dict):
                        brdth, bd, date_str, penalty,
                        macro_state, event_risk, t1_cap, dhan_status,
                        exit_alerts, trim_signals, add_on,
-                       sector_concentration, holding_heat)
+                       sector_concentration, holding_heat,
+                       signal_attribution)
 
     msg = MIMEMultipart("alternative")
     exit_subject_flag = f" - Î“ÃœÃ¡{len(exit_alerts)} EXIT ALERT" + ("S" if len(exit_alerts) != 1 else "") if exit_alerts else ""
@@ -728,12 +734,118 @@ def _sector_concentration_section(sector_concentration: list) -> str:
   </div>"""
 
 
+def _signal_attribution_section(attribution: dict) -> str:
+    """
+    Section 7 (P4-02) — Signal→Outcome Attribution. Answers "are the scanner's
+    live signals working with real money?" by joining trades_v4 scanner picks
+    against realized_trades broker data (see signal_attribution.py). Renders
+    only when there are matched trades — returns "" if attribution is empty or
+    has no matched data, same empty-renders-nothing rule as every other section.
+
+    This is the real-money version of validation/pipeline_replay_deep.py:
+    not historical simulation, but actual capital deployed following live signals.
+    The "signal worked" definition is net_pnl_pct > 0 (cost-inclusive, since
+    realized_trades already stores net_pnl_pct after broker charges from
+    import_broker_trades.py).
+
+    Shows three breakdowns: by pattern, by score bucket, by regime — same
+    three dimensions signal_attribution.py aggregates to, so the email is a
+    direct reflection of the Turso signal_attribution_summary table.
+    """
+    if not attribution or not attribution.get("n_matched"):
+        return ""
+
+    agg     = attribution.get("aggregates", {})
+    overall = agg.get("overall", {})
+    if not overall:
+        return ""
+
+    n_matched  = attribution.get("n_matched", 0)
+    n_signals  = attribution.get("n_signals", 0)
+    n_realized = attribution.get("n_realized", 0)
+
+    def _rows_html(data: dict) -> str:
+        if not data:
+            return "<tr><td colspan='5' style='padding:7px 10px;color:#5E7A96'>No data</td></tr>"
+        html = ""
+        for k, s in sorted(data.items(), key=lambda x: -(x[1].get("avg_net_pnl_pct") or 0)):
+            if not s:
+                continue
+            wr    = s.get("win_rate", 0)
+            avg   = s.get("avg_net_pnl_pct", 0)
+            total = s.get("total_net_pnl", 0)
+            n     = s.get("n", 0)
+            val_color = "#00D4AA" if avg >= 0 else "#FF5252"
+            html += f"""
+<tr style="border-bottom:1px solid #1F3046">
+  <td style="padding:6px 10px;color:#E8F0F8;font-size:11px">{k}</td>
+  <td style="padding:6px 10px;font-family:monospace;color:#9AAFC4;font-size:11px">{n}</td>
+  <td style="padding:6px 10px;font-family:monospace;color:#9AAFC4;font-size:11px">{wr:.0f}%</td>
+  <td style="padding:6px 10px;font-family:monospace;color:{val_color};font-size:11px">{avg:+.2f}%</td>
+  <td style="padding:6px 10px;font-family:monospace;color:{val_color};font-size:11px">₹{total:,.0f}</td>
+</tr>"""
+        return html
+
+    def _subsection(title: str, data: dict) -> str:
+        return f"""
+<div style="margin-bottom:10px">
+  <div style="font-size:10px;font-weight:700;color:#5E7A96;text-transform:uppercase;
+              letter-spacing:0.1em;margin-bottom:6px">{title}</div>
+  <table style="width:100%;border-collapse:collapse;font-size:11px">
+    <thead>
+      <tr style="background:#0A1018;border-bottom:1px solid #1F3046">
+        <th style="padding:6px 10px;text-align:left;color:#5E7A96;font-size:9px"></th>
+        <th style="padding:6px 10px;text-align:left;color:#5E7A96;font-size:9px">N</th>
+        <th style="padding:6px 10px;text-align:left;color:#5E7A96;font-size:9px">WIN%</th>
+        <th style="padding:6px 10px;text-align:left;color:#5E7A96;font-size:9px">AVG P&L%</th>
+        <th style="padding:6px 10px;text-align:left;color:#5E7A96;font-size:9px">TOTAL P&L</th>
+      </tr>
+    </thead>
+    <tbody>{_rows_html(data)}</tbody>
+  </table>
+</div>"""
+
+    overall_color = "#00D4AA" if overall.get("avg_net_pnl_pct", 0) >= 0 else "#FF5252"
+    overall_avg   = overall.get("avg_net_pnl_pct", 0)
+    overall_wr    = overall.get("win_rate", 0)
+    overall_total = overall.get("total_net_pnl", 0)
+
+    pattern_html = _subsection("By Pattern",      agg.get("by_pattern", {}))
+    bucket_html  = _subsection("By Score Bucket", agg.get("by_score_bucket", {}))
+    regime_html  = _subsection("By Regime",       agg.get("by_regime", {}))
+
+    return f"""
+  <div style="margin-top:20px">
+    <div style="font-family:monospace;font-size:9px;letter-spacing:0.2em;color:#5E7A96;
+                text-transform:uppercase;margin-bottom:10px">
+      Section 7 - Signal→Outcome Attribution (P4-02)
+    </div>
+    <div style="background:rgba(0,212,170,0.05);border:1px solid rgba(0,212,170,0.2);
+                border-radius:8px;padding:12px 14px;margin-bottom:14px">
+      <div style="font-size:12px;font-weight:700;color:#00D4AA;margin-bottom:4px">
+        Live Signal Performance — Real Money vs Scanner Picks
+      </div>
+      <div style="font-size:11px;color:#9AAFC4;margin-bottom:10px">
+        {n_matched} matched trades out of {n_signals} scanner signals and {n_realized} broker
+        trades (±5 day entry window). Win rate {overall_wr:.0f}% |
+        Avg net P&L <span style="color:{overall_color}">{overall_avg:+.2f}%</span> |
+        Total ₹<span style="color:{overall_color}">{overall_total:,.0f}</span>.
+        Not a performance guarantee — small sample, grows as more broker trades are imported.
+      </div>
+      {pattern_html}
+      {bucket_html}
+      {regime_html}
+    </div>
+  </div>"""
+
+
 def _build_html(t1, t2, t3, all_r, near_bo, defensive,
                 regime, rlbl, rcol, rbg, rborder, rnote,
                 breadth, bd, date_str, penalty,
                 macro_state, event_risk, t1_cap, dhan_status=None,
                 exit_alerts=None, trim_signals=None, add_on=None,
-                sector_concentration=None, holding_heat=None) -> str:
+                sector_concentration=None, holding_heat=None,
+                signal_attribution=None) -> str:
 
     mcol = MACRO_COLOR.get(macro_state, "#FFB300")
     ecol = EVENT_COLOR.get(event_risk,  "#5E7A96")
@@ -742,6 +854,7 @@ def _build_html(t1, t2, t3, all_r, near_bo, defensive,
     add_on             = add_on or []
     sector_concentration = sector_concentration or []
     holding_heat       = holding_heat or {}
+    signal_attribution = signal_attribution or {}
 
     # [NEW] Dhan status banner Î“Ã‡Ã¶ only rendered when Dhan was unavailable
     # this run (expired/missing token, network error). See
@@ -817,7 +930,8 @@ def _build_html(t1, t2, t3, all_r, near_bo, defensive,
     defensive_section  = _defensive_section(defensive, regime)   # NEW
     position_section   = (_position_alerts_section(exit_alerts, trim_signals, add_on)   # NEW P2-07
                            + _sector_concentration_section(sector_concentration)         # NEW P4-04
-                           + _portfolio_heat_alert(holding_heat))                        # NEW P4-04 heat
+                           + _portfolio_heat_alert(holding_heat)                         # NEW P4-04 heat
+                           + _signal_attribution_section(signal_attribution))            # NEW P4-02
 
     exit_badge = ""
     if exit_alerts:
