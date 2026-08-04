@@ -102,6 +102,19 @@ SCHEMA_STATEMENTS = [
         UNIQUE(industry, breadth_date)
     )
     """,
+    """
+    CREATE TABLE IF NOT EXISTS scan_metadata (
+        scan_date           TEXT PRIMARY KEY,
+        dhan_available      INTEGER,
+        dhan_message        TEXT,
+        tickers_from_dhan   INTEGER,
+        regime              TEXT,
+        breadth_score       INTEGER,
+        t1_count            INTEGER,
+        t2_count            INTEGER,
+        published_at        TEXT
+    )
+    """,
 ]
 
 
@@ -223,7 +236,82 @@ def publish_signals(results, regime: str, scan_date: str = None):
     return published
 
 
-def get_holdings() -> dict:
+def publish_scan_metadata(dhan_status: dict, regime: str, breadth_score: int,
+                           t1_count: int, t2_count: int,
+                           scan_date: str = None, dry_run: bool = False) -> bool:
+    """
+    P4-08: publish one scan-level metadata row per run — Dhan token status,
+    regime, breadth score, pick counts. Upserts on scan_date so safe to
+    re-run. This is deliberately a separate table from scanner_signals
+    (which has one row per ticker) — Dhan status is one fact per scan, not
+    one per signal, so duplicating it across 28 rows would be wrong.
+
+    The Dashboard reads this via db.py's get_scan_metadata() to surface a
+    Dhan token expiry warning banner without requiring the user to check
+    logs. A missing/expired token is always a data quality issue for the
+    next scan — surfacing it here gives you 18-23 hours to refresh before
+    it matters.
+
+    Skipped on dry_run, same as every other publish in this file.
+    Never raises past the caller — per P1-06.
+    """
+    if dry_run:
+        print(f"  [turso_sync] publish_scan_metadata skipped — dry run")
+        return False
+
+    import datetime as _dt
+    scan_date = scan_date or _dt.date.today().isoformat()
+    now = _dt.datetime.now().isoformat()
+
+    try:
+        client = get_client()
+    except SystemExit as e:
+        print(f"  [turso_sync] publish_scan_metadata skipped — {e}")
+        return False
+
+    try:
+        client.execute("""
+            CREATE TABLE IF NOT EXISTS scan_metadata (
+                scan_date           TEXT PRIMARY KEY,
+                dhan_available      INTEGER,
+                dhan_message        TEXT,
+                tickers_from_dhan   INTEGER,
+                regime              TEXT,
+                breadth_score       INTEGER,
+                t1_count            INTEGER,
+                t2_count            INTEGER,
+                published_at        TEXT
+            )
+        """)
+        client.execute("""
+            INSERT INTO scan_metadata (
+                scan_date, dhan_available, dhan_message, tickers_from_dhan,
+                regime, breadth_score, t1_count, t2_count, published_at
+            ) VALUES (?,?,?,?,?,?,?,?,?)
+            ON CONFLICT(scan_date) DO UPDATE SET
+                dhan_available=excluded.dhan_available,
+                dhan_message=excluded.dhan_message,
+                tickers_from_dhan=excluded.tickers_from_dhan,
+                regime=excluded.regime,
+                breadth_score=excluded.breadth_score,
+                t1_count=excluded.t1_count,
+                t2_count=excluded.t2_count,
+                published_at=excluded.published_at
+        """, [
+            scan_date,
+            1 if dhan_status.get("available") else 0,
+            dhan_status.get("message", ""),
+            dhan_status.get("tickers_from_dhan", 0),
+            regime, breadth_score, t1_count, t2_count, now,
+        ])
+        print(f"  [turso_sync] scan_metadata published for {scan_date} "
+              f"(dhan={'OK' if dhan_status.get('available') else 'FAILED'})")
+        return True
+    except Exception as e:
+        print(f"  [turso_sync] Failed to publish scan_metadata: {e}")
+        return False
+    finally:
+        client.close()
     """
     P1-04: read current holdings from Turso, consolidated by symbol across
     accounts — deliberately mirrors Portfolio Dashboard's own
