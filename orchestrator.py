@@ -52,6 +52,7 @@ from agents.pattern_agent              import PatternAgent, is_low_edge_pattern,
 from agents.rs_agent                   import RSAgent, compute_universe_ranks, compute_sector_relative_ranks
 from agents.volume_agent               import VolumeAgent
 from agents.market_agent               import MarketAgent
+from sector_score_live                 import LiveSectorBreadth
 from agents.market_breadth_agent       import (
     fetch_nse_wide_breadth,
     fetch_breadth_from_bhavcopy,
@@ -189,6 +190,11 @@ class StockResult:
     pattern_score: int = 0;      rs_score: int = 0
     volume_score: int = 0;       market_score: int = 0
     sector_score: int = 0;       rsi_score: int = 0
+    sector_breadth_score: float = 0.0   # P3-07 — LOO sector breadth (0-100), diagnostic
+    sector_breadth_tier: str = ""       # P3-07 — TOP/MID/BOTTOM per backtested thresholds
+    sector_breadth_bonus: int = 0       # P3-07 — actual raw_score contribution
+    composite_breadth_score: float = 0.0  # P3-07 — composite (0.6*LOO + 0.4*MCap), diagnostic only
+    composite_breadth_tier: str = ""       # P3-07 — composite tier, NOT yet wired into raw_score
     ema_score: int = 0;          macd_score: int = 0
     liq_score: int = 0;          bonus_score: int = 0
     fundamental_score: int = 0;  institutional_score: int = 0
@@ -394,6 +400,9 @@ class AgentOrchestrator:
         # ── STEP 4: Sector ────────────────────────────────────────────────────
         self.sector_agent = SectorAgent(data_dict)
         self.sector_ranks = self.sector_agent.get_ranks()
+        # P3-07 — LOO sector breadth score, separate from SectorAgent's RS-rank-based
+        # score_for_sector() above. One DB pass here, reused per-ticker below.
+        self.sector_breadth_calc = LiveSectorBreadth()
 
         # ── STEP 5: RS ranks ──────────────────────────────────────────────────
         self.universe_rs_ranks = compute_universe_ranks(data_dict)
@@ -622,6 +631,16 @@ class AgentOrchestrator:
         # Sector
         r.sector_score = self.sector_agent.score_for_sector(sector, self.sector_ranks)
 
+        # P3-07 — LOO sector breadth (validated 05 Aug 2026, p=0.0000, matched-sample
+        # confirmed). Separate field from sector_score above — different methodology,
+        # different meaning, do not conflate.
+        r.sector_breadth_score = self.sector_breadth_calc.score(ticker) or 0.0
+        r.sector_breadth_tier  = self.sector_breadth_calc.tier(ticker) or ""
+        r.sector_breadth_bonus = self.sector_breadth_calc.bonus(ticker)
+        # P3-07 composite (diagnostic — not in raw_score until backtested)
+        r.composite_breadth_score = self.sector_breadth_calc.composite_score(ticker) or 0.0
+        r.composite_breadth_tier  = self.sector_breadth_calc.composite_tier(ticker) or ""
+
         # G4: Risk
         risk = RiskAgent(df, r.breakout_level, r.entry_low, r.entry_high,
                          universe=universe)
@@ -711,6 +730,7 @@ class AgentOrchestrator:
             r.market_score   +
             r.macd_score     +
             r.sector_score   +
+            r.sector_breadth_bonus +
             r.bonus_score    +
             round(r.weekly_trend_bonus)
         )
