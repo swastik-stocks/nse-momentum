@@ -35,11 +35,22 @@ jobs:
           DHAN_ACCESS_TOKEN:  ${{ secrets.DHAN_ACCESS_TOKEN }}
         run: python scanner.py
 
+      # P3-05: Fetch MCap from NSE's official daily PR Bhavcopy zip.
+      # Runs before sector_breadth.py so MCap weights are in Turso when
+      # sector_breadth reads them for MCap-weighted SMA50 breadth.
+      - name: Fetch market cap data (P3-05)
+        if: always()
+        env:
+          TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
+          TURSO_AUTH_TOKEN:   ${{ secrets.TURSO_AUTH_TOKEN }}
+        run: python fetch_mcap.py
+
       # P3-01/02/06: Sector breadth grid — runs after scanner.py so the
       # Bhavcopy cache written by that run is available for P3-06 metrics.
+      # Reads ticker_mcap (P3-05) for MCap-weighted SMA50 breadth.
       # publish_ticker_sector_map() also runs here (P3-08), so industry_breadth
       # (which reads ticker_sector_map from Turso) must come after this step.
-      - name: Publish sector breadth (P3-01/02/06) and ticker-sector map (P3-08)
+      - name: Publish sector breadth (P3-01/02/06/08) with MCap weighting (P3-05)
         if: always()
         env:
           TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
