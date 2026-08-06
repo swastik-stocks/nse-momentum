@@ -1,19 +1,15 @@
 name: NSE Momentum Daily Scan
-
 on:
   schedule:
     # 7:30 PM IST = 14:00 UTC (IST is UTC+5:30)
     # Runs Mon-Fri only. Bhavcopy is available by 6 PM IST.
     - cron: '0 14 * * 1-5'
   workflow_dispatch:
-
 jobs:
   scan:
     runs-on: ubuntu-latest
     timeout-minutes: 30
-
     steps:
-
       - name: Checkout repository
         uses: actions/checkout@v4
 
@@ -35,7 +31,29 @@ jobs:
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
           TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
           TURSO_AUTH_TOKEN:   ${{ secrets.TURSO_AUTH_TOKEN }}
+          DHAN_CLIENT_ID:     ${{ secrets.DHAN_CLIENT_ID }}
+          DHAN_ACCESS_TOKEN:  ${{ secrets.DHAN_ACCESS_TOKEN }}
         run: python scanner.py
+
+      # P3-01/02/06: Sector breadth grid — runs after scanner.py so the
+      # Bhavcopy cache written by that run is available for P3-06 metrics.
+      # publish_ticker_sector_map() also runs here (P3-08), so industry_breadth
+      # (which reads ticker_sector_map from Turso) must come after this step.
+      - name: Publish sector breadth (P3-01/02/06) and ticker-sector map (P3-08)
+        if: always()
+        env:
+          TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
+          TURSO_AUTH_TOKEN:   ${{ secrets.TURSO_AUTH_TOKEN }}
+        run: python sector_breadth.py
+
+      # P3-03/04: Industry breadth grid (138 industries via Screener.in).
+      # Depends on ticker_sector_map published by sector_breadth.py above.
+      - name: Publish industry breadth (P3-03/04)
+        if: always()
+        env:
+          TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
+          TURSO_AUTH_TOKEN:   ${{ secrets.TURSO_AUTH_TOKEN }}
+        run: python industry_breadth.py
 
       - name: Upload scan log
         if: always()
