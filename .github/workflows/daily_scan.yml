@@ -1,12 +1,55 @@
 name: NSE Momentum Daily Scan
 on:
-  schedule:
-    # 7:30 PM IST = 14:00 UTC (IST is UTC+5:30)
-    # Runs Mon-Fri only. Bhavcopy is available by 6 PM IST.
-    - cron: '0 14 * * 1-5'
+  # Primary trigger: cron-job.org POSTs here at 19:30 IST Mon-Fri (see
+  # P0 setup notes). GitHub's own `schedule` trigger is best-effort and
+  # routinely starts late under platform load, so cron-job.org (which
+  # supports IST directly and alerts on failure) now owns the real
+  # timing. This event carries no useful payload; it just kicks the scan.
+  repository_dispatch:
+    types: [evening-scan]
   workflow_dispatch:
+  schedule:
+    # 8:30 PM IST = 15:00 UTC — LATE FALLBACK ONLY, ~1 hour after the
+    # cron-job.org primary trigger. The `gate` job below skips the scan
+    # if scan_metadata already has a row for today, so this only does
+    # anything when the primary trigger genuinely failed to fire.
+    - cron: '0 15 * * 1-5'
 jobs:
+  gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      should_run: ${{ steps.check.outputs.should_run }}
+    steps:
+      - name: Checkout repository
+        if: github.event_name == 'schedule'
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        if: github.event_name == 'schedule'
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install libsql_client
+        if: github.event_name == 'schedule'
+        run: pip install libsql_client
+
+      - id: check
+        name: Check whether today's scan already ran (backstop gate)
+        env:
+          TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
+          TURSO_AUTH_TOKEN:   ${{ secrets.TURSO_AUTH_TOKEN }}
+        run: |
+          if [ "${{ github.event_name }}" != "schedule" ]; then
+            echo "should_run=true" >> "$GITHUB_OUTPUT"
+          else
+            python check_scan_done.py
+          fi
+
   scan:
+    needs: gate
+    if: needs.gate.outputs.should_run == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:

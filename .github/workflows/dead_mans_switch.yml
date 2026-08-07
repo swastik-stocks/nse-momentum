@@ -1,0 +1,31 @@
+name: NSE Momentum Dead Man's Switch
+on:
+  schedule:
+    # 9:15 PM IST = 15:45 UTC — 45 min after the 20:30 IST backstop scan
+    # window, so a genuinely stuck/failed run has had time to finish (or
+    # fail) before this alerts. See P0 Step 4 in the reliability plan.
+    - cron: '45 15 * * 1-5'
+  workflow_dispatch:
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install libsql_client
+        run: pip install libsql_client
+
+      - name: Verify today's scan ran
+        env:
+          TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
+          TURSO_AUTH_TOKEN:   ${{ secrets.TURSO_AUTH_TOKEN }}
+          GMAIL_ADDRESS:      ${{ secrets.GMAIL_ADDRESS }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+        run: python check_scan_health.py
