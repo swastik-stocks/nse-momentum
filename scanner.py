@@ -32,6 +32,37 @@ logging.basicConfig(
 log = logging.getLogger(__name__)
 
 
+def _lookup_symbol_master_names(tickers_ns: list) -> dict:
+    """
+    P1-07: best-effort company-name lookup for held tickers being folded
+    into the scan universe (see run_scan). Reads the nse_symbol_master table
+    published nightly by publish_symbol_master.py. Non-fatal on any failure
+    — a held ticker still gets scanned even if this returns {} (it just
+    displays as its own ticker instead of a company name, same as any other
+    lookup failure elsewhere in this pipeline per P1-06).
+    """
+    bare = {t: t[:-3] if t.upper().endswith((".NS", ".BO")) else t for t in tickers_ns}
+    try:
+        from turso_sync import get_client
+        client = get_client()
+    except SystemExit as e:
+        log.warning(f"      Symbol master lookup skipped (non-fatal): {e}")
+        return {}
+    try:
+        placeholders = ",".join("?" * len(bare))
+        rs = client.execute(
+            f"SELECT symbol, company_name FROM nse_symbol_master WHERE symbol IN ({placeholders})",
+            list(bare.values()),
+        )
+        by_bare = {row[0]: row[1] for row in rs.rows if row[1]}
+        return {ticker_ns: by_bare[bare_sym] for ticker_ns, bare_sym in bare.items() if bare_sym in by_bare}
+    except Exception as e:
+        log.warning(f"      Symbol master lookup failed (non-fatal): {e}")
+        return {}
+    finally:
+        client.close()
+
+
 def run_scan(dry_run: bool = False, max_tickers: int = None):
     log.info("=" * 60)
     log.info("  NSE MOMENTUM SCANNER v5.3" + ("  [DRY RUN]" if dry_run else ""))
@@ -72,18 +103,9 @@ def run_scan(dry_run: bool = False, max_tickers: int = None):
     bhavcopy_cmp_map  = getattr(bhav, 'bhavcopy_cmp_map', {})
     log.info(f"      {len(delivery)} symbols loaded | {len(bhavcopy_cmp_map)} CMP prices from Bhavcopy")
 
-    #      OHLCV batch fetch
-    log.info("\n[3/6] Fetching / loading OHLCV (2yr history)...")
-    tickers    = [item[0] for item in universe]
-    stock_data = fetch_batch_ohlcv(tickers, period="2y")
-    loaded     = sum(1 for df in stock_data.values() if not df.empty)
-    log.info(f"      {loaded}/{len(tickers)} tickers loaded")
-
     # Holdings from Portfolio Dashboard (P1-04, via Turso bridge) — "what do
     # I currently own". Non-fatal on failure per P1-06: a bridge read must
-    # never be able to break the scan. Not yet acted on anywhere (that's
-    # Phase 2's job) — this just makes it available on data_dict for when
-    # Phase 2 needs it.
+    # never be able to break the scan.
     log.info("\n      Fetching current holdings from Turso (Portfolio Dashboard bridge)...")
     try:
         from turso_sync import get_holdings
@@ -92,6 +114,33 @@ def run_scan(dry_run: bool = False, max_tickers: int = None):
     except Exception as e:
         log.warning(f"      Holdings fetch failed (non-fatal): {e}")
         holdings = {}
+
+    # P1-07: fold held tickers not already in the static universe into the
+    # scan, so a small/new listing you actually hold isn't silently skipped
+    # just because it missed the 500-stock build list. Resolved symbols only
+    # (see backfill_holdings_symbols.py / Portfolio Dashboard's entry-time
+    # resolution) — a held symbol is always TICKER.NS/.BO by that point, so
+    # this is a direct set-membership check, not fuzzy matching. Defaults to
+    # the SMALL tier's config (strictest score_gate + min_rrr of the three
+    # tiers) since we don't know its real market-cap bucket — safer to be
+    # conservative on an unclassified stock than to accidentally grant it
+    # LARGE's looser gate.
+    held_not_in_universe = [t for t in holdings if t not in seen]
+    if held_not_in_universe:
+        names = _lookup_symbol_master_names(held_not_in_universe)
+        for ticker in held_not_in_universe:
+            name = names.get(ticker, ticker)
+            universe.append((ticker, name, "Held (unclassified)", "SMALL"))
+            seen.add(ticker)
+        log.info(f"      Folded {len(held_not_in_universe)} held ticker(s) not in the "
+                 f"static universe into today's scan: {', '.join(held_not_in_universe)}")
+
+    #      OHLCV batch fetch
+    log.info("\n[3/6] Fetching / loading OHLCV (2yr history)...")
+    tickers    = [item[0] for item in universe]
+    stock_data = fetch_batch_ohlcv(tickers, period="2y")
+    loaded     = sum(1 for df in stock_data.values() if not df.empty)
+    log.info(f"      {loaded}/{len(tickers)} tickers loaded")
 
     # Prepare data_dict for orchestrator
     data_dict = {

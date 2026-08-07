@@ -29,7 +29,6 @@ Requires: pandas, numpy, openpyxl (for .xlsx), plus your existing data_fetcher.p
 """
 
 import argparse
-import difflib
 import os
 import sys
 import smtplib
@@ -40,7 +39,6 @@ from email.mime.text import MIMEText
 
 import numpy as np
 import pandas as pd
-import requests
 
 BASE_DIR = Path(__file__).parent
 sys.path.insert(0, str(BASE_DIR))
@@ -57,6 +55,11 @@ except ImportError:
     print("ERROR: could not import fetch_batch_ohlcv from data_fetcher.py.")
     print("Place this file in the same folder as data_fetcher.py (your repo root).")
     sys.exit(1)
+
+# P1-05: resolver logic (NSE master download/cache, ISIN/fuzzy matching)
+# moved to symbol_resolver.py so publish_symbol_master.py and
+# backfill_holdings_symbols.py can reuse it without duplicating this file.
+from symbol_resolver import resolve_tickers
 
 try:
     from loguru import logger as log
@@ -83,177 +86,6 @@ ISIN_COLS   = ["isin", "isin number", "isin code"]
 
 # Rows that are totals/footers, not real holdings — never treat as a ticker
 _JUNK_TICKERS = {"", "NAN", "TOTAL", "GRAND TOTAL", "NET TOTAL", "SUBTOTAL"}
-
-NSE_MASTER_URL = "https://nsearchives.nseindia.com/content/equities/EQUITY_L.csv"
-NSE_ETF_MASTER_URL = "https://nsearchives.nseindia.com/content/equities/eq_etfseclist.csv"
-_MASTER_CACHE_PATH = BASE_DIR / "data" / "nse_equity_master.csv"
-_ETF_CACHE_PATH = BASE_DIR / "data" / "nse_etf_master.csv"
-_MASTER_CACHE_MAX_AGE_DAYS = 7
-
-
-def _download_and_cache(url: str, cache_path: Path) -> pd.DataFrame | None:
-    try:
-        if cache_path.exists():
-            age_days = (datetime.now().timestamp() - cache_path.stat().st_mtime) / 86400
-            if age_days < _MASTER_CACHE_MAX_AGE_DAYS:
-                return _read_csv_flexible_encoding(cache_path)
-
-        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
-        resp = requests.get(url, headers=headers, timeout=15)
-        resp.raise_for_status()
-        cache_path.parent.mkdir(exist_ok=True)
-        cache_path.write_bytes(resp.content)
-        return _read_csv_flexible_encoding(cache_path)
-
-    except Exception as e:
-        log.warning(f"  Could not fetch {url} ({e}).")
-        if cache_path.exists():
-            try:
-                return _read_csv_flexible_encoding(cache_path)
-            except Exception:
-                pass
-        return None
-
-
-def _read_csv_flexible_encoding(path: Path) -> pd.DataFrame:
-    """NSE's CSVs aren't always pure UTF-8 (stray Windows-1252 characters
-    like em-dashes show up occasionally) — try utf-8 first, fall back to
-    cp1252/latin-1 rather than crashing the whole ticker-resolution step
-    over one bad byte in an unrelated column."""
-    try:
-        return pd.read_csv(path, encoding="utf-8")
-    except UnicodeDecodeError:
-        return pd.read_csv(path, encoding="cp1252")
-
-
-def _load_nse_master() -> tuple:
-    """
-    Broker exports (Axis Direct in particular) give company names and ISINs,
-    not NSE ticker symbols — 'Anant Raj Ltd', not 'ANANTRAJ'. Passing a company
-    name straight to fetch_batch_ohlcv() would silently fetch nothing.
-
-    Downloads TWO NSE master lists — equities (EQUITY_L.csv) and ETFs
-    (eq_etfseclist.csv) — since ETF holdings (e.g. SILVERETF) don't appear
-    in the equity-only list. Caches both locally for a week.
-
-    IMPORTANT: builds isin_map/name_map SEPARATELY per source and merges the
-    resulting DICTS, rather than pd.concat-ing the two raw DataFrames. The
-    two files use slightly different column casing (e.g. 'SYMBOL' vs
-    'Symbol'), and concat treats those as distinct columns — a prior version
-    of this function did concat first, which caused a column-name collision
-    in _find_col that silently wiped out equity resolution entirely. Merging
-    already-built dicts sidesteps that class of bug completely.
-
-    Returns (isin_map, name_map) — equity entries take priority; ETF entries
-    fill in any keys equities didn't already provide. Returns ({}, {}) if
-    nothing could be loaded — callers must handle that gracefully.
-    """
-    log.info("  Loading NSE securities master (equities + ETFs, cached weekly)...")
-    equity_df = _download_and_cache(NSE_MASTER_URL, _MASTER_CACHE_PATH)
-    etf_df    = _download_and_cache(NSE_ETF_MASTER_URL, _ETF_CACHE_PATH)
-
-    isin_map, name_map = {}, {}
-    for df in (etf_df, equity_df):  # ETF first, equity second — equity wins on key collision
-        if df is None:
-            continue
-        i_map, n_map = _build_isin_and_name_maps(df)
-        isin_map.update(i_map)
-        name_map.update(n_map)
-
-    return isin_map, name_map
-
-
-def _build_isin_and_name_maps(master: pd.DataFrame) -> tuple:
-    isin_col = _find_col(master, ["isin number", "isin"])
-    sym_col  = _find_col(master, ["symbol"])
-    name_col = _find_col(master, ["name of company", "underlying", "company name", "name"])
-    isin_map = {}
-    name_map = {}
-
-    if isin_col and sym_col:
-        sub = master[[isin_col, sym_col]].dropna()
-        isin_map = dict(zip(sub[isin_col].astype(str).str.strip(),
-                             sub[sym_col].astype(str).str.strip()))
-    if name_col and sym_col:
-        sub = master[[name_col, sym_col]].dropna()
-        # Drop blank/whitespace-only names too — an empty string is a valid
-        # dict key that would otherwise fuzzy-match against everything.
-        sub = sub[sub[name_col].astype(str).str.strip() != ""]
-        name_map = dict(zip(sub[name_col].astype(str).str.strip(),
-                             sub[sym_col].astype(str).str.strip()))
-    return isin_map, name_map
-
-
-def resolve_tickers(raw_names: pd.Series, isins: pd.Series = None) -> tuple:
-    """
-    Resolve broker-supplied company names (+ optional ISINs) to real NSE
-    ticker symbols. ISIN match is exact and preferred; fuzzy company-name
-    matching is a fallback ONLY — and is explicitly flagged as such, because
-    a silent wrong-stock match on a capital-protection tool is a serious
-    problem, not a cosmetic one (e.g. 'ICICI Prudential Life Insurance' vs
-    'ICICI Prudential Asset Management', or 'Bajaj Finance' vs 'Bajaj
-    Finserv', are different companies that share a name prefix — fuzzy
-    matching can confuse them).
-
-    AMBIGUITY CHECK: the 0.75 cutoff alone only tells you the BEST match
-    cleared a bar — it says nothing about whether a close runner-up existed
-    that could just as easily have been picked. This pulls the top 2
-    candidates and flags AMBIGUOUS_FUZZY when they're within 0.08 similarity
-    of each other, which is the actual signature of a same-prefix collision
-    risk, not just "did the top match clear the threshold."
-
-    Returns (resolved_tickers: pd.Series, methods: pd.Series) where methods
-    is one of: ISIN_EXACT, FUZZY_NAME, AMBIGUOUS_FUZZY, UNRESOLVED — always
-    inspect FUZZY_NAME and AMBIGUOUS_FUZZY rows before trusting their advice.
-    """
-    isin_map, name_map = _load_nse_master()
-    if not isin_map and not name_map:
-        log.warning("  No NSE master list available — using broker names as-is.")
-        return raw_names, pd.Series(["UNRESOLVED"] * len(raw_names), index=raw_names.index)
-
-    name_keys = list(name_map.keys())
-    AMBIGUITY_MARGIN = 0.08   # runner-up within this of the top match = flag it
-
-    resolved, methods = [], []
-    for i, raw_name in enumerate(raw_names):
-        isin = str(isins.iloc[i]).strip() if isins is not None else None
-        symbol, method = None, "UNRESOLVED"
-
-        if isin and isin in isin_map:
-            symbol, method = isin_map[isin], "ISIN_EXACT"
-        else:
-            # Stricter cutoff (0.75, up from 0.6) — a same-prefix collision
-            # like the ICICI Prudential example above scores dangerously
-            # high on loose fuzzy matching. Better to leave it UNRESOLVED
-            # and force a manual check than silently pick the wrong company.
-            candidates = difflib.get_close_matches(str(raw_name), name_keys, n=2, cutoff=0.75)
-            if candidates:
-                symbol = name_map[candidates[0]]
-                if len(candidates) == 2:
-                    top_ratio = difflib.SequenceMatcher(None, str(raw_name), candidates[0]).ratio()
-                    runner_ratio = difflib.SequenceMatcher(None, str(raw_name), candidates[1]).ratio()
-                    if (top_ratio - runner_ratio) <= AMBIGUITY_MARGIN:
-                        method = "AMBIGUOUS_FUZZY"
-                        log.warning(f"  AMBIGUOUS match for '{raw_name}': top candidate "
-                                    f"'{candidates[0]}' ({top_ratio:.2f}) vs runner-up "
-                                    f"'{candidates[1]}' ({runner_ratio:.2f}) — too close to "
-                                    f"trust automatically, flagging for manual review.")
-                    else:
-                        method = "FUZZY_NAME"
-                else:
-                    method = "FUZZY_NAME"
-
-        if symbol:
-            resolved.append(symbol)
-            methods.append(method)
-        else:
-            log.warning(f"  Could not resolve ticker for '{raw_name}' "
-                        f"(ISIN={isin}) — using raw name, price fetch will likely fail.")
-            resolved.append(raw_name)
-            methods.append(method)
-
-    return pd.Series(resolved, index=raw_names.index), pd.Series(methods, index=raw_names.index)
-
 
 def _find_col(df: pd.DataFrame, candidates: list) -> str | None:
     cols_lower = {str(c).lower().strip(): c for c in df.columns}
