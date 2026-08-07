@@ -312,6 +312,8 @@ def publish_scan_metadata(dhan_status: dict, regime: str, breadth_score: int,
         return False
     finally:
         client.close()
+
+def get_holdings() -> dict:
     """
     P1-04: read current holdings from Turso, consolidated by symbol across
     accounts — deliberately mirrors Portfolio Dashboard's own
@@ -541,6 +543,8 @@ def get_holding_stops() -> dict:
         return {}
     finally:
         client.close()
+
+if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--test", action="store_true", help="Verify credentials/connection only, no writes")
     ap.add_argument("--init-schema", action="store_true", help="Create the P1-01 bridge tables (idempotent)")
