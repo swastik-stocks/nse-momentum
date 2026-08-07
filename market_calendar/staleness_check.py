@@ -71,7 +71,7 @@ def check_staleness(picks_date: date, today: date = None) -> None:
 
     expected_scan_date = previous_trading_day(today)
 
-    if picks_date != expected_scan_date:
+    if picks_date not in (expected_scan_date, today):
         raise StaleDataError(
             f"picks_latest.json is dated {picks_date} but the last "
             f"trading day before {today} was {expected_scan_date}. "
@@ -81,3 +81,4 @@ def check_staleness(picks_date: date, today: date = None) -> None:
 
 class StaleDataError(Exception):
     pass
+
