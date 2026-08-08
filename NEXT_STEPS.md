@@ -8,27 +8,29 @@ elsewhere — this file is the durable record of what's still open.
 
 ## Pending
 
-1. **Confirm `get_holdings` fix + universe union in a real scan run**
-   (nse_momentum) — `turso_sync.py`'s missing `get_holdings` definition was
-   fixed and pushed (commit `d0774ac`), and `scanner.py` now folds held
-   tickers missing from the static universe into the scan (commit
-   `691b172`). Neither has been confirmed in an actual GitHub Actions run
-   yet — the test run done during this session predates both fixes. Check
-   the next real run (Monday 19:30 IST, or trigger manually via Actions →
-   "Run workflow" or cron-job.org's Test run) for:
-   - `[P2-01] Held stocks evaluated:` log line + a populated Section 6
-     (Position Alerts) in the email
-   - `Folded 3 held ticker(s) not in the static universe...` log line
-     (SBIFUNDS.NS, SILVERBEES.NS, YATHARTH.NS)
-
-2. **Optional — cosmetic**: `company_name` for the two backfilled holdings
-   (id 22, 23 in the `holdings` table) still reads "ASTER DM QUALITY CARE"
-   / "SAI LIFE SCIENCES" instead of their real NSE names ("Aster DM Quality
-   Care Limited" / "Sai Life Sciences Limited"). Never affected anything
-   functionally (display-only field) — low priority, only worth doing if
-   it's bothering you.
+1. **New finding, not part of P1 scope**: `turso_sync.publish_holding_stops()`
+   is defined but never called anywhere in the codebase — dead code. It
+   writes `position_actions` rows with `action_type='HOLD_STOP'`, which
+   Portfolio Dashboard's `get_holding_stops()` reads for its "Portfolio
+   Heat" feature — meaning that feature has never had real data, regardless
+   of the `get_holdings` fix. Doesn't affect the evening email's Section 6
+   (EXIT/TRIM/heat there is computed fresh in-memory each run, not read
+   back from `position_actions`). Worth deciding whether to wire this in or
+   remove it as unused.
 
 ## Done (2026-08-08)
+
+- **Cosmetic `company_name` fix** — the two backfilled holdings (id 22, 23)
+  now show their real NSE names ("Aster DM Quality Care Limited" / "Sai
+  Life Sciences Limited") instead of the original free-text entries.
+
+- **Confirmed `get_holdings` fix + universe union in a real scan run** —
+  the 2026-08-08 scan (`scan_metadata.published_at` 05:48 UTC, after both
+  fixes were pushed) shows `tickers_from_dhan=502` against a 500-stock
+  static universe; `get_holdings()` currently returns 3 tickers missing
+  from the static list (SBIFUNDS.NS, SILVERBEES.NS, YATHARTH.NS) — 500+3=503
+  requested, 502 fetched via Dhan is consistent with one Dhan-side miss on
+  a newer/smaller name, not an error. Confirms both fixes are live.
 
 - **Portfolio Dashboard `libsql` → `libsql_client` migration** (see that
   repo's `NEXT_STEPS.md` for detail) — fixed the indefinite `conn.sync()`
