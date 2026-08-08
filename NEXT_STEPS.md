@@ -21,26 +21,7 @@ elsewhere — this file is the durable record of what's still open.
    - `Folded 3 held ticker(s) not in the static universe...` log line
      (SBIFUNDS.NS, SILVERBEES.NS, YATHARTH.NS)
 
-2. **Migrate Portfolio Dashboard's `db.py` from `libsql` to `libsql_client`**
-   (F:\PortfolioDashboard) — `libsql`'s embedded-replica `conn.sync()` hangs
-   indefinitely in this environment (confirmed twice, not a network issue —
-   curl reaches the same Turso host in <1s). `db.py`'s own docstring
-   explains it was switched TO `libsql` FROM `libsql_client` after a past
-   `WSServerHandshakeError` when Turso deprecated the old websocket/hrana
-   protocol — but nse_momentum's `turso_sync.py` uses `libsql_client`
-   successfully against this exact same database throughout this session,
-   suggesting that issue is resolved and `libsql_client` is now the
-   healthier choice. This is a real rewrite (different cursor/commit
-   semantics), not a one-line fix.
-
-3. **Re-enable Turso in Portfolio Dashboard's `.env`** — currently commented
-   out (`TURSO_DATABASE_URL`/`TURSO_AUTH_TOKEN`) as an immediate unblock so
-   the app loads past login. Running on a stale local `portfolio.db`
-   (dated 27 Jul — missing MANAPPURAM/ASTERDM/SAILIFE, has since-removed
-   holdings like DIVISLAB/SMLMAH) until item 2 is done and these are
-   uncommented again.
-
-4. **Optional — cosmetic**: `company_name` for the two backfilled holdings
+2. **Optional — cosmetic**: `company_name` for the two backfilled holdings
    (id 22, 23 in the `holdings` table) still reads "ASTER DM QUALITY CARE"
    / "SAI LIFE SCIENCES" instead of their real NSE names ("Aster DM Quality
    Care Limited" / "Sai Life Sciences Limited"). Never affected anything
@@ -48,6 +29,12 @@ elsewhere — this file is the durable record of what's still open.
    it's bothering you.
 
 ## Done (2026-08-08)
+
+- **Portfolio Dashboard `libsql` → `libsql_client` migration** (see that
+  repo's `NEXT_STEPS.md` for detail) — fixed the indefinite `conn.sync()`
+  hang that was blocking Portfolio Dashboard from loading past login.
+  Turso re-enabled in `.env`, verified working end-to-end (reads + writes)
+  against production.
 
 - P0 scheduler: cron-job.org as primary trigger, GitHub `schedule` as
   backstop, dead man's switch — all live and confirmed working.
