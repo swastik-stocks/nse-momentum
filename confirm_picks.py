@@ -110,6 +110,16 @@ def _load_recipients() -> list:
     return [GMAIL_ADDRESS]
 
 
+def _load_cc_recipients() -> list:
+    """Optional CC list -- recipients_cc.txt, one address per line. Applies to
+    every email this script sends (all checkpoints + the BTST scan)."""
+    path = "recipients_cc.txt"
+    if os.path.exists(path):
+        with open(path, encoding="utf-8") as f:
+            return [l.strip() for l in f if l.strip() and not l.startswith("#")]
+    return []
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # RVOL — real first-45min calculation
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1173,15 +1183,18 @@ def build_html(results: list, scan_date: str, run_time: str) -> str:
 
 def send_email(subject: str, html_body: str):
     recipients = _load_recipients()
+    cc = _load_cc_recipients()
     msg = MIMEMultipart("alternative")
     msg["Subject"] = subject
     msg["From"]    = GMAIL_ADDRESS
     msg["To"]      = ", ".join(recipients)
+    if cc:
+        msg["Cc"] = ", ".join(cc)
     msg.attach(MIMEText(html_body, "html", "utf-8"))
     with smtplib.SMTP_SSL("smtp.gmail.com", 465) as smtp:
         smtp.login(GMAIL_ADDRESS, GMAIL_APP_PASSWORD)
-        smtp.sendmail(GMAIL_ADDRESS, recipients, msg.as_string())
-    log.info(f"  Email sent to {recipients}")
+        smtp.sendmail(GMAIL_ADDRESS, recipients + cc, msg.as_string())
+    log.info(f"  Email sent to {recipients}" + (f" (cc: {cc})" if cc else ""))
 
 
 # ─────────────────────────────────────────────────────────────────────────────

@@ -120,6 +120,19 @@ def _load_recipients() -> list:
     return emails or ([GMAIL_ADDRESS] if GMAIL_ADDRESS else [])
 
 
+def _load_cc_recipients() -> list:
+    """Optional CC list -- recipients_cc.txt, one address per line."""
+    path = BASE_DIR / "recipients_cc.txt"
+    if not path.exists():
+        return []
+    emails = []
+    for line in path.read_text().splitlines():
+        line = line.strip()
+        if line and not line.startswith("#") and "@" in line:
+            emails.append(line)
+    return emails
+
+
 def send_email_report(tiers: dict):
     if not GMAIL_ADDRESS or not GMAIL_APP_PW:
         log.warning("Gmail credentials missing.")
@@ -129,6 +142,7 @@ def send_email_report(tiers: dict):
     if not recipients:
         log.warning("No recipients in recipients.txt")
         return
+    cc = _load_cc_recipients()
 
     t1           = tiers.get("tier1", [])
     t2           = tiers.get("tier2", [])
@@ -190,13 +204,15 @@ def send_email_report(tiers: dict):
                       f"Regime {regime} ({rlbl}) - {len(t1)} picks{exit_subject_flag}{conc_subject_flag}")
     msg["From"] = GMAIL_ADDRESS
     msg["To"]   = ", ".join(recipients)
+    if cc:
+        msg["Cc"] = ", ".join(cc)
     msg.attach(MIMEText(html, "html"))
 
     try:
         with smtplib.SMTP_SSL("smtp.gmail.com", 465) as smtp:
             smtp.login(GMAIL_ADDRESS, GMAIL_APP_PW)
-            smtp.sendmail(GMAIL_ADDRESS, recipients, msg.as_string())
-        log.info(f"Email sent to {len(recipients)} recipient(s)")
+            smtp.sendmail(GMAIL_ADDRESS, recipients + cc, msg.as_string())
+        log.info(f"Email sent to {len(recipients)} recipient(s)" + (f" (cc: {len(cc)})" if cc else ""))
     except Exception as e:
         log.error(f"Email send failed: {e}")
         raise

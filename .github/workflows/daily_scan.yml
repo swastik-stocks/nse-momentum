@@ -68,6 +68,18 @@ jobs:
           pip install git+https://github.com/rongardF/tvdatafeed.git || echo "tvDatafeed install failed - RVOL will use yfinance fallback"
           pip install pandas-ta --no-deps || echo "pandas-ta install failed - using manual calculations"
 
+      # [NEW 2026-08-11] Optional CC list for every email this repo sends.
+      # Kept out of the repo itself (recipients_cc.txt is gitignored, unlike
+      # recipients.txt which is tracked -- see .gitignore) since this repo is
+      # public; the actual address lives in the CC_RECIPIENTS secret instead.
+      - name: Write CC recipients file
+        env:
+          CC_RECIPIENTS: ${{ secrets.CC_RECIPIENTS }}
+        run: |
+          if [ -n "$CC_RECIPIENTS" ]; then
+            printf '%s\n' "$CC_RECIPIENTS" > recipients_cc.txt
+          fi
+
       - name: Run NSE Momentum Scanner v5.3
         env:
           GMAIL_ADDRESS:      ${{ secrets.GMAIL_ADDRESS }}

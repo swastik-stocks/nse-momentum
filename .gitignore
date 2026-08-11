@@ -1,6 +1,7 @@
 .env
 .env.*
 recipients.txt
+recipients_cc.txt
 scan_debug.txt
 __pycache__/
 *.pyc
