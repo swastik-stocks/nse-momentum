@@ -38,31 +38,41 @@ them); the rest is real and prioritized below.
 
 ### P0 — do first (BTST is live and unvalidated/ungated on two real risks)
 
-- [ ] **ASM/GSM hard-reject gate before BTST entry.** Confirmed absent —
-      no NSE surveillance-list (Additional/Graded Surveillance Measure)
-      handling anywhere in this repo. A stock under ASM/GSM has real
-      trading restrictions (margin, price bands, sometimes trade-for-trade
-      only) that make an overnight BTST hold specifically dangerous.
-      Pull NSE's daily ASM/GSM list and add as a hard reject gate ahead of
-      any BTST candidate in `confirm_picks.py`'s `classify_btst()`.
-- [ ] **`agents/event_risk_agent.py`: hard reject (not score penalty) on
-      earnings-eve for BTST.** Confirmed current behavior: only applies a
-      -2/-5 score penalty near earnings (`_score_penalty` logic), never
-      blocks. Fine for a same-day entry; not fine for holding a position
-      into an earnings gap overnight. Needs a BTST-specific hard reject,
-      separate from the existing penalty used by the morning scan.
+- [x] **ASM/GSM hard-reject gate before BTST entry.** DONE 2026-08-11.
+      `confirm_picks.get_asm_gsm_symbols()` fetches NSE's live surveillance
+      list (`reportASM` long+short term + `reportGSM`, confirmed working
+      against real current data, no auth needed). Wired into
+      `classify_btst()` as the first check, ahead of everything else. Fails
+      SAFE — if the fetch itself fails, treated as blocked/"UNVERIFIED",
+      never silently assumed clear.
+- [x] **Earnings-eve hard reject for BTST.** DONE 2026-08-11, but the
+      original plan was wrong about where this lives: `event_risk_agent.py`
+      is a market-wide macro calendar (RBI/expiry days), not per-ticker
+      earnings — confirmed by reading it. The actual per-ticker earnings
+      check already existed in `agents/fundamental_proxy_agent.py`'s Agent
+      9B (a soft score penalty via `nseindia.com/api/event-calendar`).
+      Reused that same endpoint/parsing in a new
+      `confirm_picks.days_to_next_earnings()`, wired into `classify_btst()`
+      as a hard reject for 0-1 days out. Confirmed live against GLAND
+      (a BTST candidate tested earlier the same day) — it had a real
+      10-Aug-2026 "Financial Results" event.
 - [ ] **Backtest `classify_btst()`'s actual thresholds** (2.0% off-high,
       1.5x RVOL, 70% T1-captured — see `confirm_picks.py`) via
-      `monte_carlo_significance.py`-style validation on T+1 exits. These
-      were reasoned out, not tested — same position VCP was in before its
-      08-05 re-test. This codebase's whole culture is "don't trust a
-      pattern until it clears Monte Carlo" (see `pattern_agent.py`
-      docstring) — BTST shouldn't be the exception just because it's new.
-- [ ] **Re-test VCP at current N.** Pruned 08-05 at N=70, p=0.1525 — the
-      pattern's own detection logic is still live for exactly this
-      purpose (`pattern_agent.py`: "still fires... for validation
-      re-testing if a future replay with more data... wants to re-examine
-      it"). Cheap, one `monte_carlo_significance.py --pattern VCP` run.
+      `monte_carlo_significance.py`-style validation on T+1 exits. Still
+      open — these were reasoned out, not tested, same position VCP was in
+      before its 08-05 re-test. Bigger lift than the two gates above
+      (needs a new backtest built from existing daily OHLCV + gate-chain
+      data); deliberately not rushed today. This codebase's whole culture
+      is "don't trust a pattern until it clears Monte Carlo" — BTST
+      shouldn't be the exception just because it's new.
+- [x] **Re-test VCP at current N — checked 2026-08-11, not actionable
+      yet.** `universe_snapshots` is still frozen at 47 (same basis as the
+      08-05 N=70 result) and `pipeline_replay_deep_progress`'s last write
+      was 2026-08-06 — no new data has accumulated. Re-running
+      `monte_carlo_significance.py` right now would reproduce the
+      identical N=70, p=0.1525 result, so it was skipped rather than
+      wasted. Only becomes meaningful once `universe_snapshots` actually
+      grows past 47 (separate P4-05 snapshot-extension work).
 
 ### P1 — next
 
