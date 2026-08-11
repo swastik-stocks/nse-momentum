@@ -32,15 +32,51 @@ jobs:
           pip install python-dotenv requests yfinance loguru
           pip install git+https://github.com/rongardF/tvdatafeed.git || echo "tvDatafeed install failed - RVOL will use yfinance fallback"
 
-      - name: Find latest successful scan run
+      - name: Find latest usable scan run
         id: find_run
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          run_id=$(curl -s -H "Authorization: Bearer $GH_TOKEN" \
-            -H "Accept: application/vnd.github+json" \
-            "https://api.github.com/repos/${{ github.repository }}/actions/workflows/daily_scan.yml/runs?status=success&per_page=1" \
-            | python3 -c "import sys,json; print(json.load(sys.stdin)['workflow_runs'][0]['id'])")
+          # [FIX 2026-08-11] A daily_scan.yml run can complete all real work
+          # (scan + artifact upload) and still be marked "cancelled" overall by
+          # GH Actions infra seconds after finishing (seen 2026-08-10: dispatch
+          # run 31395814390 uploaded picks_latest fine but the run itself came
+          # back "cancelled", so the old status=success query skipped it and
+          # fell through to a later backstop run that had SKIPPED the scan
+          # entirely -- 0 artifacts, "Download picks artifact" failed).
+          # Fix: scan the last 10 completed runs (success OR cancelled) newest
+          # first, and trust the first one that actually has a non-expired
+          # picks_latest artifact, rather than trusting the run's own verdict.
+          run_id=$(python3 <<'PY'
+          import json, os, urllib.request
+
+          token = os.environ["GH_TOKEN"]
+          repo = "${{ github.repository }}"
+
+          def gh(url):
+              req = urllib.request.Request(url, headers={
+                  "Authorization": f"Bearer {token}",
+                  "Accept": "application/vnd.github+json",
+              })
+              with urllib.request.urlopen(req) as r:
+                  return json.load(r)
+
+          runs = gh(f"https://api.github.com/repos/{repo}/actions/workflows/daily_scan.yml/runs?status=completed&per_page=10")["workflow_runs"]
+          picked = ""
+          for run in runs:
+              if run["conclusion"] not in ("success", "cancelled"):
+                  continue
+              arts = gh(f"https://api.github.com/repos/{repo}/actions/runs/{run['id']}/artifacts")["artifacts"]
+              if any(a["name"] == "picks_latest" and not a["expired"] for a in arts):
+                  picked = run["id"]
+                  break
+          print(picked)
+          PY
+          )
+          if [ -z "$run_id" ]; then
+            echo "::error::No daily_scan.yml run in the last 10 completed runs has a usable picks_latest artifact."
+            exit 1
+          fi
           echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
           echo "Using scan run: $run_id"
 
