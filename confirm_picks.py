@@ -904,11 +904,19 @@ def classify_btst(pick: dict, cmp: float | None, day_high: float | None,
     off_high_disp = f"{pct_off_high:.1f}%" if pct_off_high is not None else "N/A"
     remaining_pct = round(((t1 - cmp) / cmp) * 100, 1) if cmp > 0 else 0.0
     return {
+        # [2026-08-11] Label/action deliberately informational, not a "hold
+        # overnight" instruction -- validation/btst_backtest.py (1,707
+        # historical signals) found this filter does NOT show a validated
+        # positive edge (permutation p=0.094 after correcting for testing 2
+        # exit metrics -- not significant). See NEXT_STEPS.md. Meeting these
+        # criteria is real, checkable information; it is not yet evidence
+        # this makes money. Use judgment, don't treat this as a signal.
         "status": "BTST_CANDIDATE", "ltp": cmp, "rvol": rvol, "rvol_src": rvol_src,
         "pct_off_high": pct_off_high, "pct_captured": pct_captured,
-        "action": (f"Hold overnight — CMP ₹{cmp:,.1f}, {off_high_disp} off high, "
-                   f"RVOL {rvol:.1f}x, {remaining_pct:.1f}% still to T1 ₹{t1:,.1f}. "
-                   f"SL stays ₹{sl:,.1f}."),
+        "action": (f"Meets closing-strength criteria (edge not yet validated — see footer) — "
+                   f"CMP ₹{cmp:,.1f}, {off_high_disp} off high, RVOL {rvol:.1f}x, "
+                   f"{remaining_pct:.1f}% still to T1 ₹{t1:,.1f}. SL stays ₹{sl:,.1f}. "
+                   f"Use your own judgment before holding overnight."),
         "label": "BTST CANDIDATE", "color": "#ffffff", "bg": "#16a34a",
     }
 
@@ -1073,15 +1081,19 @@ def build_btst_html(results: list, scan_date: str, run_time: str) -> str:
 
     action_box = ""
     if candidate_n:
+        # [2026-08-11] Informational framing, not a recommendation -- see
+        # classify_btst()'s BTST_CANDIDATE branch for the backtest context
+        # (1,707 historical signals, edge not statistically validated).
         action_box = f"""
-        <div style="background:#f0fdf4;border-left:4px solid #16a34a;
+        <div style="background:#fffbeb;border-left:4px solid #ca8a04;
             margin:16px 28px 0;padding:14px 16px;border-radius:0 4px 4px 0;">
-          <div style="font-weight:700;color:#15803d;font-size:15px;">
-            BTST — {candidate_n} position(s) still strong into the close
+          <div style="font-weight:700;color:#92400e;font-size:15px;">
+            {candidate_n} position(s) meet closing-strength criteria — not a hold recommendation
           </div>
-          <div style="color:#166534;font-size:13px;margin-top:4px;">
-            Near today's high, full-day RVOL still confirmed, meaningful room left to T1.
-            Hold overnight, keep SL where it is, review at tomorrow's 09:20 checkpoint.
+          <div style="color:#78350f;font-size:13px;margin-top:4px;">
+            Near today's high, full-day RVOL confirmed, meaningful room left to T1 — these are
+            the same checks a genuine setup would clear, but backtesting hasn't yet shown this
+            filter predicts a profitable overnight hold (see footer). Use your own judgment.
           </div>
         </div>"""
     elif results:
@@ -1111,7 +1123,7 @@ def build_btst_html(results: list, scan_date: str, run_time: str) -> str:
     <div style="color:#94a3b8;font-size:11px;letter-spacing:2px;">
         NSE MOMENTUM DISCOVERY &ndash; V{VERSION}</div>
     <div style="color:#f1f5f9;font-size:22px;font-weight:700;margin-top:4px;">
-        BTST Scan — Closing Strength Check</div>
+        BTST Scan — Closing Strength Check (informational)</div>
     <div style="color:#64748b;font-size:13px;margin-top:2px;">
         {scan_date} &nbsp;·&nbsp; Run at {run_time} IST</div>
   </div>
@@ -1147,7 +1159,13 @@ def build_btst_html(results: list, scan_date: str, run_time: str) -> str:
       font-size:11px;color:#94a3b8;">
     Not SEBI-registered investment advice. All trading involves capital risk.
     BTST = Buy Today Sell Tomorrow — holds carry overnight gap risk. SL = hard stop, do not widen.
-    Only positions CONFIRMED at an earlier checkpoint today are evaluated here.
+    Only positions CONFIRMED at an earlier checkpoint today are evaluated here.<br><br>
+    <strong>On "BTST CANDIDATE":</strong> this label means a position meets the closing-strength
+    and R:R filter (near today's high, RVOL confirmed, room left to T1) — it does NOT mean this
+    filter has been shown to predict a profitable overnight hold. A backtest against 1,707
+    historical signals (2026-08-11) found the filtered subset was not statistically distinguishable
+    from an unfiltered baseline once corrected for testing multiple exit definitions. Treat this
+    section as informational context, not a recommendation, until re-validated with more data.
   </div>
 </div>
 </body></html>"""
