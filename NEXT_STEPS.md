@@ -56,14 +56,26 @@ them); the rest is real and prioritized below.
       as a hard reject for 0-1 days out. Confirmed live against GLAND
       (a BTST candidate tested earlier the same day) — it had a real
       10-Aug-2026 "Financial Results" event.
-- [ ] **Backtest `classify_btst()`'s actual thresholds** (2.0% off-high,
-      1.5x RVOL, 70% T1-captured — see `confirm_picks.py`) via
-      `monte_carlo_significance.py`-style validation on T+1 exits. Still
-      open — these were reasoned out, not tested, same position VCP was in
-      before its 08-05 re-test. Bigger lift than the two gates above
-      (needs a new backtest built from existing daily OHLCV + gate-chain
-      data); deliberately not rushed today. This codebase's whole culture
-      is "don't trust a pattern until it clears Monte Carlo" — BTST
+- [x] **Backtest `classify_btst()`'s actual thresholds** (2.0% off-high,
+      1.5x RVOL, 70% T1-captured — see `confirm_picks.py`). DONE 2026-08-11
+      via new `validation/btst_backtest.py`, reusing the same validated
+      gate chain as `pipeline_replay_deep.py` (no drift risk) with the
+      signal day's own OHLC bar as a 15:15 proxy. **Result: the filter
+      does NOT show a validated edge.** 1,707 historical Cup & Handle /
+      Swing High Breakout signals since 2016, 153 (9.0%) would clear the
+      filter. Overnight-gap metric: filtered mean -0.09% vs unfiltered
+      -0.21% (p=0.047 raw, **p=0.094 after Benjamini-Hochberg correction
+      for testing 2 exit metrics — not significant**). T+1-close-exit
+      metric: not significant either way (p=0.257). Both filtered and
+      unfiltered buckets have negative mean/median returns outright.
+      Same position VCP was in before its 08-05 prune — a plausible-
+      looking number that doesn't hold up under a proper test.
+      **Action taken:** kept the BTST feature live (per your call), but
+      reframed the email copy from "Hold overnight" to explicitly
+      informational — meeting the criteria is real, checkable
+      information, not proof of a profitable hold. See `confirm_picks.py`
+      commit e6ed176. This codebase's whole culture is "don't trust a
+      pattern until it clears Monte Carlo" — BTST
       shouldn't be the exception just because it's new.
 - [x] **Re-test VCP at current N — checked 2026-08-11, not actionable
       yet.** `universe_snapshots` is still frozen at 47 (same basis as the
