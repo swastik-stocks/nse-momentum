@@ -42,6 +42,7 @@ CHANGES vs v5.3:
 """
 
 import os, json, smtplib, time
+import requests
 from datetime import datetime, date, timedelta
 from zoneinfo import ZoneInfo
 from email.mime.multipart import MIMEMultipart
@@ -655,19 +656,152 @@ def classify(pick: dict, cmp: float | None, rvol: float, rvol_src: str,
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# [NEW 2026-08-11] BTST safety gates — NSE ASM/GSM + per-ticker earnings
+# ─────────────────────────────────────────────────────────────────────────────
+
+_NSE_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+    "Accept": "application/json, text/plain, */*",
+    "Referer": "https://www.nseindia.com/reports/asm-gsm",
+}
+
+
+def get_asm_gsm_symbols() -> set | None:
+    """
+    Live NSE surveillance list (ASM long+short term + GSM), fetched once per
+    BTST scan -- not per ticker. Confirmed working 2026-08-11 against
+    https://www.nseindia.com/api/reportASM and .../reportGSM (both return
+    the current day's list, keyed by symbol, no auth/cookie needed).
+
+    Returns None on any fetch/parse failure (network, NSE format change,
+    blocked request) -- callers must treat None as "could not verify," NOT
+    as "clear." BTST is fail-SAFE here (block if unverifiable), matching
+    the existing RVOL<0 pattern in classify() -- staying non-terminal /
+    unconfirmed on missing data, never silently assuming safety.
+    """
+    try:
+        session = requests.Session()
+        session.headers.update(_NSE_HEADERS)
+        session.get("https://www.nseindia.com/", timeout=8)  # cookie warm-up
+
+        flagged = set()
+
+        r_asm = session.get("https://www.nseindia.com/api/reportASM", timeout=10)
+        r_asm.raise_for_status()
+        asm = r_asm.json()
+        for bucket in ("longterm", "shortterm"):
+            for row in asm.get(bucket, {}).get("data", []):
+                sym = row.get("symbol")
+                if sym:
+                    flagged.add(sym.upper())
+
+        r_gsm = session.get("https://www.nseindia.com/api/reportGSM", timeout=10)
+        r_gsm.raise_for_status()
+        for row in r_gsm.json():
+            sym = row.get("symbol")
+            if sym:
+                flagged.add(sym.upper())
+
+        log.info(f"  ASM/GSM list fetched: {len(flagged)} symbol(s) currently flagged")
+        return flagged
+    except Exception as e:
+        log.warning(f"  ASM/GSM fetch failed ({type(e).__name__}: {e}) — "
+                    f"BTST will treat all tickers as UNVERIFIED, not clear")
+        return None
+
+
+def days_to_next_earnings(ticker_raw: str, as_of: date = None) -> int | None:
+    """
+    Days until the nearest upcoming (or today's) NSE-listed board meeting /
+    financial-results event for this ticker, via the same
+    https://www.nseindia.com/api/event-calendar endpoint already used (with
+    identical parsing) by agents/fundamental_proxy_agent.py's Agent 9B --
+    confirmed live 2026-08-11 (e.g. GLAND.NS shows a real 10-Aug-2026
+    "Financial Results" event, one day before this check was built).
+
+    Three distinct outcomes, NOT collapsed into one:
+      - int >= 0: a qualifying future event is confirmed that many days out.
+      - -1: fetch succeeded, no qualifying event is currently announced --
+        this is the NORMAL, SAFE case most days (NSE only publishes board-
+        meeting dates roughly 5-7 days ahead per SEBI norms, so "nothing
+        announced" does not mean "nothing coming," it means the near-term
+        window is genuinely clear as far as anyone can know right now).
+      - None: the fetch itself failed (network/parse/blocked) -- genuinely
+        unverifiable, and the only case callers should treat as unsafe.
+      Collapsing -1 and None into one "unknown" value would make this gate
+      block almost every day for no real reason, since most tickers have
+      no announced event on most days.
+    """
+    as_of = as_of or datetime.now(IST).date()
+    symbol = ticker_raw.replace(".NS", "")
+    try:
+        r = requests.get(
+            f"https://www.nseindia.com/api/event-calendar?symbol={symbol}",
+            headers=_NSE_HEADERS, timeout=8,
+        )
+        r.raise_for_status()
+        events = r.json()
+        if not isinstance(events, list):
+            return None
+
+        best_days = None
+        for event in events:
+            date_str = event.get("date", "") or event.get("bm_date", "")
+            purpose  = (event.get("purpose", "") or "").lower()
+            desc     = (event.get("bm_desc", "") or "").lower()
+            if not date_str:
+                continue
+            if not any(kw in purpose or kw in desc
+                       for kw in ("result", "quarterly", "financial results")):
+                continue
+            try:
+                ev_date = datetime.strptime(date_str, "%d-%b-%Y").date()
+            except Exception:
+                continue
+            days_away = (ev_date - as_of).days
+            if days_away < 0:
+                continue
+            if best_days is None or days_away < best_days:
+                best_days = days_away
+        return best_days if best_days is not None else -1
+    except Exception as e:
+        log.debug(f"    event-calendar fetch failed for {symbol}: {type(e).__name__}: {e}")
+        return None
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # [NEW 2026-08-11] BTST (Buy Today Sell Tomorrow) classification — 15:15 scan
 # ─────────────────────────────────────────────────────────────────────────────
 
 def classify_btst(pick: dict, cmp: float | None, day_high: float | None,
-                   rvol: float, rvol_src: str) -> dict:
+                   rvol: float, rvol_src: str,
+                   asm_gsm_symbols: set | None = None,
+                   days_to_earnings: int | None = None) -> dict:
     """
     15:15 BTST scan classification -- separate from the morning entry
     classify() above. Only ever called on tickers that were already
     CONFIRMED / CONFIRMED_LOW_VOL at an earlier checkpoint today (see
     run_btst_scan) -- this answers "hold overnight?", not "enter now?".
 
-    Two gates (Closing Strength + R:R Favorability, per the GLAND example
-    that motivated this):
+    Two SAFETY GATES checked FIRST, ahead of everything else -- these are
+    hard vetoes on holding overnight at all, not signal-quality checks:
+      0a. ASM/GSM -- NSE surveillance-listed stocks carry real trading
+          restrictions (margin, price bands, sometimes trade-for-trade
+          only). asm_gsm_symbols=None means the fetch failed and this
+          could not be verified -- BLOCKS just like a real flag, since
+          "unverifiable" must never be treated as "safe" for a regulatory
+          check (see get_asm_gsm_symbols() docstring).
+      0b. Earnings-eve -- days_to_earnings 0 or 1 means results/board
+          meeting today or tomorrow: hold-overnight risk is asymmetric
+          gap risk, not the normal "was the pattern right" risk, so this
+          is a hard reject, not the soft score penalty the morning scan's
+          fundamental_proxy_agent.py uses. days_to_earnings=None (fetch
+          failed) also blocks, same reasoning as ASM/GSM. -1 means
+          "checked, nothing announced" -- the normal, safe case (see
+          days_to_next_earnings() docstring) -- NOT treated as a block.
+
+    Then the two original gates (Closing Strength + R:R Favorability, per
+    the GLAND example that motivated this):
       1. Closing strength -- CMP within BTST_MAX_PCT_OFF_HIGH of today's
          high AND full-day-elapsed RVOL still >= BTST_MIN_RVOL. A stock
          that faded off its highs or saw volume dry up into the close is
@@ -680,6 +814,7 @@ def classify_btst(pick: dict, cmp: float | None, day_high: float | None,
     sl    = pick["sl"]
     pivot = pick.get("pivot", entry)
     t1    = pick["t1"]
+    ticker_disp = pick.get("ticker", "").replace(".NS", "")
 
     if cmp is None:
         return {
@@ -687,6 +822,29 @@ def classify_btst(pick: dict, cmp: float | None, day_high: float | None,
             "pct_off_high": None, "pct_captured": None,
             "action": "Could not fetch live price — check manually before market close",
             "label": "DATA ERROR", "color": "#6b7280", "bg": "#f3f4f6",
+        }
+
+    if asm_gsm_symbols is None or ticker_disp.upper() in asm_gsm_symbols:
+        verified = asm_gsm_symbols is not None
+        return {
+            "status": "ASM_GSM_BLOCKED", "ltp": cmp, "rvol": rvol, "rvol_src": rvol_src,
+            "pct_off_high": None, "pct_captured": None,
+            "action": (f"{'Under NSE ASM/GSM surveillance' if verified else 'ASM/GSM status could not be verified'} "
+                       f"— do not hold overnight, restrictions apply. Square off today."),
+            "label": "ASM/GSM" if verified else "ASM/GSM UNVERIFIED",
+            "color": "#ffffff", "bg": "#dc2626",
+        }
+
+    if days_to_earnings is None or 0 <= days_to_earnings <= 1:
+        verified = days_to_earnings is not None
+        note = (f"results due in {days_to_earnings}d" if verified
+                else "earnings calendar could not be verified")
+        return {
+            "status": "EARNINGS_BLOCKED", "ltp": cmp, "rvol": rvol, "rvol_src": rvol_src,
+            "pct_off_high": None, "pct_captured": None,
+            "action": f"Earnings-eve risk ({note}) — asymmetric gap risk, do not hold overnight. Square off today.",
+            "label": "EARNINGS EVE" if verified else "EARNINGS UNVERIFIED",
+            "color": "#ffffff", "bg": "#dc2626",
         }
 
     if cmp <= sl:
@@ -885,10 +1043,13 @@ def _btst_row(r: dict) -> str:
 
 
 def build_btst_html(results: list, scan_date: str, run_time: str) -> str:
-    order = {"BTST_CANDIDATE": 0, "NEAR_T1": 1, "FADED": 2, "VOL_LIGHT": 3,
-             "NOT_HELD": 4, "STOPPED_OUT": 5, "DATA_ERROR": 6}
+    order = {"ASM_GSM_BLOCKED": 0, "EARNINGS_BLOCKED": 1, "BTST_CANDIDATE": 2,
+             "NEAR_T1": 3, "FADED": 4, "VOL_LIGHT": 5,
+             "NOT_HELD": 6, "STOPPED_OUT": 7, "DATA_ERROR": 8}
     results = sorted(results, key=lambda r: order.get(r["classification"]["status"], 9))
 
+    asm_gsm_n   = sum(1 for r in results if r["classification"]["status"] == "ASM_GSM_BLOCKED")
+    earnings_n  = sum(1 for r in results if r["classification"]["status"] == "EARNINGS_BLOCKED")
     candidate_n = sum(1 for r in results if r["classification"]["status"] == "BTST_CANDIDATE")
     near_t1_n   = sum(1 for r in results if r["classification"]["status"] == "NEAR_T1")
     faded_n     = sum(1 for r in results if r["classification"]["status"] == "FADED")
@@ -898,6 +1059,8 @@ def build_btst_html(results: list, scan_date: str, run_time: str) -> str:
     error_n     = sum(1 for r in results if r["classification"]["status"] == "DATA_ERROR")
 
     summary_parts = []
+    if asm_gsm_n:   summary_parts.append(f"<span style='color:#dc2626;font-weight:700;'>{asm_gsm_n} ASM/GSM</span>")
+    if earnings_n:  summary_parts.append(f"<span style='color:#dc2626;font-weight:700;'>{earnings_n} EARNINGS EVE</span>")
     if candidate_n: summary_parts.append(f"<span style='color:#16a34a;font-weight:700;'>{candidate_n} BTST CANDIDATE{'S' if candidate_n != 1 else ''}</span>")
     if near_t1_n:   summary_parts.append(f"<span style='color:#ca8a04;font-weight:700;'>{near_t1_n} NEAR T1</span>")
     if faded_n:     summary_parts.append(f"<span style='color:#dc2626;font-weight:700;'>{faded_n} FADED</span>")
@@ -1277,6 +1440,9 @@ def run_btst_scan(today_iso: str, today_str: str, run_time: str):
     log.info(f"  BTST scan: {len(candidates)} position(s) were CONFIRMED today, "
              f"re-checking for closing strength...")
 
+    # Fetched once for the whole scan, not per ticker -- one NSE call, not N.
+    asm_gsm_symbols = get_asm_gsm_symbols()
+
     now_ist = datetime.now(IST)
     results = []
     for ticker_key, pick in candidates:
@@ -1288,7 +1454,10 @@ def run_btst_scan(today_iso: str, today_str: str, run_time: str):
         cmp                        = get_live_price(ticker_raw)
         rvol, rvol_src             = get_rvol(ticker_raw, as_of=now_ist)
         day_high, day_low, dh_src  = get_intraday_high_low(ticker_raw, as_of=now_ist)
-        c = classify_btst(pick, cmp, day_high, rvol, rvol_src)
+        days_to_earnings           = days_to_next_earnings(ticker_raw, as_of=now_ist.date())
+        c = classify_btst(pick, cmp, day_high, rvol, rvol_src,
+                           asm_gsm_symbols=asm_gsm_symbols,
+                           days_to_earnings=days_to_earnings)
 
         cmp_disp      = f"₹{cmp:,.1f}" if cmp else "N/A"
         rvol_disp     = f"{rvol:.1f}x" if rvol >= 0 else "N/A"
