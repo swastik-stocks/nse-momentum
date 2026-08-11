@@ -14,6 +14,14 @@ on:
         options:
           - 'true'
           - 'false'
+      btst:
+        description: 'Run the 15:15 BTST closing-strength scan instead of the normal entry-confirmation checkpoint?'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - 'true'
+          - 'false'
 permissions:
   actions: read
   contents: read
@@ -143,6 +151,13 @@ jobs:
           # clicking "Run workflow" manually in the UI without inputs.
           input_label="${{ github.event.inputs.checkpoint_label }}"
           input_final="${{ github.event.inputs.is_final }}"
+          input_btst="${{ github.event.inputs.btst }}"
+
+          if [ "$input_btst" = "true" ]; then
+            echo "btst=--btst" >> "$GITHUB_OUTPUT"
+          else
+            echo "btst=" >> "$GITHUB_OUTPUT"
+          fi
 
           if [ -n "$input_label" ]; then
             echo "label=$input_label" >> "$GITHUB_OUTPUT"
@@ -168,7 +183,7 @@ jobs:
           GMAIL_ADDRESS: ${{ secrets.GMAIL_ADDRESS }}
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
           PICKS_JSON_PATH: picks_latest.json
-        run: python confirm_picks.py --checkpoint "${{ steps.checkpoint.outputs.label }}" ${{ steps.checkpoint.outputs.final }}
+        run: python confirm_picks.py --checkpoint "${{ steps.checkpoint.outputs.label }}" ${{ steps.checkpoint.outputs.final }} ${{ steps.checkpoint.outputs.btst }}
 
       - name: Upload checkpoint state for next run today
         if: always()   # save state even if the run partly failed -- don't lose progress

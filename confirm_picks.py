@@ -92,6 +92,13 @@ REGIME_TOLERANCE = {
 # (still below pivot) and DATA_ERROR (retry-worthy) get re-classified on the
 # next checkpoint.
 TERMINAL_STATUSES = {"CONFIRMED", "CONFIRMED_LOW_VOL", "BREAKOUT_NO_VOLUME", "MISSED", "BROKEN"}
+
+# [NEW 2026-08-11] 15:15 BTST (Buy Today Sell Tomorrow) scan thresholds.
+# See classify_btst() for how these two gates (closing strength, R:R
+# favorability) are applied -- design discussed after the 10:05 GLAND example.
+BTST_MIN_RVOL             = 1.5    # full-day-elapsed RVOL must still clear the same bar as a fresh morning entry
+BTST_MAX_PCT_OFF_HIGH     = 2.0    # CMP must be within this % of today's high -- further off = momentum stalling into the close
+BTST_MAX_PCT_T1_CAPTURED  = 70.0   # skip if >=70% of the entry->T1 move is already used up -- not enough R:R left to justify overnight risk
 # ─────────────────────────────────────────────────────────────────────────────
 
 
@@ -421,6 +428,64 @@ def get_opening_range(ticker_nse: str, as_of: datetime = None,
     return None, None, "unavailable"
 
 
+def get_intraday_high_low(ticker_nse: str, as_of: datetime = None) -> tuple:
+    """
+    Returns (day_high, day_low, source) for today's session from market open
+    (09:15) up to `as_of` -- used by the 15:15 BTST scan's closing-strength
+    gate (how far CMP has faded from today's high). Same tvDatafeed ->
+    yfinance fallback chain as get_opening_range(), but the window is
+    open-to-as_of rather than a fixed first-N-minutes slice.
+    """
+    as_of = as_of or datetime.now(IST)
+    today = as_of.date()
+
+    try:
+        from tvDatafeed import TvDatafeed, Interval
+        symbol = ticker_nse.replace(".NS", "")
+        tv = TvDatafeed()
+        df = tv.get_hist(symbol=symbol, exchange="NSE",
+                          interval=Interval.in_5_minute, n_bars=100)
+        if df is not None and not df.empty:
+            try:
+                df.index = df.index.tz_localize("UTC").tz_convert("Asia/Kolkata")
+            except Exception:
+                try:
+                    df.index = df.index.tz_convert("Asia/Kolkata")
+                except Exception:
+                    pass
+            win = df[(df.index.date == today) &
+                     (df.index.time >= MARKET_OPEN_TIME) &
+                     (df.index.time <= as_of.time())]
+            if not win.empty:
+                dh, dl = float(win["high"].max()), float(win["low"].min())
+                log.info(f"    [tvDatafeed] {symbol}: day range so far = {dl:.1f}-{dh:.1f}")
+                return dh, dl, "tvDatafeed"
+    except Exception as e:
+        log.debug(f"    [tvDatafeed] day range {ticker_nse}: {type(e).__name__}: {e}")
+
+    try:
+        import yfinance as yf
+        t = ticker_nse if ticker_nse.endswith(".NS") else ticker_nse + ".NS"
+        df_1m = yf.Ticker(t).history(period="5d", interval="1m", prepost=False)
+        if not df_1m.empty:
+            try:
+                df_1m.index = df_1m.index.tz_convert("Asia/Kolkata")
+            except Exception:
+                pass
+            win = df_1m[(df_1m.index.date == today) &
+                        (df_1m.index.time >= MARKET_OPEN_TIME) &
+                        (df_1m.index.time <= as_of.time())]
+            if not win.empty:
+                dh, dl = float(win["High"].max()), float(win["Low"].min())
+                log.info(f"    [yfinance-fallback] {t}: day range so far = {dl:.1f}-{dh:.1f}")
+                return dh, dl, "yfinance"
+    except Exception as e:
+        log.debug(f"    [yfinance-fallback] day range {ticker_nse}: {type(e).__name__}: {e}")
+
+    log.warning(f"    Day high/low unavailable for {ticker_nse} — BTST closing-strength check skipped")
+    return None, None, "unavailable"
+
+
 def classify(pick: dict, cmp: float | None, rvol: float, rvol_src: str,
              max_entry_drift_pct: float = MAX_ENTRY_DRIFT_PCT,
              max_pivot_extension_pct: float = MAX_PIVOT_EXTENSION_PCT,
@@ -580,6 +645,107 @@ def classify(pick: dict, cmp: float | None, rvol: float, rvol_src: str,
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# [NEW 2026-08-11] BTST (Buy Today Sell Tomorrow) classification — 15:15 scan
+# ─────────────────────────────────────────────────────────────────────────────
+
+def classify_btst(pick: dict, cmp: float | None, day_high: float | None,
+                   rvol: float, rvol_src: str) -> dict:
+    """
+    15:15 BTST scan classification -- separate from the morning entry
+    classify() above. Only ever called on tickers that were already
+    CONFIRMED / CONFIRMED_LOW_VOL at an earlier checkpoint today (see
+    run_btst_scan) -- this answers "hold overnight?", not "enter now?".
+
+    Two gates (Closing Strength + R:R Favorability, per the GLAND example
+    that motivated this):
+      1. Closing strength -- CMP within BTST_MAX_PCT_OFF_HIGH of today's
+         high AND full-day-elapsed RVOL still >= BTST_MIN_RVOL. A stock
+         that faded off its highs or saw volume dry up into the close is
+         NOT a BTST candidate, regardless of how the morning entry went.
+      2. R:R favorability -- less than BTST_MAX_PCT_T1_CAPTURED% of the
+         entry->T1 move already captured. A stock 90% of the way to T1
+         has little room left to reward the overnight gap risk.
+    """
+    entry = pick["entry"]
+    sl    = pick["sl"]
+    pivot = pick.get("pivot", entry)
+    t1    = pick["t1"]
+
+    if cmp is None:
+        return {
+            "status": "DATA_ERROR", "ltp": None, "rvol": rvol, "rvol_src": rvol_src,
+            "pct_off_high": None, "pct_captured": None,
+            "action": "Could not fetch live price — check manually before market close",
+            "label": "DATA ERROR", "color": "#6b7280", "bg": "#f3f4f6",
+        }
+
+    if cmp <= sl:
+        return {
+            "status": "STOPPED_OUT", "ltp": cmp, "rvol": rvol, "rvol_src": rvol_src,
+            "pct_off_high": None, "pct_captured": None,
+            "action": (f"SL breached intraday (CMP ₹{cmp:,.1f} ≤ SL ₹{sl:,.1f}) — "
+                       f"position should already be closed, nothing to hold"),
+            "label": "STOPPED OUT", "color": "#ffffff", "bg": "#dc2626",
+        }
+
+    pct_off_high = round(((day_high - cmp) / day_high) * 100, 1) if day_high and day_high > 0 else None
+    pct_captured = round(((cmp - entry) / (t1 - entry)) * 100, 1) if t1 != entry else None
+
+    below_pivot = cmp < pivot
+    exhausted   = pct_captured is not None and pct_captured >= BTST_MAX_PCT_T1_CAPTURED
+    faded       = pct_off_high is not None and pct_off_high > BTST_MAX_PCT_OFF_HIGH
+    vol_light   = rvol < 0 or rvol < BTST_MIN_RVOL
+
+    if below_pivot:
+        return {
+            "status": "NOT_HELD", "ltp": cmp, "rvol": rvol, "rvol_src": rvol_src,
+            "pct_off_high": pct_off_high, "pct_captured": pct_captured,
+            "action": (f"CMP ₹{cmp:,.1f} back below pivot ₹{pivot:,.1f} — "
+                       f"momentum gone, do not hold overnight"),
+            "label": "BELOW PIVOT", "color": "#ffffff", "bg": "#7c3aed",
+        }
+
+    if exhausted:
+        return {
+            "status": "NEAR_T1", "ltp": cmp, "rvol": rvol, "rvol_src": rvol_src,
+            "pct_off_high": pct_off_high, "pct_captured": pct_captured,
+            "action": (f"Already {pct_captured:.0f}% of the way to T1 ₹{t1:,.1f} — "
+                       f"book profit today, little room left for BTST"),
+            "label": f"NEAR T1 ({pct_captured:.0f}%)", "color": "#ffffff", "bg": "#ca8a04",
+        }
+
+    if faded:
+        return {
+            "status": "FADED", "ltp": cmp, "rvol": rvol, "rvol_src": rvol_src,
+            "pct_off_high": pct_off_high, "pct_captured": pct_captured,
+            "action": (f"{pct_off_high:.1f}% off today's high ₹{day_high:,.1f} — "
+                       f"momentum stalling into the close, skip BTST"),
+            "label": f"FADED ({pct_off_high:.1f}% off high)", "color": "#ffffff", "bg": "#dc2626",
+        }
+
+    if vol_light:
+        rvol_disp = f"{rvol:.1f}x" if rvol >= 0 else "N/A"
+        return {
+            "status": "VOL_LIGHT", "ltp": cmp, "rvol": rvol, "rvol_src": rvol_src,
+            "pct_off_high": pct_off_high, "pct_captured": pct_captured,
+            "action": f"Full-day RVOL only {rvol_disp} — conviction faded through the day, skip BTST",
+            "label": f"LIGHT VOL ({rvol_disp})", "color": "#ffffff", "bg": "#dc2626",
+        }
+
+    # Both gates cleared
+    off_high_disp = f"{pct_off_high:.1f}%" if pct_off_high is not None else "N/A"
+    remaining_pct = round(((t1 - cmp) / cmp) * 100, 1) if cmp > 0 else 0.0
+    return {
+        "status": "BTST_CANDIDATE", "ltp": cmp, "rvol": rvol, "rvol_src": rvol_src,
+        "pct_off_high": pct_off_high, "pct_captured": pct_captured,
+        "action": (f"Hold overnight — CMP ₹{cmp:,.1f}, {off_high_disp} off high, "
+                   f"RVOL {rvol:.1f}x, {remaining_pct:.1f}% still to T1 ₹{t1:,.1f}. "
+                   f"SL stays ₹{sl:,.1f}."),
+        "label": "BTST CANDIDATE", "color": "#ffffff", "bg": "#16a34a",
+    }
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Email HTML
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -667,6 +833,151 @@ def _section(items: list, label: str, accent: str) -> str:
           border-bottom:2px solid {accent};">{label}</td>
     </tr>"""
     return header + "".join(_row(r) for r in items)
+
+
+def _btst_row(r: dict) -> str:
+    p           = r["pick"]
+    c           = r["classification"]
+    ticker_disp = p.get("ticker", "").replace(".NS", "")
+    ltp         = f"₹{c['ltp']:,.1f}" if c["ltp"] is not None else "N/A"
+    off_high    = f"{c['pct_off_high']:.1f}%" if c.get("pct_off_high") is not None else "—"
+    captured    = f"{c['pct_captured']:.0f}%" if c.get("pct_captured") is not None else "—"
+    tier        = f"T{p.get('tier','?')}"
+    sl          = p.get("sl", 0) or 0
+    t1          = p.get("t1", 0) or 0
+
+    return f"""
+    <tr style="border-bottom:1px solid #e5e7eb;">
+      <td style="padding:10px 8px;">
+        <span style="font-weight:700;font-size:14px;color:#111827;">{ticker_disp}</span><br>
+        <span style="font-size:11px;color:#9ca3af;">{tier} · Score {p.get('score','')}</span>
+      </td>
+      <td style="padding:10px 8px;font-size:12px;color:#6b7280;">{p.get('sector','')}</td>
+      <td style="padding:10px 8px;text-align:center;">
+        <span style="background:{c['bg']};color:{c['color']};padding:4px 10px;
+            border-radius:4px;font-size:11px;font-weight:700;white-space:nowrap;">
+            {c['label']}</span>
+      </td>
+      <td style="padding:10px 8px;text-align:right;font-weight:700;color:#111827;">{ltp}</td>
+      <td style="padding:10px 8px;text-align:right;">{_fmt_rvol(c['rvol'], c.get('rvol_src',''))}</td>
+      <td style="padding:10px 8px;text-align:right;font-size:12px;color:#6b7280;">{off_high}</td>
+      <td style="padding:10px 8px;text-align:right;font-size:12px;color:#6b7280;">{captured}</td>
+      <td style="padding:10px 8px;text-align:right;font-size:12px;">
+        <span style='color:#dc2626;font-weight:600;'>₹{sl:,.1f}</span><br>
+        <span style='color:#9ca3af;font-size:10px;'>SL</span>
+      </td>
+      <td style="padding:10px 8px;text-align:right;font-size:12px;">
+        <span style='color:#16a34a;font-weight:600;'>₹{t1:,.1f}</span><br>
+        <span style='color:#9ca3af;font-size:10px;'>T1</span>
+      </td>
+      <td style="padding:10px 8px;font-size:12px;color:#374151;">{c['action']}</td>
+    </tr>"""
+
+
+def build_btst_html(results: list, scan_date: str, run_time: str) -> str:
+    order = {"BTST_CANDIDATE": 0, "NEAR_T1": 1, "FADED": 2, "VOL_LIGHT": 3,
+             "NOT_HELD": 4, "STOPPED_OUT": 5, "DATA_ERROR": 6}
+    results = sorted(results, key=lambda r: order.get(r["classification"]["status"], 9))
+
+    candidate_n = sum(1 for r in results if r["classification"]["status"] == "BTST_CANDIDATE")
+    near_t1_n   = sum(1 for r in results if r["classification"]["status"] == "NEAR_T1")
+    faded_n     = sum(1 for r in results if r["classification"]["status"] == "FADED")
+    vol_light_n = sum(1 for r in results if r["classification"]["status"] == "VOL_LIGHT")
+    not_held_n  = sum(1 for r in results if r["classification"]["status"] == "NOT_HELD")
+    stopped_n   = sum(1 for r in results if r["classification"]["status"] == "STOPPED_OUT")
+    error_n     = sum(1 for r in results if r["classification"]["status"] == "DATA_ERROR")
+
+    summary_parts = []
+    if candidate_n: summary_parts.append(f"<span style='color:#16a34a;font-weight:700;'>{candidate_n} BTST CANDIDATE{'S' if candidate_n != 1 else ''}</span>")
+    if near_t1_n:   summary_parts.append(f"<span style='color:#ca8a04;font-weight:700;'>{near_t1_n} NEAR T1</span>")
+    if faded_n:     summary_parts.append(f"<span style='color:#dc2626;font-weight:700;'>{faded_n} FADED</span>")
+    if vol_light_n: summary_parts.append(f"<span style='color:#dc2626;font-weight:700;'>{vol_light_n} LIGHT VOL</span>")
+    if not_held_n:  summary_parts.append(f"<span style='color:#7c3aed;font-weight:700;'>{not_held_n} BELOW PIVOT</span>")
+    if stopped_n:   summary_parts.append(f"<span style='color:#dc2626;font-weight:700;'>{stopped_n} STOPPED OUT</span>")
+    if error_n:     summary_parts.append(f"<span style='color:#9ca3af;font-weight:700;'>{error_n} DATA ERROR</span>")
+    summary_html = (" &nbsp;|&nbsp; ".join(summary_parts) if summary_parts
+                     else "No positions were CONFIRMED today — nothing to evaluate for BTST")
+
+    action_box = ""
+    if candidate_n:
+        action_box = f"""
+        <div style="background:#f0fdf4;border-left:4px solid #16a34a;
+            margin:16px 28px 0;padding:14px 16px;border-radius:0 4px 4px 0;">
+          <div style="font-weight:700;color:#15803d;font-size:15px;">
+            BTST — {candidate_n} position(s) still strong into the close
+          </div>
+          <div style="color:#166534;font-size:13px;margin-top:4px;">
+            Near today's high, full-day RVOL still confirmed, meaningful room left to T1.
+            Hold overnight, keep SL where it is, review at tomorrow's 09:20 checkpoint.
+          </div>
+        </div>"""
+    elif results:
+        action_box = f"""
+        <div style="background:#fef2f2;border-left:4px solid #dc2626;
+            margin:16px 28px 0;padding:14px 16px;border-radius:0 4px 4px 0;">
+          <div style="font-weight:700;color:#991b1b;font-size:15px;">
+            NO BTST CANDIDATES — square off today's confirmed positions
+          </div>
+          <div style="color:#7f1d1d;font-size:13px;margin-top:4px;">
+            None of today's confirmed setups still clear the closing-strength
+            and R:R bar for holding overnight.
+          </div>
+        </div>"""
+
+    rows_html = "".join(_btst_row(r) for r in results)
+
+    return f"""<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"></head>
+<body style="margin:0;padding:0;background:#f9fafb;
+    font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;">
+<div style="max-width:1000px;margin:24px auto;background:#ffffff;
+    border-radius:12px;box-shadow:0 1px 4px rgba(0,0,0,.08);overflow:hidden;">
+
+  <div style="background:#0f172a;padding:20px 28px;">
+    <div style="color:#94a3b8;font-size:11px;letter-spacing:2px;">
+        NSE MOMENTUM DISCOVERY &ndash; V{VERSION}</div>
+    <div style="color:#f1f5f9;font-size:22px;font-weight:700;margin-top:4px;">
+        BTST Scan — Closing Strength Check</div>
+    <div style="color:#64748b;font-size:13px;margin-top:2px;">
+        {scan_date} &nbsp;·&nbsp; Run at {run_time} IST</div>
+  </div>
+
+  <div style="background:#f8fafc;border-bottom:1px solid #e2e8f0;
+      padding:14px 28px;font-size:14px;">
+    {summary_html}
+  </div>
+
+  {action_box}
+
+  <div style="padding:8px 28px 28px;">
+    <table style="width:100%;border-collapse:collapse;margin-top:8px;">
+      <thead>
+        <tr style="background:#f1f5f9;">
+          <th style="padding:10px 8px;text-align:left;font-size:11px;color:#6b7280;letter-spacing:1px;text-transform:uppercase;">Ticker</th>
+          <th style="padding:10px 8px;text-align:left;font-size:11px;color:#6b7280;letter-spacing:1px;text-transform:uppercase;">Sector</th>
+          <th style="padding:10px 8px;text-align:center;font-size:11px;color:#6b7280;letter-spacing:1px;text-transform:uppercase;">Status</th>
+          <th style="padding:10px 8px;text-align:right;font-size:11px;color:#6b7280;letter-spacing:1px;text-transform:uppercase;">CMP</th>
+          <th style="padding:10px 8px;text-align:right;font-size:11px;color:#6b7280;letter-spacing:1px;text-transform:uppercase;" title="Elapsed-time-matched RVOL from market open to now — a full-day figure at 15:15, not the 45min morning window">RVOL (Full-Day)</th>
+          <th style="padding:10px 8px;text-align:right;font-size:11px;color:#6b7280;letter-spacing:1px;text-transform:uppercase;" title="How far CMP has faded from today's intraday high">Off High</th>
+          <th style="padding:10px 8px;text-align:right;font-size:11px;color:#6b7280;letter-spacing:1px;text-transform:uppercase;" title="% of the entry-to-T1 move already captured">To T1 Used</th>
+          <th style="padding:10px 8px;text-align:right;font-size:11px;color:#dc2626;letter-spacing:1px;text-transform:uppercase;">SL</th>
+          <th style="padding:10px 8px;text-align:right;font-size:11px;color:#16a34a;letter-spacing:1px;text-transform:uppercase;">T1</th>
+          <th style="padding:10px 8px;text-align:left;font-size:11px;color:#6b7280;letter-spacing:1px;text-transform:uppercase;">Action</th>
+        </tr>
+      </thead>
+      <tbody>{rows_html}</tbody>
+    </table>
+  </div>
+
+  <div style="background:#f8fafc;border-top:1px solid #e2e8f0;padding:14px 28px;
+      font-size:11px;color:#94a3b8;">
+    Not SEBI-registered investment advice. All trading involves capital risk.
+    BTST = Buy Today Sell Tomorrow — holds carry overnight gap risk. SL = hard stop, do not widen.
+    Only positions CONFIRMED at an earlier checkpoint today are evaluated here.
+  </div>
+</div>
+</body></html>"""
 
 
 def build_stale_html(scan_date_str: str, today_iso: str, run_time: str) -> str:
@@ -923,6 +1234,68 @@ def _get_tolerance(regime_code: str | None) -> dict:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# [NEW 2026-08-11] 15:15 BTST scan
+# ─────────────────────────────────────────────────────────────────────────────
+
+def run_btst_scan(today_iso: str, today_str: str, run_time: str):
+    """
+    3:15 PM BTST (Buy Today Sell Tomorrow) scan. Only evaluates tickers that
+    were CONFIRMED/CONFIRMED_LOW_VOL at some earlier checkpoint today --
+    pulled straight from confirm_state_<date>.json (the same file the
+    morning checkpoints already write to, see TERMINAL_STATUSES). This is a
+    hold-or-exit decision on a position you'd actually be in, not a fresh
+    screen of all 20 evening picks -- a stock that was never confirmed for
+    entry this morning has nothing to hold overnight regardless of how it
+    looks at 15:15.
+
+    Re-fetches live CMP + RVOL (get_rvol's elapsed-time-matched window
+    naturally becomes a full-day figure when as_of is ~15:15, no separate
+    "full day" RVOL function needed) + today's intraday high, then applies
+    classify_btst()'s two gates.
+    """
+    state_path = _state_path(today_iso)
+    state = _load_state(state_path)
+
+    candidates = [
+        (ticker, entry["pick"])
+        for ticker, entry in state.items()
+        if entry["classification"]["status"] in ("CONFIRMED", "CONFIRMED_LOW_VOL")
+    ]
+    log.info(f"  BTST scan: {len(candidates)} position(s) were CONFIRMED today, "
+             f"re-checking for closing strength...")
+
+    now_ist = datetime.now(IST)
+    results = []
+    for ticker_key, pick in candidates:
+        ticker_raw = pick.get("ticker_raw") or ticker_key
+        if not ticker_raw.endswith(".NS"):
+            ticker_raw += ".NS"
+
+        log.info(f"  Checking {ticker_key} for BTST...")
+        cmp                        = get_live_price(ticker_raw)
+        rvol, rvol_src             = get_rvol(ticker_raw, as_of=now_ist)
+        day_high, day_low, dh_src  = get_intraday_high_low(ticker_raw, as_of=now_ist)
+        c = classify_btst(pick, cmp, day_high, rvol, rvol_src)
+
+        cmp_disp      = f"₹{cmp:,.1f}" if cmp else "N/A"
+        rvol_disp     = f"{rvol:.1f}x" if rvol >= 0 else "N/A"
+        off_high_disp = f"{c['pct_off_high']:.1f}%" if c['pct_off_high'] is not None else "N/A"
+        log.info(f"    → {c['status']:15s}  CMP={cmp_disp:>10}  RVOL={rvol_disp:>8}  off_high={off_high_disp}")
+
+        results.append({"pick": pick, "classification": c})
+        time.sleep(0.3)
+
+    candidate_n = sum(1 for r in results if r["classification"]["status"] == "BTST_CANDIDATE")
+
+    subject = (f"[NSE Momentum {run_time} BTST SCAN] "
+               f"{candidate_n} BTST CANDIDATE{'S' if candidate_n != 1 else ''} | {today_str}")
+
+    html = build_btst_html(results, today_str, run_time)
+    send_email(subject, html)
+    log.info("  Done.")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Main
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -937,6 +1310,10 @@ def main():
                               "sends a full summary email even if nothing new happened, "
                               "and includes ALL results (terminal + still-pending) rather "
                               "than just what's new since the last checkpoint.")
+    parser.add_argument("--btst", action="store_true",
+                         help="Run the 15:15 BTST (Buy Today Sell Tomorrow) closing-strength "
+                              "scan instead of the standard entry-confirmation checkpoint. "
+                              "Only evaluates tickers CONFIRMED at an earlier checkpoint today.")
     args = parser.parse_args()
 
     # [BUG-3] IST timestamp — not UTC labeled as IST
@@ -975,6 +1352,15 @@ def main():
                 stale_html
             )
             return
+
+    # [NEW 2026-08-11] BTST scan is a completely separate flow -- different
+    # candidate pool (today's already-CONFIRMED positions, not all 20 picks),
+    # different classification, different email. Branch out before the
+    # regime-tolerance lookup and multi-checkpoint machinery below, neither
+    # of which the BTST path uses.
+    if args.btst:
+        run_btst_scan(today_iso, today_str, run_time)
+        return
 
     # [FIX-3] Regime-aware tolerance — see ASSUMPTION note in module docstring
     # re: confirming the actual key name if this doesn't seem to activate.
