@@ -49,7 +49,7 @@ except ImportError:
 sys.path.insert(0, str(Path(__file__).parent / "agents"))
 
 from agents.pattern_agent              import PatternAgent, is_low_edge_pattern, PATTERN_EXPECTANCY
-from agents.rs_agent                   import RSAgent, compute_universe_ranks, compute_sector_relative_ranks
+from agents.rs_agent                   import RSAgent, compute_universe_ranks, compute_sector_relative_ranks, compute_vol_adjusted_universe_ranks
 from agents.volume_agent               import VolumeAgent
 from agents.market_agent               import MarketAgent
 from sector_score_live                 import LiveSectorBreadth
@@ -413,6 +413,13 @@ class AgentOrchestrator:
         self.sector_rs_ranks = compute_sector_relative_ranks(
             data_dict, universe_meta=data_dict.get("universe_meta", {})
         )
+        # v6 — factor-library item 1 (Shenoy & Vijaykumar 2020): volatility-
+        # adjusted momentum percentile, validated 2026-08-12 against 2,500
+        # gate-cleared signals (p=0.0004, consistent across both halves of
+        # 2007-2026). See agents/rs_agent.py::RSAgent.score() for how this
+        # is blended in.
+        self.vol_adj_rs_ranks = compute_vol_adjusted_universe_ranks(data_dict)
+
 
         # ── STEP 6: MacroAgent (BUG-2 + BUG-4 FIX) ───────────────────────────
         # BUG-2: VIX thresholds recalibrated — VIX 13.33 now correctly = BENIGN (+3 pts)
@@ -606,8 +613,10 @@ class AgentOrchestrator:
             df, self.data.get("nifty50_data", pd.DataFrame()),
             universe_ranks=self.universe_rs_ranks,
             sector_ranks=self.sector_rs_ranks,   # NEW
+            vol_adj_ranks=self.vol_adj_rs_ranks,  # v6 — factor-library item 1
             ticker=ticker
         )
+
         r.rs_score       = min(int(rsa.score() * cfg["rs_weight_mult"]), 20)
         r.rs_percentile  = rsa.get_percentile()
         r.rs_sector_pct  = rsa.get_sector_percentile()   # NEW

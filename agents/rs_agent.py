@@ -8,6 +8,15 @@ v5 changes:
 - Added rs_sector: stock vs sector peers
 - Added rs_persistence: weeks in top quartile (last 13 weeks)
 - Composite stored for RankingFunnel prioritisation
+
+v6 (2026-08-12): Factor-library item 1 (Shenoy & Vijaykumar 2020,
+volatility-adjusted momentum) wired into score() as a modest additive
+modifier. Validated via validation/tier1_factor_validate.py against 2,500
+gate-cleared signals spanning 2007-2026: top-tercile Avg R 1.11 vs pool
+0.84 (permutation p=0.0004), consistent across both halves of the date
+range (1.04 / 1.18). Bottom tercile statistically indistinguishable from
+the pool -- a refinement signal, not a pass/fail one, hence additive
+rather than a hard gate. See compute_vol_adjusted_universe_ranks() below.
 """
 
 import logging
@@ -212,6 +221,91 @@ def compute_rs_persistence(close: np.ndarray, nifty_close: np.ndarray,
     return count
 
 
+def compute_vol_adjusted_universe_ranks(data_dict: Dict, bars_per_day: float = 1.0) -> Dict[str, float]:
+    """
+    [LIVE -- wired into RSAgent.score() as of v6, 2026-08-12. See
+    validation/tier1_factor_validate.py for the significance test this
+    cleared before wiring: p=0.0004, consistent across both halves of a
+    2007-2026, 2,500-signal replay.]
+
+    Factor-library item 1 (Shenoy & Vijaykumar 2020, Capitalmind): rank
+    stocks by momentum divided by realized volatility instead of raw
+    momentum alone. Their NSE 2000-2020 backtest found this roughly
+    doubled risk-adjusted return vs. naive momentum (Sharpe 0.38 vs 0.20)
+    while producing a SMALLER max drawdown, despite higher raw volatility
+    in the ranking itself -- volatility-scaling tends to rotate away from
+    stocks whose "momentum" is really just noisy/violent price action.
+
+    Deliberately reuses the SAME 4w/12w/26w 40/40/20 composite as
+    compute_universe_ranks() above (rather than the paper's literal
+    12-month lookback) so this is a true apples-to-apples second ranking
+    of the same underlying signal, not a differently-scoped one -- the
+    validation chain (pipeline_replay.py / monte_carlo_significance.py /
+    split_period_significance.py) needs to compare THIS against the
+    existing percentile on identical history, or the comparison is
+    meaningless.
+
+    Denominator: annualized stddev of daily returns over the w26 window
+    (the longest of the three lookbacks) -- a stock's realized volatility
+    doesn't meaningfully differ across the shorter 4w/12w sub-windows, so
+    one vol estimate over the full window is sufficient and avoids
+    triple-counting the same volatility measurement three times.
+
+    Returns {ticker: percentile_0_to_100}, empty dict if no benchmark/data
+    -- same shape as compute_universe_ranks() so callers can drop this in
+    identically once validated.
+    """
+    nifty      = data_dict.get("nifty50_data", pd.DataFrame())
+    stock_data = data_dict.get("stock_data", {})
+
+    w4       = max(2, round(20  * bars_per_day))
+    w12      = max(2, round(60  * bars_per_day))
+    w26      = max(2, round(130 * bars_per_day))
+    periods_per_year = 252 * bars_per_day   # trading days/yr, scaled for hourly replay
+
+    if nifty.empty or len(nifty) < w12:
+        return {}
+
+    nifty_c = nifty["Close"].squeeze().to_numpy(dtype=float)
+
+    def _nret(bars):
+        return float(nifty_c[-1] / nifty_c[-bars] - 1) \
+               if len(nifty_c) >= bars and nifty_c[-bars] > 0 else 0.0
+
+    n4, n12, n26 = _nret(w4), _nret(w12), _nret(w26)
+
+    scores = {}
+    for ticker, df in stock_data.items():
+        if df.empty or len(df) < w26 + 1:
+            continue
+        c = df["Close"].squeeze().to_numpy(dtype=float)
+
+        def _ret(bars):
+            return float(c[-1] / c[-bars] - 1) if len(c) >= bars and c[-bars] > 0 else 0.0
+
+        s4, s12, s26 = _ret(w4), _ret(w12), _ret(w26)
+        composite_excess = 0.40 * (s4 - n4) + 0.40 * (s12 - n12) + 0.20 * (s26 - n26)
+
+        daily_rets = c[-w26:] / c[-w26 - 1:-1] - 1
+        ann_vol = float(np.std(daily_rets, ddof=1) * np.sqrt(periods_per_year))
+        if ann_vol <= 0:
+            continue
+
+        scores[ticker] = composite_excess / ann_vol
+
+    if not scores:
+        return {}
+
+    vals     = np.array(list(scores.values()))
+    sorted_v = np.sort(vals)
+    result   = {}
+    for ticker, raw in scores.items():
+        rank = int(np.searchsorted(sorted_v, raw, side="left"))
+        result[ticker] = round(rank / max(len(sorted_v), 1) * 100, 1)
+
+    return result
+
+
 class RSAgent:
     """Per-stock RS agent. Uses pre-computed universe ranks."""
 
@@ -219,12 +313,19 @@ class RSAgent:
                  nifty500_df: pd.DataFrame = None,
                  universe_ranks: Dict[str, float] = None,
                  sector_ranks: Dict[str, float] = None,
+                 vol_adj_ranks: Dict[str, float] = None,
                  ticker: str = "", bars_per_day: float = 1.0):
         self.df     = df
         self.nifty  = nifty_df
         self.ticker = ticker
         self.ranks  = universe_ranks or {}
         self.sector_pcts = sector_ranks or {}   # NEW — Mansfield sector-relative percentile
+        # [LIVE, v6] factor-library item 1 — see compute_vol_adjusted_universe_ranks().
+        # orchestrator.py now always passes this; empty only for callers
+        # (older tests, ad-hoc scripts) that don't supply it, in which case
+        # score() simply skips the modifier below.
+        self.vol_adj_pcts = vol_adj_ranks or {}
+        self._vol_adj_pct = None
         # [NEW] bars_per_day=1 (default) is exactly the original daily
         # behavior — the live scanner never passes this, unaffected.
         # The hourly replay passes bars_per_day=7 (see hourly_scaling.py).
@@ -269,6 +370,13 @@ class RSAgent:
         # e.g. sector too small, or ticker missing from universe_meta)
         self._sector_pct = self.sector_pcts.get(self.ticker, self._pct)
 
+        # [LIVE, v6] factor-library item 1 — read by score() below. None
+        # (not a neutral 50.0 default) when no vol_adj_ranks were supplied,
+        # so callers can tell "not computed" apart from "computed and
+        # landed at the 50th percentile."
+        if self.ticker and self.ticker in self.vol_adj_pcts:
+            self._vol_adj_pct = self.vol_adj_pcts[self.ticker]
+
     def score(self) -> int:
         p = self._pct
         if p >= 90: base = 20
@@ -292,6 +400,21 @@ class RSAgent:
         elif self._sector_pct < 25:
             base -= 1
 
+        # v6 — factor-library item 1 (Shenoy & Vijaykumar 2020): small
+        # additive modifier from volatility-adjusted momentum percentile.
+        # Same rationale as the sector modifier above — refines the base
+        # score rather than gating on it, since validation showed this is
+        # a "how much better" signal (top tercile Avg R 1.11 vs pool 0.84,
+        # p=0.0004) not a "pass/fail" one (bottom tercile still cleared
+        # the gate at a reasonable PF of 1.82, just less reliably).
+        if self._vol_adj_pct is not None:
+            if self._vol_adj_pct >= 80:
+                base += 2
+            elif self._vol_adj_pct >= 67:
+                base += 1
+            elif self._vol_adj_pct < 33:
+                base -= 1
+
         return max(0, min(base, 20))  # cap held at 20 — see note above on why not raised
 
     def get_percentile(self) -> float:
@@ -303,6 +426,14 @@ class RSAgent:
 
     def get_persistence(self) -> int:
         return self._persistence
+
+    def get_vol_adjusted_percentile(self):
+        """
+        [PROTOTYPE] factor-library item 1 — None if vol_adj_ranks wasn't
+        supplied (i.e. every live-scanning call today), a 0-100 percentile
+        otherwise. Diagnostic-only until it clears the evidence chain.
+        """
+        return self._vol_adj_pct
 
     def passes_gate(self) -> bool:
         return self._pct >= RS_GATE
