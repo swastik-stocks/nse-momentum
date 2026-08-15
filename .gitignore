@@ -13,6 +13,10 @@ picks_latest.json
 # --- backups, logs, scratch, generated artifacts ---
 *.bak
 *.bak_*
+*.bak.*
+*.tmp.*
+*.cutler_backup_*
+*.db
 logs/
 data/*.db.bak
 data/pattern_validation_results.csv

@@ -314,6 +314,10 @@ class RSAgent:
                  universe_ranks: Dict[str, float] = None,
                  sector_ranks: Dict[str, float] = None,
                  vol_adj_ranks: Dict[str, float] = None,
+                 lottery_ranks: Dict[str, float] = None,
+                 ml_momentum_preds: Dict[str, int] = None,
+                 slope_r2_ranks: Dict[str, float] = None,
+                 volume_dryup_ranks: Dict[str, float] = None,
                  ticker: str = "", bars_per_day: float = 1.0):
         self.df     = df
         self.nifty  = nifty_df
@@ -326,6 +330,29 @@ class RSAgent:
         # score() simply skips the modifier below.
         self.vol_adj_pcts = vol_adj_ranks or {}
         self._vol_adj_pct = None
+        # [LIVE, v6] factor-library backlog item — Chung (2019) lottery-index
+        # retail-trading proxy. See compute_universe_lottery_percentiles() in
+        # agents/lottery_index_agent.py for the validated cutoffs.
+        self.lottery_pcts = lottery_ranks or {}
+        self._lottery_pct = None
+        # [LIVE, v6] factor-library backlog item — Beaudan & He (2019) ML
+        # momentum classifier. See compute_universe_ml_momentum_predictions()
+        # in agents/ml_momentum_agent.py.
+        self.ml_momentum_preds = ml_momentum_preds or {}
+        self._ml_momentum_pred = None
+        # [LIVE, v6] factor-library backlog item — Clenow "Stocks on the
+        # Move" exponential regression slope x R^2. See
+        # compute_universe_slope_r2_percentiles() in agents/slope_r2_agent.py.
+        self.slope_r2_pcts = slope_r2_ranks or {}
+        self._slope_r2_pct = None
+        # [LIVE, v6] factor-library backlog item — PKScreener-style volume
+        # dry-up pre-breakout screen. See
+        # compute_universe_volume_ratio_percentiles() in
+        # agents/volume_dryup_agent.py. NOTE inverted convention vs every
+        # other percentile modifier here: LOW percentile = dry = validated
+        # bonus bucket, HIGH percentile = already-elevated volume = penalty.
+        self.volume_dryup_pcts = volume_dryup_ranks or {}
+        self._volume_dryup_pct = None
         # [NEW] bars_per_day=1 (default) is exactly the original daily
         # behavior — the live scanner never passes this, unaffected.
         # The hourly replay passes bars_per_day=7 (see hourly_scaling.py).
@@ -377,6 +404,23 @@ class RSAgent:
         if self.ticker and self.ticker in self.vol_adj_pcts:
             self._vol_adj_pct = self.vol_adj_pcts[self.ticker]
 
+        # [LIVE, v6] factor-library backlog item — Chung (2019). Same
+        # None-vs-50.0 distinction as vol_adj_pct above.
+        if self.ticker and self.ticker in self.lottery_pcts:
+            self._lottery_pct = self.lottery_pcts[self.ticker]
+
+        # [LIVE, v6] factor-library backlog item — Beaudan & He (2019).
+        if self.ticker and self.ticker in self.ml_momentum_preds:
+            self._ml_momentum_pred = self.ml_momentum_preds[self.ticker]
+
+        # [LIVE, v6] factor-library backlog item — Clenow slope x R^2.
+        if self.ticker and self.ticker in self.slope_r2_pcts:
+            self._slope_r2_pct = self.slope_r2_pcts[self.ticker]
+
+        # [LIVE, v6] factor-library backlog item — PKScreener volume dry-up.
+        if self.ticker and self.ticker in self.volume_dryup_pcts:
+            self._volume_dryup_pct = self.volume_dryup_pcts[self.ticker]
+
     def score(self) -> int:
         p = self._pct
         if p >= 90: base = 20
@@ -415,6 +459,65 @@ class RSAgent:
             elif self._vol_adj_pct < 33:
                 base -= 1
 
+        # v6 — factor-library backlog item (Chung 2019 lottery-index
+        # retail-trading proxy): stocks with low price / high idiosyncratic
+        # vol+skew / high max-return look more "lottery-like," which
+        # validation found predicts STRONGER forward momentum here (top
+        # tercile Avg R 1.39 vs pool 0.84, p=0.0; bottom tercile reliably
+        # underperformed the pool, p=1.0 — see
+        # validation/lottery_index_validate.py). Two tiers only (not four,
+        # like vol_adj_pct above) since validation only tested terciles,
+        # not finer percentile cuts — extrapolating a graded scale beyond
+        # what was actually measured isn't warranted.
+        if self._lottery_pct is not None:
+            if self._lottery_pct >= 67:
+                base += 2
+            elif self._lottery_pct <= 33:
+                base -= 1
+
+        # v6 — factor-library backlog item (Beaudan & He 2019 ML momentum
+        # classifier): predicted-positive class validated at WR=61.8%,
+        # Avg R 1.05 vs pool 0.78, p=0.0; predicted-negative reliably
+        # underperformed the pool, p=1.0 (see
+        # validation/ml_momentum_validate.py, 8 walk-forward windows,
+        # 1,681 out-of-sample predictions). Binary only — the raw
+        # probability was never itself validated as a graded signal.
+        if self._ml_momentum_pred is not None:
+            if self._ml_momentum_pred == 1:
+                base += 2
+            else:
+                base -= 1
+
+        # v6 — factor-library backlog item (Clenow "Stocks on the Move"
+        # exponential regression slope x R^2): a smooth, well-fit uptrend
+        # outranks an equal-return but choppy one. Strongest result of
+        # this whole factor-library round — top tercile Avg R 1.54 vs pool
+        # 0.84, p=0.0; bottom tercile reliably underperformed, p=1.0 (see
+        # validation/slope_r2_validate.py, 2,500-signal replay). Bonus/
+        # penalty magnitude kept at the same +2/-1 convention as every
+        # other tercile modifier here — only the direction and ranking
+        # was backtested, not this specific magnitude (same caveat
+        # sector_score_live.py's own SECTOR_BREADTH_BONUS_MAGNITUDE carries).
+        if self._slope_r2_pct is not None:
+            if self._slope_r2_pct >= 67:
+                base += 2
+            elif self._slope_r2_pct <= 33:
+                base -= 1
+
+        # v6 — factor-library backlog item (PKScreener-style volume
+        # dry-up pre-breakout screen): a breakout firing on a volume
+        # dry-up (LOW volume_ratio percentile) outperformed one firing on
+        # already-elevated volume — driest tercile Avg R 1.20 vs pool
+        # 0.84, p=0.0; wettest tercile below pool, p=0.88 (see
+        # validation/volume_dryup_validate.py, 2,500-signal replay).
+        # INVERTED direction vs every other percentile modifier above:
+        # LOW percentile earns the bonus here, HIGH percentile the penalty.
+        if self._volume_dryup_pct is not None:
+            if self._volume_dryup_pct <= 33:
+                base += 2
+            elif self._volume_dryup_pct >= 67:
+                base -= 1
+
         return max(0, min(base, 20))  # cap held at 20 — see note above on why not raised
 
     def get_percentile(self) -> float:
@@ -434,6 +537,27 @@ class RSAgent:
         otherwise. Diagnostic-only until it clears the evidence chain.
         """
         return self._vol_adj_pct
+
+    def get_lottery_percentile(self):
+        """[LIVE, v6] factor-library backlog item — None if lottery_ranks
+        wasn't supplied, a 0-100 percentile otherwise."""
+        return self._lottery_pct
+
+    def get_ml_momentum_pred(self):
+        """[LIVE, v6] factor-library backlog item — None if
+        ml_momentum_preds wasn't supplied, 0/1 otherwise."""
+        return self._ml_momentum_pred
+
+    def get_slope_r2_percentile(self):
+        """[LIVE, v6] factor-library backlog item — None if
+        slope_r2_ranks wasn't supplied, a 0-100 percentile otherwise."""
+        return self._slope_r2_pct
+
+    def get_volume_dryup_percentile(self):
+        """[LIVE, v6] factor-library backlog item — None if
+        volume_dryup_ranks wasn't supplied, a 0-100 percentile otherwise.
+        Remember the inverted convention: LOW = dry = bonus bucket."""
+        return self._volume_dryup_pct
 
     def passes_gate(self) -> bool:
         return self._pct >= RS_GATE

@@ -82,3 +82,4 @@ def check_staleness(picks_date: date, today: date = None) -> None:
 class StaleDataError(Exception):
     pass
 
+

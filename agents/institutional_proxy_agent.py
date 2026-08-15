@@ -1,15 +1,26 @@
 """
-NSE Momentum v5.0 - Institutional Proxy Agent v5
+NSE Momentum v6.0 - Institutional Proxy Agent v6
 10A: Delivery % accumulation score
 10B: RVOL quality (up-volume vs down-volume)
 10C: Volume contraction/expansion pattern
 10D: Shareholding change proxy (NSE API)
 10E: Bulk/block deal detection
+10F: Promoter momentum-confirmation bonus (v6, factor-library item 4)
 
 v5 additions:
   - Rolling delivery trend: rewards sustained rising delivery over 5 days
   - Distribution risk flag: price rising + delivery falling = warning
   - Score: 0-20 pts (unchanged ceiling, better internals)
+
+v6 (2026-08-13): 10F added -- see _10f_promoter_momentum()'s own docstring.
+Validated via validation/promoter_feedback_validate.py against 1,021
+gate-cleared signals (2007-2026): promoters buying into an already-strong
+RS position ("buying_winner") scored Avg R 1.54 vs pool 0.68, p~0.0 --
+the single strongest result of any factor-library item tested in this
+codebase so far. This INVERTS Shu (2009)'s original direction (which
+predicted reversal, not confirmation) -- see the agent's docstring for
+why that's an expected, explainable consequence of substituting promoter
+data for the FII data Shu's paper used, not a red flag.
 """
 
 import logging
@@ -19,15 +30,31 @@ from datetime import datetime
 import numpy as np
 import pandas as pd
 
+from agents.promoter_feedback_agent import PromoterFeedbackAgent, MIN_QUARTERS_FOR_SIGNAL
+
 log = logging.getLogger(__name__)
+
+SHAREHOLDING_URL = "https://www.nseindia.com/api/corporate-share-holdings-master"
+SHAREHOLDING_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+    "Referer":    "https://www.nseindia.com",
+    "Accept":     "application/json",
+}
+QUARTERS_BACK = 8   # Shu's own 8-quarter lookback
 
 
 class InstitutionalProxyAgent:
     def __init__(self, ticker: str, df: pd.DataFrame,
-                 delivery_pct: float = 0.0):
-        self.ticker       = ticker
-        self.df           = df
-        self.delivery_pct = delivery_pct
+                 delivery_pct: float = 0.0, rs_percentile: float = 50.0):
+        self.ticker        = ticker
+        self.df            = df
+        self.delivery_pct  = delivery_pct
+        # v6 -- factor-library item 4. Defaults to the neutral midpoint
+        # (50.0) for any caller that doesn't pass this (e.g. older tests),
+        # in which case _10f_promoter_momentum() simply never fires (its
+        # gate requires rs_percentile > 50 AND real promoter buying).
+        self.rs_percentile = rs_percentile
+        self._shareholding_records = None   # cached, fetched at most once per instance
 
     def evaluate(self) -> dict:
         s10a                = self._10a_delivery()
@@ -35,11 +62,12 @@ class InstitutionalProxyAgent:
         s10c                = self._10c_volume_pattern()
         s10d                = self._10d_shareholding()
         s10e                = self._10e_bulk_deals()
+        s10f                = self._10f_promoter_momentum()
         rolling_bonus       = self._rolling_delivery_trend()
         distribution_penalty = self._distribution_risk()
 
         total = min(
-            s10a + s10b + s10c + s10d + s10e
+            s10a + s10b + s10c + s10d + s10e + s10f
             + rolling_bonus - distribution_penalty,
             20
         )
@@ -52,9 +80,34 @@ class InstitutionalProxyAgent:
             "10c_volume_pattern": s10c,
             "10d_shareholding":  s10d,
             "10e_bulk_deals":    s10e,
+            "10f_promoter_momentum": s10f,
             "rolling_delivery_bonus":    rolling_bonus,
             "distribution_risk_penalty": distribution_penalty,
         }
+
+    def _fetch_shareholding_records(self) -> list:
+        """
+        Fetched ONCE per instance, shared by _10d_shareholding (1-quarter
+        delta) and _10f_promoter_momentum (8-quarter delta) -- avoids
+        hitting NSE twice per stock per scan for the same underlying data.
+        Returns [] on any failure; callers treat that as "no signal",
+        never a crash.
+        """
+        if self._shareholding_records is not None:
+            return self._shareholding_records
+        try:
+            symbol = self.ticker.replace(".NS", "")
+            url    = f"{SHAREHOLDING_URL}?index=equities&symbol={symbol}"
+            r = requests.get(url, headers=SHAREHOLDING_HEADERS, timeout=8)
+            if r.status_code != 200:
+                self._shareholding_records = []
+                return []
+            data = r.json()
+            records = data.get("data", []) if isinstance(data, dict) else data
+            self._shareholding_records = records or []
+        except Exception:
+            self._shareholding_records = []
+        return self._shareholding_records
 
     def _10a_delivery(self) -> int:
         """Delivery % as institutional accumulation signal. 0-5 pts."""
@@ -159,31 +212,91 @@ class InstitutionalProxyAgent:
         return 0
 
     def _10d_shareholding(self) -> int:
-        """Shareholding change proxy from NSE quarterly data. 0-3 pts."""
+        """
+        Shareholding change proxy from NSE quarterly data. 0-3 pts.
+
+        [FIX 2026-08-13] The old endpoint (corporates-shp) is DEAD --
+        confirmed 404 live. This silently broke the whole method (every
+        call fell through to `except: return 1`, a flat neutral score,
+        for an unknown period). Replaced with the real, live endpoint
+        (corporate-share-holdings-master), confirmed working and returning
+        22 quarters of history for RELIANCE in one call.
+
+        DATA-FIT NOTE: the real endpoint has no FII/DII field under any
+        name -- it only reports promoter% (pr_and_prgrp) and public%
+        (public_val). The original code's "fii" key was reading a field
+        that doesn't exist in this response shape either (it would have
+        silently defaulted to 0 - 0 = no change even if the URL had
+        worked). This fix uses PROMOTER holding delta as the accumulation
+        proxy instead of FII delta -- a different signal (insider
+        conviction, not foreign institutional flow), interim pending the
+        proper factor-library item 4 validation (see
+        FACTOR_LIBRARY_IMPLEMENTATION_PLAN.md) which will test whether
+        this proxy actually predicts anything before it's trusted beyond
+        "at least it's live data now, not a silent flat 1".
+        """
         try:
-            symbol  = self.ticker.replace(".NS", "")
-            url     = f"https://www.nseindia.com/api/corporates-shp?symbol={symbol}"
-            headers = {
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
-                "Referer":    "https://www.nseindia.com",
-                "Accept":     "application/json",
-            }
-            r = requests.get(url, headers=headers, timeout=8)
-            if r.status_code != 200:
-                return 1
-            data    = r.json()
-            records = data.get("data", []) if isinstance(data, dict) else data
+            records = self._fetch_shareholding_records()
             if not records or len(records) < 2:
                 return 1
-            latest_fii = float(records[0].get("fii", 0) or 0)
-            prior_fii  = float(records[1].get("fii", 0) or 0)
-            change     = latest_fii - prior_fii
+            # records[0] is the latest quarter (confirmed: NSE returns
+            # these sorted descending by date).
+            latest_promoter = float(records[0].get("pr_and_prgrp", 0) or 0)
+            prior_promoter  = float(records[1].get("pr_and_prgrp", 0) or 0)
+            change          = latest_promoter - prior_promoter
             if change >= 2.0:  return 3
             if change >= 0.5:  return 2
             if change >= -0.5: return 1
             return 0
         except Exception:
             return 1
+
+    def _10f_promoter_momentum(self) -> int:
+        """
+        [v6, factor-library item 4] Promoter momentum-confirmation bonus.
+        0-3 pts, ADDITIVE ONLY -- never a penalty, because the validation
+        only found a significant edge in ONE quadrant (promoters buying
+        into an already-strong RS position; see
+        validation/promoter_feedback_validate.py's item4_quadrant_*
+        results). The other three quadrants (buying a laggard, selling a
+        winner, selling a laggard) were all statistically indistinguishable
+        from the pool baseline (p=0.92-0.98) -- NOT evidence they're bad,
+        just evidence we don't have grounds to score them differently from
+        neutral. Scoring this as a bonus-only, single-quadrant signal is a
+        deliberately conservative read of what was actually validated,
+        not the full continuous MT formula PromoterFeedbackAgent exposes
+        (that formula's generic +/-mapping across all four quadrants was
+        an explicit "starting hypothesis, not yet validated" per its own
+        docstring -- only the buying-into-strength quadrant cleared that
+        bar here).
+        """
+        try:
+            records = self._fetch_shareholding_records()
+            if not records or len(records) < MIN_QUARTERS_FOR_SIGNAL + 1:
+                return 0
+            idx_trailing = min(QUARTERS_BACK, len(records) - 1)
+            promoter_now      = float(records[0].get("pr_and_prgrp", 0) or 0)
+            promoter_trailing = float(records[idx_trailing].get("pr_and_prgrp", 0) or 0)
+
+            pf = PromoterFeedbackAgent(
+                promoter_pct_now=promoter_now, promoter_pct_trailing=promoter_trailing,
+                quarters_available=idx_trailing, rs_percentile=self.rs_percentile
+            )
+            if not pf.is_valid():
+                return 0
+
+            # The validated pattern specifically: promoters buying
+            # (delta > 0) into a stock already in the top half of the RS
+            # universe (rs_percentile > 50) -- N=130, Avg R 1.54, p~0.0.
+            if pf.get_delta() > 0 and self.rs_percentile > 50:
+                if pf.get_delta() >= 2.0 and self.rs_percentile >= 70:
+                    return 3
+                if pf.get_delta() >= 1.0:
+                    return 2
+                return 1
+            return 0
+        except Exception:
+            return 0
 
     def _10e_bulk_deals(self) -> int:
         """NSE bulk/block deal detection. 0-3 pts."""

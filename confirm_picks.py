@@ -43,6 +43,7 @@ CHANGES vs v5.3:
 
 import os, json, smtplib, time
 import requests
+import numpy as np
 from datetime import datetime, date, timedelta
 from zoneinfo import ZoneInfo
 from email.mime.multipart import MIMEMultipart
@@ -51,6 +52,7 @@ from dotenv import load_dotenv
 
 from market_calendar.staleness_check import check_staleness, StaleDataError
 import dhan_rvol
+from agents.intraday_vol_adjusted_agent import IntradayVolAdjustedAgent
 
 try:
     from loguru import logger as log
@@ -495,6 +497,137 @@ def get_intraday_high_low(ticker_nse: str, as_of: datetime = None) -> tuple:
 
     log.warning(f"    Day high/low unavailable for {ticker_nse} — BTST closing-strength check skipped")
     return None, None, "unavailable"
+
+
+def get_intraday_bars(ticker_nse: str, as_of: datetime = None):
+    """
+    [2026-08-13] Same tvDatafeed -> yfinance fallback chain and open-to-
+    as_of window as get_intraday_high_low() above, but returns the actual
+    bar series (a DataFrame with a 'Close' column, open-to-as_of) instead
+    of collapsing it to day_high/day_low. Feeds
+    agents.intraday_vol_adjusted_agent.IntradayVolAdjustedAgent — see
+    compute_intraday_diagnostic() below. Returns None on any failure
+    (paper-mode diagnostic, must never block the real BTST classification).
+    """
+    as_of = as_of or datetime.now(IST)
+    today = as_of.date()
+
+    try:
+        from tvDatafeed import TvDatafeed, Interval
+        symbol = ticker_nse.replace(".NS", "")
+        tv = TvDatafeed()
+        df = tv.get_hist(symbol=symbol, exchange="NSE",
+                          interval=Interval.in_5_minute, n_bars=100)
+        if df is not None and not df.empty:
+            try:
+                df.index = df.index.tz_localize("UTC").tz_convert("Asia/Kolkata")
+            except Exception:
+                try:
+                    df.index = df.index.tz_convert("Asia/Kolkata")
+                except Exception:
+                    pass
+            win = df[(df.index.date == today) &
+                     (df.index.time >= MARKET_OPEN_TIME) &
+                     (df.index.time <= as_of.time())]
+            if not win.empty:
+                return win.rename(columns={"close": "Close", "open": "Open"})
+    except Exception as e:
+        log.debug(f"    [tvDatafeed] intraday bars {ticker_nse}: {type(e).__name__}: {e}")
+
+    try:
+        import yfinance as yf
+        t = ticker_nse if ticker_nse.endswith(".NS") else ticker_nse + ".NS"
+        df_1m = yf.Ticker(t).history(period="5d", interval="1m", prepost=False)
+        if not df_1m.empty:
+            try:
+                df_1m.index = df_1m.index.tz_convert("Asia/Kolkata")
+            except Exception:
+                pass
+            win = df_1m[(df_1m.index.date == today) &
+                        (df_1m.index.time >= MARKET_OPEN_TIME) &
+                        (df_1m.index.time <= as_of.time())]
+            if not win.empty:
+                return win
+    except Exception as e:
+        log.debug(f"    [yfinance-fallback] intraday bars {ticker_nse}: {type(e).__name__}: {e}")
+
+    return None
+
+
+def get_trailing_daily_vol_pct(ticker_nse: str) -> float:
+    """
+    [2026-08-13] Stddev of daily returns over the trailing ~20 trading
+    days (excluding today), for IntradayVolAdjustedAgent's Z calculation
+    — same non-annualized convention as the backtest that validated this
+    approach (see validation/intraday_vol_adjusted_validate.py). Returns
+    0.0 on any failure (agent treats that as "insufficient data," not a
+    crash — same fail-open convention as every prototype agent).
+    """
+    try:
+        import yfinance as yf
+        t = ticker_nse if ticker_nse.endswith(".NS") else ticker_nse + ".NS"
+        hist = yf.Ticker(t).history(period="2mo", interval="1d")
+        if hist.empty or len(hist) < 15:
+            return 0.0
+        today_str = datetime.now(IST).date().isoformat()
+        hist = hist[hist.index.strftime("%Y-%m-%d") != today_str]
+        closes = hist["Close"].to_numpy(dtype=float)[-21:]
+        if len(closes) < 15:
+            return 0.0
+        rets = closes[1:] / closes[:-1] - 1
+        return float(np.std(rets, ddof=1))
+    except Exception as e:
+        log.debug(f"    trailing daily vol {ticker_nse}: {type(e).__name__}: {e}")
+        return 0.0
+
+
+def compute_intraday_diagnostic(ticker_nse: str, as_of: datetime = None) -> dict:
+    """
+    [2026-08-13, PAPER-MODE — informational only, does not gate anything]
+
+    Factor-library "intraday vol-adjusted move" idea, scoped out and
+    prototyped after a choppy-volume session raised the question of
+    whether RVOL alone can tell a clean continuation apart from a loud
+    whipsaw. Validated against validation/intraday_vol_adjusted_validate.py
+    (N=153 historical BTST-confirmed signals, 2015-2026): results were
+    UNDERPOWERED, not proven — no checkpoint reached significance, and the
+    direction flipped between checkpoints on the smallest buckets. Wired
+    in here purely to ACCUMULATE real observations going forward, the same
+    "observe, don't pay" pattern this codebase already uses for the P2-08
+    ADD-ON premise (see orchestrator.py's ADDON_LIVE_EXECUTION). Must
+    never gate BTST classification or change any status — see
+    classify_btst(), which does not call this function.
+
+    Returns a dict (z, efficiency, label) or None if live data was
+    unavailable — always fails open, never raises.
+    """
+    try:
+        bars = get_intraday_bars(ticker_nse, as_of=as_of)
+        if bars is None or bars.empty or "Close" not in bars.columns:
+            return None
+        day_open = float(bars["Open"].iloc[0]) if "Open" in bars.columns else float(bars["Close"].iloc[0])
+        trailing_vol = get_trailing_daily_vol_pct(ticker_nse)
+
+        agent = IntradayVolAdjustedAgent(
+            bars[["Close"]], day_open=day_open, trailing_daily_vol_pct=trailing_vol
+        )
+        if agent.get_bars_available() < 2:
+            return None
+
+        z, eff = agent.get_z(), agent.get_efficiency()
+        if abs(z) >= 1.0 and eff >= 0.6:
+            label = "Clean/Strong"
+        elif abs(z) >= 1.0 and eff < 0.6:
+            label = "Choppy"
+        elif abs(z) < 1.0 and eff >= 0.6:
+            label = "Quiet/Orderly"
+        else:
+            label = "Quiet"
+
+        return {"z": z, "efficiency": eff, "label": label}
+    except Exception as e:
+        log.debug(f"    intraday diagnostic {ticker_nse}: {type(e).__name__}: {e}")
+        return None
 
 
 def classify(pick: dict, cmp: float | None, rvol: float, rvol_src: str,
@@ -1022,6 +1155,13 @@ def _btst_row(r: dict) -> str:
     sl          = p.get("sl", 0) or 0
     t1          = p.get("t1", 0) or 0
 
+    diag = r.get("intraday_diag")
+    if diag:
+        diag_disp = (f"<span style='color:#6b7280;'>{diag['label']}</span><br>"
+                      f"<span style='font-size:10px;color:#9ca3af;'>Z {diag['z']:+.1f} · Eff {diag['efficiency']:.2f}</span>")
+    else:
+        diag_disp = "<span style='color:#d1d5db;'>—</span>"
+
     return f"""
     <tr style="border-bottom:1px solid #e5e7eb;">
       <td style="padding:10px 8px;">
@@ -1038,6 +1178,7 @@ def _btst_row(r: dict) -> str:
       <td style="padding:10px 8px;text-align:right;">{_fmt_rvol(c['rvol'], c.get('rvol_src',''))}</td>
       <td style="padding:10px 8px;text-align:right;font-size:12px;color:#6b7280;">{off_high}</td>
       <td style="padding:10px 8px;text-align:right;font-size:12px;color:#6b7280;">{captured}</td>
+      <td style="padding:10px 8px;text-align:right;font-size:12px;">{diag_disp}</td>
       <td style="padding:10px 8px;text-align:right;font-size:12px;">
         <span style='color:#dc2626;font-weight:600;'>₹{sl:,.1f}</span><br>
         <span style='color:#9ca3af;font-size:10px;'>SL</span>
@@ -1146,6 +1287,7 @@ def build_btst_html(results: list, scan_date: str, run_time: str) -> str:
           <th style="padding:10px 8px;text-align:right;font-size:11px;color:#6b7280;letter-spacing:1px;text-transform:uppercase;" title="Elapsed-time-matched RVOL from market open to now — a full-day figure at 15:15, not the 45min morning window">RVOL (Full-Day)</th>
           <th style="padding:10px 8px;text-align:right;font-size:11px;color:#6b7280;letter-spacing:1px;text-transform:uppercase;" title="How far CMP has faded from today's intraday high">Off High</th>
           <th style="padding:10px 8px;text-align:right;font-size:11px;color:#6b7280;letter-spacing:1px;text-transform:uppercase;" title="% of the entry-to-T1 move already captured">To T1 Used</th>
+          <th style="padding:10px 8px;text-align:right;font-size:11px;color:#9ca3af;letter-spacing:1px;text-transform:uppercase;" title="EXPERIMENTAL, paper-mode only — see footer. Is today's move (so far) unusually large for this stock AND clean/trending, or is it choppy? Does not affect status or SL/T1.">Intraday Read (exp.)</th>
           <th style="padding:10px 8px;text-align:right;font-size:11px;color:#dc2626;letter-spacing:1px;text-transform:uppercase;">SL</th>
           <th style="padding:10px 8px;text-align:right;font-size:11px;color:#16a34a;letter-spacing:1px;text-transform:uppercase;">T1</th>
           <th style="padding:10px 8px;text-align:left;font-size:11px;color:#6b7280;letter-spacing:1px;text-transform:uppercase;">Action</th>
@@ -1165,7 +1307,14 @@ def build_btst_html(results: list, scan_date: str, run_time: str) -> str:
     filter has been shown to predict a profitable overnight hold. A backtest against 1,707
     historical signals (2026-08-11) found the filtered subset was not statistically distinguishable
     from an unfiltered baseline once corrected for testing multiple exit definitions. Treat this
-    section as informational context, not a recommendation, until re-validated with more data.
+    section as informational context, not a recommendation, until re-validated with more data.<br><br>
+    <strong>On "Intraday Read":</strong> EXPERIMENTAL, paper-mode only — does not affect status,
+    SL, T1, or any decision this email implies. Combines how large today's move is relative to
+    this stock's normal daily volatility (Z) with how much of today's total price travel was net
+    progress vs. back-and-forth (Efficiency, 0-1). Backtested against 153 historical BTST-confirmed
+    signals (2015-2026) and found UNDERPOWERED — no checkpoint reached statistical significance,
+    and results flipped direction on the smallest sample buckets. Shown here purely to accumulate
+    real observations for a future re-test, not because it's been shown to work.
   </div>
 </div>
 </body></html>"""
@@ -1477,12 +1626,17 @@ def run_btst_scan(today_iso: str, today_str: str, run_time: str):
                            asm_gsm_symbols=asm_gsm_symbols,
                            days_to_earnings=days_to_earnings)
 
+        # [2026-08-13, PAPER-MODE] Informational only — see
+        # compute_intraday_diagnostic()'s docstring. Never affects `c`
+        # (the real classification) and is never allowed to raise.
+        intraday_diag = compute_intraday_diagnostic(ticker_raw, as_of=now_ist)
+
         cmp_disp      = f"₹{cmp:,.1f}" if cmp else "N/A"
         rvol_disp     = f"{rvol:.1f}x" if rvol >= 0 else "N/A"
         off_high_disp = f"{c['pct_off_high']:.1f}%" if c['pct_off_high'] is not None else "N/A"
         log.info(f"    → {c['status']:15s}  CMP={cmp_disp:>10}  RVOL={rvol_disp:>8}  off_high={off_high_disp}")
 
-        results.append({"pick": pick, "classification": c})
+        results.append({"pick": pick, "classification": c, "intraday_diag": intraday_diag})
         time.sleep(0.3)
 
     candidate_n = sum(1 for r in results if r["classification"]["status"] == "BTST_CANDIDATE")

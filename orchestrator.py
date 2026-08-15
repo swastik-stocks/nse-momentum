@@ -50,6 +50,10 @@ sys.path.insert(0, str(Path(__file__).parent / "agents"))
 
 from agents.pattern_agent              import PatternAgent, is_low_edge_pattern, PATTERN_EXPECTANCY
 from agents.rs_agent                   import RSAgent, compute_universe_ranks, compute_sector_relative_ranks, compute_vol_adjusted_universe_ranks
+from agents.lottery_index_agent        import compute_universe_lottery_percentiles
+from agents.ml_momentum_agent          import compute_universe_ml_momentum_predictions, load_latest_model as load_latest_ml_momentum_model
+from agents.slope_r2_agent             import compute_universe_slope_r2_percentiles
+from agents.volume_dryup_agent         import compute_universe_volume_ratio_percentiles
 from agents.volume_agent               import VolumeAgent
 from agents.market_agent               import MarketAgent
 from sector_score_live                 import LiveSectorBreadth
@@ -420,6 +424,44 @@ class AgentOrchestrator:
         # is blended in.
         self.vol_adj_rs_ranks = compute_vol_adjusted_universe_ranks(data_dict)
 
+        # v6 — factor-library backlog item (Chung 2019): lottery-index
+        # retail-trading proxy, validated 2026-08-14 against 2,500
+        # gate-cleared signals (top tercile p=0.0, Avg R 1.39 vs pool 0.84;
+        # bottom tercile reliably underperformed, p=1.0). See
+        # agents/rs_agent.py::RSAgent.score() for how this is blended in.
+        self.lottery_rs_ranks = compute_universe_lottery_percentiles(data_dict)
+
+        # v6 — factor-library backlog item (Beaudan & He 2019): ML momentum
+        # classifier, validated 2026-08-14 via 8 walk-forward windows over
+        # 2016-2026 (predicted-positive p=0.0, Avg R 1.05 vs pool 0.78;
+        # predicted-negative reliably underperformed, p=1.0). Model is a
+        # TRAINED artifact (unlike every other item here) — loaded once per
+        # scan from the DB, retrained periodically via
+        # train_ml_momentum_model.py, never fit live. Empty dict (no
+        # modifier applied to anyone) if no model has been trained yet.
+        _ml_model, _ml_trained_through = load_latest_ml_momentum_model()
+        if _ml_model is None:
+            log.warning("  No ML momentum model found in DB — skipping this modifier "
+                         "(run train_ml_momentum_model.py to seed one)")
+        else:
+            log.info(f"  ML momentum model loaded (trained through {_ml_trained_through})")
+        self.ml_momentum_preds = compute_universe_ml_momentum_predictions(data_dict, _ml_model)
+
+        # v6 — factor-library backlog item (Clenow "Stocks on the Move"):
+        # exponential regression slope x R^2, validated 2026-08-15 against
+        # 2,500 gate-cleared signals — strongest result of this whole
+        # factor-library round (top tercile p=0.0, Avg R 1.54 vs pool 0.84;
+        # bottom tercile reliably underperformed, p=1.0). See
+        # agents/rs_agent.py::RSAgent.score() for how this is blended in.
+        self.slope_r2_rs_ranks = compute_universe_slope_r2_percentiles(data_dict)
+
+        # v6 — factor-library backlog item (PKScreener-style volume
+        # dry-up), validated 2026-08-15 against 2,500 gate-cleared signals
+        # (driest tercile p=0.0, Avg R 1.20 vs pool 0.84; wettest tercile
+        # below pool, p=0.88). NOTE inverted convention — see
+        # agents/rs_agent.py::RSAgent.score() for how this is blended in.
+        self.volume_dryup_rs_ranks = compute_universe_volume_ratio_percentiles(data_dict)
+
 
         # ── STEP 6: MacroAgent (BUG-2 + BUG-4 FIX) ───────────────────────────
         # BUG-2: VIX thresholds recalibrated — VIX 13.33 now correctly = BENIGN (+3 pts)
@@ -614,6 +656,10 @@ class AgentOrchestrator:
             universe_ranks=self.universe_rs_ranks,
             sector_ranks=self.sector_rs_ranks,   # NEW
             vol_adj_ranks=self.vol_adj_rs_ranks,  # v6 — factor-library item 1
+            lottery_ranks=self.lottery_rs_ranks,  # v6 — factor-library backlog item (Chung 2019)
+            ml_momentum_preds=self.ml_momentum_preds,  # v6 — factor-library backlog item (Beaudan & He 2019)
+            slope_r2_ranks=self.slope_r2_rs_ranks,  # v6 — factor-library backlog item (Clenow)
+            volume_dryup_ranks=self.volume_dryup_rs_ranks,  # v6 — factor-library backlog item (PKScreener)
             ticker=ticker
         )
 
@@ -706,7 +752,9 @@ class AgentOrchestrator:
         r.fundamental_score = fp.evaluate()["fundamental_proxy_score"]
 
         # Institutional proxy
-        ip = InstitutionalProxyAgent(ticker, df, del_pct)
+        # v6 — factor-library item 4 (10F, promoter momentum-confirmation
+        # bonus) needs rs_percentile, computed above at G3.
+        ip = InstitutionalProxyAgent(ticker, df, del_pct, rs_percentile=r.rs_percentile)
         r.institutional_score = ip.evaluate()["institutional_proxy_score"]
 
         r.bonus_score = min(
