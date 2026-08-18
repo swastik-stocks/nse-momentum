@@ -95,7 +95,23 @@ REGIME_TOLERANCE = {
 # already CONFIRMED, MISSED, etc. this morning stays that way; only PENDING
 # (still below pivot) and DATA_ERROR (retry-worthy) get re-classified on the
 # next checkpoint.
-TERMINAL_STATUSES = {"CONFIRMED", "CONFIRMED_LOW_VOL", "BREAKOUT_NO_VOLUME", "MISSED", "BROKEN"}
+#
+# [FIX-5 2026-08-18] BREAKOUT_NO_VOLUME removed from this set. It was treated
+# as terminal, same as a real entry/exit decision -- but "no volume YET" is
+# exactly as reversible as CONFIRMED_PENDING_RVOL's "no RVOL data yet" (which
+# was correctly kept non-terminal, see classify()'s [FIX-4]). Confirmed live
+# 2026-08-18: GLAXO got locked into BREAKOUT_NO_VOLUME at 0.53x RVOL mid-
+# morning and was never re-checked again -- real RVOL reached 6.24x by 15:24
+# IST (institutional volume showed up late) but the cached morning verdict
+# kept overriding it all day, and the BTST scan (which only ever looks at
+# tickers CONFIRMED/CONFIRMED_LOW_VOL at some earlier checkpoint) never got
+# a chance to see it. Leaving it non-terminal means it gets re-classified
+# each checkpoint like PENDING/CONFIRMED_PENDING_RVOL already do, so genuine
+# late-session volume can still flip it to CONFIRMED while price is still
+# within chase tolerance -- and if price has since run away, classify()'s
+# existing entry-drift/pivot-extension checks correctly catch that as MISSED
+# instead, so there's no risk of belatedly recommending a chased entry.
+TERMINAL_STATUSES = {"CONFIRMED", "CONFIRMED_LOW_VOL", "MISSED", "BROKEN"}
 
 # [NEW 2026-08-11] 15:15 BTST (Buy Today Sell Tomorrow) scan thresholds.
 # See classify_btst() for how these two gates (closing strength, R:R
