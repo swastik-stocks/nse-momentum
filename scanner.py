@@ -10,12 +10,15 @@ import sys, logging, json, argparse
 from datetime import datetime
 from pathlib import Path
 
-from data_fetcher import fetch_batch_ohlcv, get_market_context, BhavcopyFetcher, validate_cmp_vs_bhavcopy
+from data_fetcher import (fetch_batch_ohlcv, get_market_context, BhavcopyFetcher,
+                           validate_cmp_vs_bhavcopy, get_last_trading_day)
 from orchestrator import AgentOrchestrator
 from nse_universe import NSE_UNIVERSE, UNIVERSE_CONFIG
 from emailer      import send_email_report
 from trade_logger import init_tables
-from sanity_gate  import run_sanity_gate, send_sanity_alert_email
+from sanity_gate  import (run_sanity_gate, send_sanity_alert_email,
+                           send_data_freshness_alert_email, MIN_OHLCV_COVERAGE_PCT)
+from market_calendar.staleness_check import get_code_provenance
 
 BASE_DIR = Path(__file__).parent
 LOG_DIR  = BASE_DIR / "logs";    LOG_DIR.mkdir(exist_ok=True)
@@ -64,6 +67,28 @@ def _lookup_symbol_master_names(tickers_ns: list) -> dict:
         client.close()
 
 
+def find_stale_tickers(stock_data: dict, expected_trading_date) -> list:
+    """
+    [2026-08-18] Returns the list of tickers whose latest loaded OHLCV bar
+    is dated BEFORE expected_trading_date (empty-dataframe tickers are
+    skipped -- those are already counted as "not loaded" elsewhere, this
+    function only flags "loaded but stale"). Pure/pulled out of run_scan()
+    specifically so it's unit-testable without mocking the whole fetch
+    pipeline.
+    """
+    stale = []
+    for t, df in stock_data.items():
+        if df.empty:
+            continue
+        try:
+            last_bar_date = df.index[-1].date()
+        except Exception:
+            continue
+        if last_bar_date < expected_trading_date:
+            stale.append(t)
+    return stale
+
+
 def run_scan(dry_run: bool = False, max_tickers: int = None):
     log.info("=" * 60)
     log.info("  NSE MOMENTUM SCANNER v5.3" + ("  [DRY RUN]" if dry_run else ""))
@@ -71,6 +96,34 @@ def run_scan(dry_run: bool = False, max_tickers: int = None):
     log.info("=" * 60)
 
     init_tables()
+
+    # [2026-08-18] Data-freshness gate, part 1: code provenance. A fresh
+    # GitHub Actions checkout should NEVER be dirty -- if it is, something
+    # is wrong with the runner itself (not a normal "someone's iterating
+    # locally" case), so this is treated as fatal on the cloud path only.
+    # This is the direct fix for the incident where uncommitted local
+    # fixes silently never reached the scheduled cloud scan: the scan now
+    # records exactly which commit produced its output, so that class of
+    # divergence is at least detectable after the fact even where it
+    # can't be prevented outright.
+    code_prov = get_code_provenance()
+    if code_prov["is_cloud_runner"] and code_prov["git_dirty"]:
+        reason = ("Cloud runner (GitHub Actions) reports a DIRTY working tree "
+                   "-- a fresh checkout should never be dirty. This indicates "
+                   "the runner itself is compromised or misconfigured, not a "
+                   "normal data issue.")
+        log.error(f"  DATA FRESHNESS GATE: {reason}")
+        if not dry_run:
+            try:
+                send_data_freshness_alert_email([reason])
+            except Exception as e:
+                log.error(f"      Alert email failed: {e}")
+        return None
+    if code_prov["git_dirty"]:
+        log.warning("  Running from an UNCOMMITTED (dirty) working tree -- "
+                     "this run's output will be flagged LOCAL/DIRTY in "
+                     "picks_latest.json and must not be confused with a "
+                     "verified production run.")
 
     #      Build de-duplicated universe
     seen, universe = set(), []
@@ -94,15 +147,46 @@ def run_scan(dry_run: bool = False, max_tickers: int = None):
     #      Market context
     log.info("\n[1/6] Fetching market context (Nifty / BankNifty / VIX)...")
     ctx = get_market_context()
-    log.info(f"      VIX: {ctx['vix']:.1f}")
+    if ctx.get("vix_is_fallback"):
+        log.warning(f"      VIX: {ctx['vix']:.1f} (FALLBACK DEFAULT -- live "
+                     f"^INDIAVIX fetch failed, this is NOT a real reading)")
+    else:
+        log.info(f"      VIX: {ctx['vix']:.1f} (live)")
 
     #      Delivery data + full Bhavcopy for NSE-wide breadth
+    #      [2026-08-18] Data-freshness gate, part 2: Bhavcopy must match the
+    #      exact expected trading date, not "whichever of the last 5 days
+    #      we could find" -- see BhavcopyFetcher.get_delivery_pct()'s
+    #      docstring. A failure here aborts the scan before any further
+    #      work rather than running the whole pipeline on data that would
+    #      fail validation later anyway.
     log.info("\n[2/6] Fetching NSE Bhavcopy (delivery %)...")
-    bhav             = BhavcopyFetcher()
-    delivery         = bhav.get_delivery_pct()
+    expected_trading_date = get_last_trading_day()
+    bhav                        = BhavcopyFetcher()
+    delivery, bhav_provenance   = bhav.get_delivery_pct(expected_trading_date)
     bhavcopy_full_df  = getattr(bhav, 'full_df', None)
     bhavcopy_cmp_map  = getattr(bhav, 'bhavcopy_cmp_map', {})
-    log.info(f"      {len(delivery)} symbols loaded | {len(bhavcopy_cmp_map)} CMP prices from Bhavcopy")
+
+    if not bhav_provenance.ok:
+        reason = f"Bhavcopy verification failed: {bhav_provenance.reason}"
+        log.error(f"  DATA FRESHNESS GATE: {reason}")
+        if not dry_run:
+            try:
+                send_data_freshness_alert_email([reason])
+            except Exception as e:
+                log.error(f"      Alert email failed: {e}")
+        else:
+            log.info("      [DRY RUN] Would have held the scan and sent a "
+                       "data-freshness alert -- continuing since this is a dry run.")
+            # Dry runs are explicitly allowed to proceed past this gate (for
+            # sanity-checking scoring changes against whatever data IS
+            # available) but a real run must not.
+            pass
+        if not dry_run:
+            return None
+
+    log.info(f"      {len(delivery)} symbols loaded | {len(bhavcopy_cmp_map)} CMP prices from Bhavcopy | "
+             f"date verified: {bhav_provenance.actual_date}")
 
     # Holdings from Portfolio Dashboard (P1-04, via Turso bridge) — "what do
     # I currently own". Non-fatal on failure per P1-06: a bridge read must
@@ -143,6 +227,42 @@ def run_scan(dry_run: bool = False, max_tickers: int = None):
     loaded     = sum(1 for df in stock_data.values() if not df.empty)
     log.info(f"      {loaded}/{len(tickers)} tickers loaded")
 
+    # [2026-08-18] Data-freshness gate, part 3: PER-TICKER date check, not
+    # just aggregate presence/absence. "loaded" above only means "we got
+    # SOMETHING for this ticker" -- a ticker whose latest bar is 2 trading
+    # days old still counts as "loaded" there. This check asks the real
+    # question per ticker: is the latest bar actually dated the expected
+    # trading day? Named stale tickers are reported individually (not
+    # folded into one aggregate %) so "1 of your actual picks was built on
+    # stale data" stays visible even when overall coverage looks healthy.
+    # Pulled out as a pure function (find_stale_tickers) so it's directly
+    # unit-testable without mocking the whole fetch pipeline -- see
+    # tests/test_data_freshness.py.
+    stale_tickers   = find_stale_tickers(stock_data, expected_trading_date)
+    fresh_loaded    = loaded - len(stale_tickers)
+    coverage_pct    = round(100.0 * fresh_loaded / len(tickers), 1) if tickers else 0.0
+    if stale_tickers:
+        log.warning(f"      {len(stale_tickers)} ticker(s) loaded but NOT dated "
+                     f"{expected_trading_date} (stale OHLCV): "
+                     f"{', '.join(stale_tickers[:20])}"
+                     f"{' ...' if len(stale_tickers) > 20 else ''}")
+    log.info(f"      Per-ticker-verified fresh coverage: {fresh_loaded}/{len(tickers)} ({coverage_pct}%)")
+
+    if coverage_pct < MIN_OHLCV_COVERAGE_PCT:
+        reason = (f"OHLCV coverage verified fresh for only {coverage_pct}% of the "
+                   f"universe ({fresh_loaded}/{len(tickers)}), below the "
+                   f"{MIN_OHLCV_COVERAGE_PCT}% floor -- too incomplete a picture "
+                   f"of the market to trust tonight's picks.")
+        log.error(f"  DATA FRESHNESS GATE: {reason}")
+        if not dry_run:
+            try:
+                send_data_freshness_alert_email([reason])
+            except Exception as e:
+                log.error(f"      Alert email failed: {e}")
+            return None
+        else:
+            log.info("      [DRY RUN] Would have held the scan for low coverage -- continuing.")
+
     # Prepare data_dict for orchestrator
     data_dict = {
         "stock_data":       stock_data,
@@ -150,11 +270,25 @@ def run_scan(dry_run: bool = False, max_tickers: int = None):
         "banknifty_data":   ctx["banknifty"],
         "nifty500_data":    ctx["nifty500"],
         "vix":              ctx["vix"],
+        "vix_is_fallback":  ctx.get("vix_is_fallback", True),
         "delivery_data":    delivery,
         "universe_meta":    {item[0]: item[2] for item in universe},
         "bhavcopy_full_df": bhavcopy_full_df,
         "bhavcopy_cmp_map": bhavcopy_cmp_map,
         "holdings":         holdings,
+        # [2026-08-18] Provenance passthrough for orchestrator.py's
+        # picks_latest.json meta block (section 2 of the data-freshness plan).
+        "data_provenance": {
+            "generated_at":              datetime.now().astimezone().isoformat(),
+            "bhavcopy_trading_date":     bhav_provenance.actual_date.isoformat() if bhav_provenance.actual_date else None,
+            "bhavcopy_requested_date":   expected_trading_date.isoformat(),
+            "bhavcopy_date_verified":    bhav_provenance.ok,
+            "ohlcv_universe_coverage":   {"requested": len(tickers), "fetched_fresh": fresh_loaded,
+                                           "fetched_any": loaded, "pct": coverage_pct,
+                                           "stale_tickers": stale_tickers},
+            "vix_is_fallback":           ctx.get("vix_is_fallback", True),
+            "code_provenance":           code_prov,
+        },
     }
 
     #      CMP cross-validation (BUG-5 FIX)

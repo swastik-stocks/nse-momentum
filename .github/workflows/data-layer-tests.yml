@@ -1,0 +1,59 @@
+name: Data-Layer Regression Tests
+
+# [2026-08-18] Added after two live stale-data incidents on the same day
+# (a stale local/cloud picks divergence, then a caching bug that masked a
+# real volume surge) -- see tests/test_data_freshness.py's module
+# docstring. This is the mechanism that stops the same bug CLASS from
+# silently coming back after a future refactor: every fixture here mirrors
+# a concrete failure this codebase actually hit. Unit-level only (all
+# external calls mocked) -- no live network needed, runs the same here as
+# on a real trading morning.
+
+on:
+  pull_request:
+    paths:
+      - 'data_fetcher.py'
+      - 'dhan_rvol.py'
+      - 'orchestrator.py'
+      - 'confirm_picks.py'
+      - 'scanner.py'
+      - 'sanity_gate.py'
+      - 'market_calendar/staleness_check.py'
+      - 'tests/**'
+  push:
+    branches: [main]
+    paths:
+      - 'data_fetcher.py'
+      - 'dhan_rvol.py'
+      - 'orchestrator.py'
+      - 'confirm_picks.py'
+      - 'scanner.py'
+      - 'sanity_gate.py'
+      - 'market_calendar/staleness_check.py'
+      - 'tests/**'
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      DHAN_ACCESS_TOKEN: test-token
+      DHAN_CLIENT_ID: test-client-id
+      GMAIL_ADDRESS: test@example.com
+      GMAIL_APP_PASSWORD: test-password
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          pip install pytest
+          pip install -r requirements.txt
+
+      - name: Run data-layer regression tests
+        run: python -m pytest tests/ -v

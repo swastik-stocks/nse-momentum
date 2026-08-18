@@ -91,11 +91,21 @@ DB_PATH  = DATA_DIR / "momentum_v4.db"
 # ─────────────────────────────────────────────────────────────────────────────
 
 def get_last_trading_day(from_date: date = None) -> date:
-    """Most recent NSE trading weekday (Mon–Fri). Ignores NSE holidays."""
+    """
+    Most recent NSE trading day on/before from_date.
+
+    [2026-08-18] Was weekday-only (ignored NSE holidays) -- delegates to
+    market_calendar.staleness_check.is_trading_day() now, the single
+    holiday-aware source both the evening and morning pipelines already
+    use, so "what date is this" logic can't silently diverge between the
+    two callers again. Name/signature unchanged -- existing callers
+    (_is_cache_fresh, fetch_dhan, etc.) need no changes.
+    """
+    from market_calendar.staleness_check import is_trading_day
     d = from_date or date.today()
-    for i in range(7):
+    for i in range(10):
         candidate = d - timedelta(days=i)
-        if candidate.weekday() < 5:
+        if is_trading_day(candidate):
             return candidate
     return d
 
@@ -612,9 +622,19 @@ def fetch_single(ticker: str, period: str = "2y") -> pd.DataFrame:
 # ─────────────────────────────────────────────────────────────────────────────
 
 def get_market_context() -> dict:
+    """
+    [2026-08-18] ctx["vix"] used to default to a hardcoded 15.0 with no way
+    for a caller to tell "real VIX happened to be 15.0" apart from "fetch
+    failed, used the fallback constant" -- that fabricated value fed
+    straight into regime classification scoring as if it were real. Now
+    carries ctx["vix_is_fallback"]: True until a real ^INDIAVIX fetch
+    actually succeeds; callers (orchestrator.py's regime step, emailer.py's
+    market-intelligence section) must render/log this explicitly rather
+    than trusting a bare vix number.
+    """
     ctx = {
         "nifty50": pd.DataFrame(), "banknifty": pd.DataFrame(),
-        "nifty500": pd.DataFrame(), "vix": 15.0,
+        "nifty500": pd.DataFrame(), "vix": 15.0, "vix_is_fallback": True,
         "timestamp": datetime.now().isoformat(),
     }
     try:
@@ -632,8 +652,10 @@ def get_market_context() -> dict:
         if not vix.empty and "Close" in vix.columns:
             v = vix["Close"].squeeze()
             ctx["vix"] = float(v.iloc[-1]) if hasattr(v, "iloc") else float(v)
+            ctx["vix_is_fallback"] = False
     except Exception as e:
-        log.warning(f"Market context fetch error: {e}")
+        log.warning(f"Market context fetch error: {e} — VIX will use fallback "
+                     f"default 15.0, flagged via ctx['vix_is_fallback']=True")
     return ctx
 
 
@@ -796,19 +818,47 @@ class BhavcopyFetcher:
         self.trading_date:     Optional[str]           = None
         self.bhavcopy_cmp_map: Dict[str, float]        = {}
 
-    def get_delivery_pct(self) -> Dict[str, float]:
+    def get_delivery_pct(self, expected_trading_date: date = None) -> tuple:
+        """
+        [2026-08-18] Was: loop back up to 5 calendar days and silently
+        return the FIRST file that parsed, regardless of which date it
+        actually was -- self.trading_date was computed but never gated on,
+        so a stale 3-4-day-old Bhavcopy (e.g. today's not published yet)
+        was indistinguishable from a fresh one to every caller.
+
+        Now: requires an exact match against `expected_trading_date`
+        (defaults to get_last_trading_day() -- the holiday-aware "what
+        date should this data be" answer). Still checks the same 5-day
+        cache/download window (a file for the right date might be sitting
+        in cache under an earlier offset, or need downloading), but only
+        ACCEPTS a result whose parsed iso_date equals expected_trading_date
+        exactly -- "close" is not "correct" for data a trading decision is
+        based on.
+
+        Returns (delivery_dict, DataProvenance) -- callers MUST check
+        provenance.ok before trusting delivery_dict; an empty {} on
+        failure looks identical to "no delivery data today" unless the
+        provenance is inspected too.
+        """
+        from market_calendar.staleness_check import verify_bhavcopy_date
+        expected = expected_trading_date or get_last_trading_day()
+        expected_str = expected.strftime("%Y-%m-%d")
+
         for offset in range(0, 5):
             dt = datetime.today() - timedelta(days=offset)
             if dt.weekday() >= 5:
                 continue
             date_str   = dt.strftime("%d%m%Y")
             iso_date   = dt.strftime("%Y-%m-%d")
+            if iso_date != expected_str:
+                continue   # not the date we need -- don't even bother parsing it
             cache_file = self.CACHE_DIR / f"bhav_{date_str}.csv"
 
             if cache_file.exists():
                 result = self._parse(cache_file, iso_date)
                 if result:
-                    return result
+                    provenance = verify_bhavcopy_date(self.trading_date, expected)
+                    return result, provenance
 
             url = self.BASE_URL.format(date=date_str)
             try:
@@ -821,12 +871,15 @@ class BhavcopyFetcher:
                     cache_file.write_bytes(r.content)
                     result = self._parse(cache_file, iso_date)
                     if result:
-                        return result
+                        provenance = verify_bhavcopy_date(self.trading_date, expected)
+                        return result, provenance
             except Exception as e:
                 log.debug(f"Bhavcopy fetch {date_str}: {e}")
 
-        log.warning("Bhavcopy unavailable — delivery % defaulting to 0")
-        return {}
+        log.warning(f"Bhavcopy for expected trading date {expected_str} unavailable "
+                     f"(not published yet, or archive unreachable) -- refusing to "
+                     f"silently substitute an older file")
+        return {}, verify_bhavcopy_date(None, expected)
 
     def _parse(self, path: Path, iso_date: str) -> Dict[str, float]:
         try:

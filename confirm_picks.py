@@ -50,7 +50,8 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from dotenv import load_dotenv
 
-from market_calendar.staleness_check import check_staleness, StaleDataError
+from market_calendar.staleness_check import (check_staleness, StaleDataError,
+                                              get_code_provenance, verify_intraday_freshness)
 from database.schema import get_connection, init_all_tables
 import dhan_rvol
 from agents.intraday_vol_adjusted_agent import IntradayVolAdjustedAgent
@@ -112,6 +113,19 @@ REGIME_TOLERANCE = {
 # existing entry-drift/pivot-extension checks correctly catch that as MISSED
 # instead, so there's no risk of belatedly recommending a chased entry.
 TERMINAL_STATUSES = {"CONFIRMED", "CONFIRMED_LOW_VOL", "MISSED", "BROKEN"}
+
+# [2026-08-18, 5b/4c] NO_RESEND_STATUSES drives the "don't spam duplicate
+# emails" dedup only -- a separate concern from data correctness. BROKEN
+# is deliberately EXCLUDED here (unlike TERMINAL_STATUSES above, kept for
+# any external reference) because it was found to have the same caching
+# exposure as the BREAKOUT_NO_VOLUME bug fixed earlier today: once cached,
+# a ticker was NEVER re-fetched for the rest of the day, so a single
+# bad/stale price tick dipping to/below SL could permanently freeze a
+# stock as "broken" all day with zero re-verification path (worse than
+# BREAKOUT_NO_VOLUME's old bug, since there wasn't even a partial re-check
+# like the BTST scan gives CONFIRMED picks). See the cached-BROKEN
+# re-verification branch in main()'s checkpoint loop below.
+NO_RESEND_STATUSES = {"CONFIRMED", "CONFIRMED_LOW_VOL", "MISSED"}
 
 # [NEW 2026-08-11] 15:15 BTST (Buy Today Sell Tomorrow) scan thresholds.
 # See classify_btst() for how these two gates (closing strength, R:R
@@ -188,8 +202,12 @@ def _rvol_tvdatafeed(ticker_nse: str, as_of: datetime = None) -> float:
         except Exception:
             try:
                 df.index = df.index.tz_convert("Asia/Kolkata")
-            except Exception:
-                pass
+            except Exception as e:
+                # [2026-08-18, 4e] Was a bare silent pass -- see the sibling
+                # fix in get_opening_range/get_intraday_high_low/
+                # get_intraday_bars for why this needs at least debug
+                # logging rather than a silent continue.
+                log.debug(f"    tz conversion failed both ways for {ticker_nse}: {e}")
         # --- END FIX
 
         today = as_of.date()
@@ -309,70 +327,111 @@ def _rvol_yfinance_fallback(ticker_nse: str, as_of: datetime = None) -> float:
         return -1.0
 
 
-def _rvol_dhan(ticker_raw: str, as_of: datetime = None) -> float:
+def _rvol_dhan(ticker_raw: str, as_of: datetime = None) -> tuple:
     """
     [NEW] Primary RVOL source — Dhan's paid Data API, elapsed-time-matched
-    (see dhan_rvol.py). Returns rvol as a float, or -1.0 on any failure
-    (too early in session, security_id not mapped, network/API error, no
-    historical data) so it slots into the same fallback chain as the
-    tvDatafeed/yfinance functions below.
+    (see dhan_rvol.py). Returns (rvol_float, elapsed_minutes_or_None); rvol
+    is -1.0 on any failure (too early in session, security_id not mapped,
+    network/API error, no historical data, candle-integrity violation) so
+    it slots into the same fallback chain as the tvDatafeed/yfinance
+    functions below.
     """
     symbol = ticker_raw.replace(".NS", "")
     try:
         result = dhan_rvol.compute_rvol(symbol, as_of=as_of)
     except Exception as e:
         log.warning(f"    [Dhan] {symbol}: RVOL call raised {type(e).__name__}: {e}")
-        return -1.0
+        return -1.0, None
 
     if "error" in result:
         log.info(f"    [Dhan] {symbol}: {result['error']}")
-        return -1.0
+        return -1.0, None
 
     log.info(f"    [Dhan] {symbol}: RVOL = {result['rvol']:.2f}x "
              f"({result.get('elapsed_minutes', '?')}min elapsed)")
-    return result["rvol"]
+    return result["rvol"], result.get("elapsed_minutes")
 
 
 def get_rvol(ticker: str, as_of: datetime = None) -> tuple:
     """
-    Returns (rvol_float, source_label).
+    Returns (rvol_float, source_label, elapsed_minutes_or_None).
     Tries Dhan first (paid, elapsed-time-matched, most reliable), falls
-    back to tvDatafeed, then yfinance, then N/A.
+    back to tvDatafeed, then yfinance, then N/A. elapsed_minutes is only
+    populated for the Dhan path today (tvDatafeed/yfinance fallbacks don't
+    thread it through) -- still a real improvement over no provenance at
+    all for the common case, since Dhan is tried first.
     """
     ticker_raw = ticker if ticker.endswith(".NS") else ticker + ".NS"
 
-    rvol = _rvol_dhan(ticker_raw, as_of=as_of)
+    rvol, elapsed = _rvol_dhan(ticker_raw, as_of=as_of)
     if rvol >= 0:
-        return rvol, "Dhan"
+        return rvol, "Dhan", elapsed
 
     log.info(f"    Dhan failed for {ticker_raw} — trying tvDatafeed fallback")
     rvol = _rvol_tvdatafeed(ticker_raw, as_of=as_of)
     if rvol >= 0:
-        return rvol, "tvDatafeed"
+        return rvol, "tvDatafeed", None
 
     log.info(f"    tvDatafeed failed for {ticker_raw} — trying yfinance fallback")
     rvol = _rvol_yfinance_fallback(ticker_raw, as_of=as_of)
     if rvol >= 0:
-        return rvol, "yfinance"
+        return rvol, "yfinance", None
 
     log.warning(f"    All RVOL sources failed for {ticker_raw} — returning N/A")
-    return -1.0, "N/A"
+    return -1.0, "N/A", None
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Live price
 # ─────────────────────────────────────────────────────────────────────────────
 
-def get_live_price(ticker: str) -> float | None:
+def get_live_price(ticker: str) -> tuple:
+    """
+    [2026-08-18, 5b-iii] Dhan-primary, yfinance-fallback-only. yfinance's
+    fast_info exposes no trustworthy trade timestamp at all (a documented,
+    unfixable gap in yfinance itself -- confirmed no reliable metadata
+    field across versions) -- so it can never be trusted as the
+    authoritative "is this price current" answer on its own. Dhan's
+    intraday candles carry a real per-bar timestamp, so Dhan is tried
+    first via dhan_rvol.get_ltp() (nearly free: the same underlying call
+    is already made for RVOL on this ticker this checkpoint). Falls back
+    to yfinance ONLY if Dhan fails, and that fallback is explicitly tagged
+    lower-confidence rather than silently presented as equally trustworthy.
+
+    Returns (price_or_None, fetched_at_or_None, source_str, suspect_bool).
+    fetched_at is None for the yfinance path by construction (it cannot
+    prove one) -- callers apply verify_intraday_freshness() to this value,
+    which correctly marks a None timestamp as unverified rather than
+    silently trusting it. suspect_bool is a cheap probabilistic tell on
+    the yfinance path only: LTP exactly equal to previous close during
+    market hours is a real signature of a stuck/delayed feed.
+    """
+    symbol = ticker.replace(".NS", "")
+    try:
+        result = dhan_rvol.get_ltp(symbol)
+        if "error" not in result:
+            return result["price"], result["fetched_at"], "dhan", False
+        log.info(f"    [Dhan] LTP unavailable for {symbol}: {result['error']} "
+                 f"— falling back to yfinance")
+    except Exception as e:
+        log.warning(f"    [Dhan] LTP call raised {type(e).__name__}: {e} — falling back to yfinance")
+
     try:
         import yfinance as yf
         t    = ticker if ticker.endswith(".NS") else ticker + ".NS"
         fast = yf.Ticker(t).fast_info
         ltp  = float(fast.last_price)
-        return ltp if ltp > 0 else None
+        if ltp <= 0:
+            return None, None, "yfinance_fallback", False
+        suspect = False
+        try:
+            suspect = abs(ltp - float(fast.previous_close)) < 1e-9
+        except Exception:
+            pass
+        return ltp, None, "yfinance_fallback", suspect
     except Exception as e:
         log.warning(f"  [WARN] live price failed for {ticker}: {e}")
-        return None
+        return None, None, "yfinance_fallback", False
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -420,8 +479,15 @@ def get_opening_range(ticker_nse: str, as_of: datetime = None,
             except Exception:
                 try:
                     df.index = df.index.tz_convert("Asia/Kolkata")
-                except Exception:
-                    pass
+                except Exception as e:
+                    # [2026-08-18, 4e] Was a bare silent pass -- if BOTH tz
+                    # conversions fail, execution used to continue with an
+                    # unconverted index with no trace at all. In practice
+                    # this self-corrects into an empty-window -1.0 (the
+                    # date/time slice below won't match anything), but that
+                    # was accidental, not by design -- log it so a genuinely
+                    # corrupted-index scenario is at least visible.
+                    log.debug(f"    tz conversion failed both ways for this frame: {e}")
             win = df[(df.index.date == today) &
                      (df.index.time >= MARKET_OPEN_TIME) &
                      (df.index.time <= window_end)]
@@ -481,8 +547,15 @@ def get_intraday_high_low(ticker_nse: str, as_of: datetime = None) -> tuple:
             except Exception:
                 try:
                     df.index = df.index.tz_convert("Asia/Kolkata")
-                except Exception:
-                    pass
+                except Exception as e:
+                    # [2026-08-18, 4e] Was a bare silent pass -- if BOTH tz
+                    # conversions fail, execution used to continue with an
+                    # unconverted index with no trace at all. In practice
+                    # this self-corrects into an empty-window -1.0 (the
+                    # date/time slice below won't match anything), but that
+                    # was accidental, not by design -- log it so a genuinely
+                    # corrupted-index scenario is at least visible.
+                    log.debug(f"    tz conversion failed both ways for this frame: {e}")
             win = df[(df.index.date == today) &
                      (df.index.time >= MARKET_OPEN_TIME) &
                      (df.index.time <= as_of.time())]
@@ -541,8 +614,15 @@ def get_intraday_bars(ticker_nse: str, as_of: datetime = None):
             except Exception:
                 try:
                     df.index = df.index.tz_convert("Asia/Kolkata")
-                except Exception:
-                    pass
+                except Exception as e:
+                    # [2026-08-18, 4e] Was a bare silent pass -- if BOTH tz
+                    # conversions fail, execution used to continue with an
+                    # unconverted index with no trace at all. In practice
+                    # this self-corrects into an empty-window -1.0 (the
+                    # date/time slice below won't match anything), but that
+                    # was accidental, not by design -- log it so a genuinely
+                    # corrupted-index scenario is at least visible.
+                    log.debug(f"    tz conversion failed both ways for this frame: {e}")
             win = df[(df.index.date == today) &
                      (df.index.time >= MARKET_OPEN_TIME) &
                      (df.index.time <= as_of.time())]
@@ -650,7 +730,8 @@ def compute_intraday_diagnostic(ticker_nse: str, as_of: datetime = None) -> dict
 def classify(pick: dict, cmp: float | None, rvol: float, rvol_src: str,
              max_entry_drift_pct: float = MAX_ENTRY_DRIFT_PCT,
              max_pivot_extension_pct: float = MAX_PIVOT_EXTENSION_PCT,
-             opening_range: tuple = (None, None, None)) -> dict:
+             opening_range: tuple = (None, None, None),
+             price_verified: bool = True, price_source: str = "unknown") -> dict:
     """
     Status set (v5.3):
       CONFIRMED           — above pivot, RVOL >= 1.5x
@@ -659,7 +740,14 @@ def classify(pick: dict, cmp: float | None, rvol: float, rvol_src: str,
       MISSED              — entry drift > threshold, OR pivot extension > threshold with low RVOL
       PENDING             — below pivot
       BROKEN              — at or below stop loss
-      DATA_ERROR          — price feed failed
+      DATA_ERROR          — price feed failed entirely (no number at all)
+      PRICE_UNVERIFIED    — a price WAS returned, but its freshness could ← NEW 2026-08-18
+                             not be proven (e.g. yfinance fallback with no
+                             trade timestamp) -- "unknown != current", see
+                             get_live_price()/5b-iii. Non-terminal: this
+                             ticker specifically gets re-checked next
+                             checkpoint, without blocking the rest of the
+                             email over one flaky source.
 
     [FIX-3] max_entry_drift_pct / max_pivot_extension_pct are now passed
     in per-call (regime-aware, see REGIME_TOLERANCE) rather than always
@@ -683,6 +771,18 @@ def classify(pick: dict, cmp: float | None, rvol: float, rvol_src: str,
         anchor_pivot = orh
         anchor_entry = max(entry, orh)
         or_anchored  = True
+
+    if cmp is not None and not price_verified:
+        return {
+            "status": "PRICE_UNVERIFIED",
+            "ltp": cmp, "gap_pct": None, "rvol": rvol, "rvol_src": rvol_src,
+            "drift_pct": None, "is_chasing": False,
+            "action": (f"Got a price (₹{cmp:,.1f} via {price_source}) but could not "
+                       f"prove it's current — no reliable trade timestamp available. "
+                       f"Not trusted for a classification. Will re-check next checkpoint."),
+            "label":  "PRICE UNVERIFIED",
+            "color":  "#ffffff", "bg": "#78716c",
+        }
 
     if cmp is None:
         return {
@@ -1009,6 +1109,25 @@ def classify_btst(pick: dict, cmp: float | None, day_high: float | None,
     pct_off_high = round(((day_high - cmp) / day_high) * 100, 1) if day_high and day_high > 0 else None
     pct_captured = round(((cmp - entry) / (t1 - entry)) * 100, 1) if t1 != entry else None
 
+    # [2026-08-18, 4e] Was: day_high=None (get_intraday_high_low() fetch
+    # failure) silently made `faded` always False -- a candidate could
+    # reach BTST_CANDIDATE status having never actually been checked for
+    # fading off its high, with the email showing "—" as the only
+    # (easy-to-miss) hint the check didn't run. Per the "unverified must
+    # BLOCK, not silently pass" contract used elsewhere in this file
+    # (get_asm_gsm_symbols/days_to_next_earnings), an unverifiable
+    # closing-strength check must explicitly block BTST candidacy, not
+    # quietly default to "not faded".
+    if day_high is None or day_high <= 0:
+        return {
+            "status": "BTST_UNVERIFIED", "ltp": cmp, "rvol": rvol, "rvol_src": rvol_src,
+            "pct_off_high": None, "pct_captured": pct_captured,
+            "action": ("Could not fetch today's intraday high — the closing-strength "
+                       "(fade-off-high) safety gate could not be checked. Not cleared "
+                       "for BTST until this can be verified."),
+            "label": "DAY-HIGH UNVERIFIED", "color": "#ffffff", "bg": "#78716c",
+        }
+
     below_pivot = cmp < pivot
     exhausted   = pct_captured is not None and pct_captured >= BTST_MAX_PCT_T1_CAPTURED
     faded       = pct_off_high is not None and pct_off_high > BTST_MAX_PCT_OFF_HIGH
@@ -1075,14 +1194,23 @@ def classify_btst(pick: dict, cmp: float | None, day_high: float | None,
 # Email HTML
 # ─────────────────────────────────────────────────────────────────────────────
 
-def _fmt_rvol(rvol: float, src: str) -> str:
+def _fmt_rvol(rvol: float, src: str, elapsed_minutes: float = None) -> str:
+    """
+    [2026-08-18] Was: hardcoded "(Live)" on every resolved RVOL regardless
+    of actual verification status -- misleading given a fabricated
+    rvol=0.0 from an empty Dhan payload (now fixed, but the display bug
+    was independent) would have shown "❌ 0.0x (Live)" as if verified.
+    Now renders the real elapsed-time provenance dhan_rvol.compute_rvol()
+    already calculates, instead of a blanket claim.
+    """
     if rvol < 0:
         return "<span style='color:#9ca3af;'>N/A</span>"
     color = "#16a34a" if rvol >= 1.5 else "#ca8a04" if rvol >= 1.0 else "#dc2626"
     icon  = "✅" if rvol >= 1.5 else "⚠️" if rvol >= 1.0 else "❌"
+    provenance = f"{elapsed_minutes:.0f}min elapsed" if elapsed_minutes is not None else "elapsed time unknown"
     return (
-        f"<span style='color:{color};font-weight:700;'>{icon} {rvol:.1f}x (Live)</span>"
-        f"<br><span style='font-size:10px;color:#9ca3af;'>{src}</span>"
+        f"<span style='color:{color};font-weight:700;'>{icon} {rvol:.1f}x</span>"
+        f"<br><span style='font-size:10px;color:#9ca3af;'>{src} · {provenance}</span>"
     )
 
 
@@ -1091,6 +1219,19 @@ def _row(r: dict) -> str:
     c           = r["classification"]
     ticker_disp = p.get("ticker", "").replace(".NS", "")
     ltp         = f"₹{c['ltp']:,.1f}" if c["ltp"] is not None else "N/A"
+    # [2026-08-18] Show real per-datum provenance instead of a bare number
+    # with no indication of source or freshness -- "traceable to the
+    # underlying source data and its calculation date/time" per the
+    # non-negotiable data-accuracy requirement.
+    price_fetched_at = c.get("price_fetched_at")
+    price_source     = c.get("price_source", "")
+    if c["ltp"] is not None:
+        ltp_prov = (f"{price_source} · {price_fetched_at} IST" if price_fetched_at
+                    else (f"{price_source} · unverified timestamp" if price_source
+                          else "unverified timestamp"))
+        if c.get("price_suspect"):
+            ltp_prov += " · <span style='color:#dc2626'>suspect (=prev close)</span>"
+        ltp = f"{ltp}<br><span style='font-size:10px;color:#9ca3af;'>{ltp_prov}</span>"
     gap         = f"{c['gap_pct']:+.1f}%" if c.get("gap_pct") is not None else "N/A"
     drift_cell  = ""
     if c.get("is_chasing"):
@@ -1130,7 +1271,7 @@ def _row(r: dict) -> str:
             {c['label']}</span>
       </td>
       <td style="padding:10px 8px;text-align:right;font-weight:700;color:#111827;">{ltp}</td>
-      <td style="padding:10px 8px;text-align:right;">{_fmt_rvol(c['rvol'], c.get('rvol_src',''))}</td>
+      <td style="padding:10px 8px;text-align:right;">{_fmt_rvol(c['rvol'], c.get('rvol_src',''), c.get('rvol_elapsed_minutes'))}</td>
       <td style="padding:10px 8px;text-align:right;color:#6b7280;">{gap}</td>
       <td style="padding:10px 8px;text-align:right;font-size:12px;">
         {sl_cell}<br><span style='color:#9ca3af;font-size:10px;'>SL</span>
@@ -1374,7 +1515,14 @@ def build_stale_html(scan_date_str: str, today_iso: str, run_time: str) -> str:
 </body></html>"""
 
 
-def build_html(results: list, scan_date: str, run_time: str) -> str:
+def build_html(results: list, scan_date: str, run_time: str, meta: dict = None) -> str:
+    meta = meta or {}
+    # [2026-08-18] scan_date as passed in has historically been TODAY's
+    # display date, not the picks' actual Bhavcopy vintage (which is
+    # normally yesterday's trading day by design). Prefer the verified
+    # meta field for the header so "Picks from Bhavcopy {date}" is
+    # actually true, not just today's date relabeled.
+    scan_date = meta.get("bhavcopy_trading_date") or scan_date
     order = {
         "CONFIRMED": 0, "CONFIRMED_PENDING_RVOL": 1, "CONFIRMED_LOW_VOL": 2,
         "BREAKOUT_NO_VOLUME": 3, "PENDING": 4, "MISSED": 5, "BROKEN": 6,
@@ -1479,7 +1627,10 @@ def build_html(results: list, scan_date: str, run_time: str) -> str:
     <div style="color:#f1f5f9;font-size:22px;font-weight:700;margin-top:4px;">
         10am Confirmation Report</div>
     <div style="color:#64748b;font-size:13px;margin-top:2px;">
-        {scan_date} &nbsp;·&nbsp; Run at {run_time} IST</div>
+        Picks from Bhavcopy {scan_date} &nbsp;·&nbsp; Confirmed at {run_time} IST</div>
+    {"" if not meta.get('code_provenance', {}).get('git_dirty') else
+     '<div style="color:#f87171;font-size:11px;margin-top:4px;">'
+     '&#9888; Evening scan was a LOCAL/UNCOMMITTED code run &mdash; not the verified production pipeline</div>'}
   </div>
 
   <div style="background:#f8fafc;border-bottom:1px solid #e2e8f0;
@@ -1528,7 +1679,17 @@ def build_html(results: list, scan_date: str, run_time: str) -> str:
 # Email sender
 # ─────────────────────────────────────────────────────────────────────────────
 
+# [2026-08-18] --no-send dry-run support, mirroring scanner.py's existing
+# --dry-run convention. Lets morning-pipeline changes be verified against
+# a REAL trading morning's live data without risking sending a wrong/test
+# email while iterating.
+_NO_SEND = False
+
+
 def send_email(subject: str, html_body: str):
+    if _NO_SEND:
+        log.info(f"  [--no-send] Would have sent: {subject!r} ({len(html_body)} chars of HTML) — not sending.")
+        return
     recipients = _load_recipients()
     cc = _load_cc_recipients()
     msg = MIMEMultipart("alternative")
@@ -1775,8 +1936,8 @@ def run_btst_scan(today_iso: str, today_str: str, run_time: str):
             ticker_raw += ".NS"
 
         log.info(f"  Checking {ticker_key} for BTST...")
-        cmp                        = get_live_price(ticker_raw)
-        rvol, rvol_src             = get_rvol(ticker_raw, as_of=now_ist)
+        cmp, _cmp_fetched_at, _cmp_src, _cmp_suspect = get_live_price(ticker_raw)
+        rvol, rvol_src, _rvol_elapsed = get_rvol(ticker_raw, as_of=now_ist)
         day_high, day_low, dh_src  = get_intraday_high_low(ticker_raw, as_of=now_ist)
         days_to_earnings           = days_to_next_earnings(ticker_raw, as_of=now_ist.date())
         c = classify_btst(pick, cmp, day_high, rvol, rvol_src,
@@ -1827,7 +1988,14 @@ def main():
                          help="Run the 15:15 BTST (Buy Today Sell Tomorrow) closing-strength "
                               "scan instead of the standard entry-confirmation checkpoint. "
                               "Only evaluates tickers CONFIRMED at an earlier checkpoint today.")
+    parser.add_argument("--no-send", action="store_true",
+                         help="Run the full fetch/classify pipeline against REAL live data and "
+                              "log what would have been emailed, without actually sending — "
+                              "mirrors scanner.py's --dry-run for safe verification of morning-"
+                              "pipeline changes on a real trading morning.")
     args = parser.parse_args()
+    global _NO_SEND
+    _NO_SEND = args.no_send
 
     # [BUG-3] IST timestamp — not UTC labeled as IST
     now_ist   = datetime.now(IST)
@@ -1844,27 +2012,83 @@ def main():
         raise FileNotFoundError(PICKS_JSON_PATH)
 
     with open(PICKS_JSON_PATH, encoding="utf-8") as f:
-        picks = json.load(f)
+        raw = json.load(f)
+
+    # [2026-08-18] Schema compatibility. picks_latest.json changed from a
+    # bare array to {"meta": {...verified provenance...}, "picks": [...]}
+    # (see orchestrator.py). A legacy flat-array file post-rollout means the
+    # evening scan that produced it did NOT run the current provenance-aware
+    # code (uncommitted/stale runner, exactly the class of bug that caused
+    # the 2026-08-18 incident) — hard-fail rather than silently falling back
+    # to the old, unverified semantics.
+    if isinstance(raw, list):
+        log.error(f"{PICKS_JSON_PATH} is in the legacy flat-array shape — the "
+                   f"evening scan that produced it did not run the current "
+                   f"provenance-aware code. Refusing to trust it.")
+        stale_html = build_stale_html("unknown (legacy file format)", today_iso, run_time)
+        send_email(f"[NSE Momentum Checkpoint] STALE DATA — legacy picks file format | {today_str}",
+                   stale_html)
+        return
+    meta  = raw.get("meta", {}) if isinstance(raw, dict) else {}
+    picks = raw.get("picks", []) if isinstance(raw, dict) else []
     log.info(f"  Loaded {len(picks)} picks from {PICKS_JSON_PATH}")
 
-    # [BUG-6 FIX] Stale data guard — compare scan_date against the LAST
-    # TRADING DAY, not literally "today". scan_date == yesterday's
-    # trading day is the CORRECT, expected state (see module docstring).
-    picks_meta    = picks[0] if picks else {}
-    scan_date_str = picks_meta.get("scan_date", "")
+    # [BUG-6 FIX, extended 2026-08-18] Stale data guard — compare scan_date
+    # against the LAST TRADING DAY, not literally "today". scan_date ==
+    # yesterday's trading day is the CORRECT, expected state (see module
+    # docstring). [4f] Previously this was the ONLY check — a stale
+    # artifact with a coincidentally-correct scan_date string would sail
+    # through undetected. Now also requires meta["bhavcopy_date_verified"]
+    # to be True and meta["generated_at"] to be a real, parseable
+    # timestamp whose date matches scan_date -- a corrupted/replayed
+    # artifact would now need to fake three independent fields, not one.
+    scan_date_str = meta.get("bhavcopy_trading_date") or (picks[0].get("scan_date") if picks else "")
+
+    def _fail_stale(reason: str):
+        log.error(f"STALE PICKS FILE — {reason}")
+        stale_html = build_stale_html(scan_date_str or "unknown", today_iso, run_time)
+        send_email(
+            f"[NSE Momentum Checkpoint] STALE DATA — evening scan missing | {today_str}",
+            stale_html
+        )
 
     if scan_date_str:
         try:
             picks_date = date.fromisoformat(scan_date_str)
-            check_staleness(picks_date)
+            check_staleness(picks_date, today=now_ist.date())
         except StaleDataError as e:
-            log.error(f"STALE PICKS FILE — {e}")
-            stale_html = build_stale_html(scan_date_str, today_iso, run_time)
-            send_email(
-                f"[NSE Momentum Checkpoint] STALE DATA — evening scan missing | {today_str}",
-                stale_html
-            )
+            _fail_stale(str(e))
             return
+
+        if not meta.get("bhavcopy_date_verified", False):
+            _fail_stale("meta.bhavcopy_date_verified is False — the evening scan itself "
+                        "could not confirm its Bhavcopy data matched the expected trading date.")
+            return
+
+        gen_at = meta.get("generated_at")
+        if not gen_at:
+            _fail_stale("meta.generated_at is missing — cannot verify this file wasn't "
+                        "a stale/replayed artifact with a coincidentally-correct date.")
+            return
+        try:
+            gen_at_dt = datetime.fromisoformat(gen_at)
+        except ValueError:
+            _fail_stale(f"meta.generated_at {gen_at!r} is not a parseable timestamp.")
+            return
+        if gen_at_dt.date().isoformat() != scan_date_str:
+            _fail_stale(f"meta.generated_at date ({gen_at_dt.date()}) does not match "
+                        f"meta.bhavcopy_trading_date ({scan_date_str}).")
+            return
+
+        code_prov = meta.get("code_provenance", {}) or {}
+        if code_prov.get("git_dirty") and code_prov.get("is_cloud_runner"):
+            _fail_stale("evening scan's code_provenance shows a dirty working tree on "
+                        "the cloud runner — its own code state could not be verified.")
+            return
+        if code_prov.get("git_dirty"):
+            log.warning("  Today's picks came from a LOCAL/UNCOMMITTED evening scan run "
+                         "(git_dirty=True, not the cloud runner) — proceeding, but this "
+                         "will be flagged in the confirmation email too.")
 
     # [NEW 2026-08-11] BTST scan is a completely separate flow -- different
     # candidate pool (today's already-CONFIRMED positions, not all 20 picks),
@@ -1877,7 +2101,7 @@ def main():
 
     # [FIX-3] Regime-aware tolerance — see ASSUMPTION note in module docstring
     # re: confirming the actual key name if this doesn't seem to activate.
-    regime_code = picks_meta.get("regime")
+    regime_code = meta.get("regime") or (picks[0].get("regime") if picks else None)
     tolerance   = _get_tolerance(regime_code)
     log.info(f"  Regime: {regime_code!r} → tolerance "
              f"entry_drift={tolerance['max_entry_drift_pct']}% "
@@ -1904,23 +2128,52 @@ def main():
         # price/RVOL or re-email something already resolved this morning.
         if ticker_key in prior_state:
             cached = prior_state[ticker_key]
-            log.info(f"  {ticker_key}: cached [{cached['classification']['status']}] "
-                     f"from earlier checkpoint — skipping re-check")
-            results.append(cached)
-            continue
+            cached_status = cached["classification"]["status"]
+
+            # [2026-08-18, 4c] BROKEN gets a lightweight re-verification
+            # instead of being trusted forever — see NO_RESEND_STATUSES
+            # docstring above. Cheap: one live-price call, no RVOL refetch
+            # needed since BROKEN only depends on cmp <= sl.
+            if cached_status == "BROKEN":
+                recheck_cmp, recheck_fetched_at, _recheck_src, _recheck_suspect = get_live_price(ticker_raw)
+                recheck_prov = verify_intraday_freshness(
+                    recheck_fetched_at, now_ist, source_name="live_price"
+                )
+                sl = pick.get("sl", 0)
+                if recheck_prov.ok and recheck_cmp is not None and recheck_cmp > sl:
+                    log.info(f"  {ticker_key}: cached BROKEN but CMP ₹{recheck_cmp:,.1f} "
+                             f"has recovered above SL ₹{sl:,.1f} — re-classifying from scratch")
+                    del prior_state[ticker_key]
+                    # falls through to the full re-check below
+                else:
+                    log.info(f"  {ticker_key}: cached [BROKEN] re-verified still <= SL "
+                             f"— skipping re-email (not new information)")
+                    results.append(cached)
+                    continue
+            else:
+                log.info(f"  {ticker_key}: cached [{cached_status}] "
+                         f"from earlier checkpoint — skipping re-check")
+                results.append(cached)
+                continue
 
         log.info(f"  Checking {ticker_key}...")
-        cmp            = get_live_price(ticker_raw)
-        rvol, rvol_src = get_rvol(ticker_raw, as_of=now_ist)
+        cmp, cmp_fetched_at, cmp_src, cmp_suspect = get_live_price(ticker_raw)
+        price_prov     = verify_intraday_freshness(cmp_fetched_at, now_ist, source_name="live_price")
+        rvol, rvol_src, rvol_elapsed = get_rvol(ticker_raw, as_of=now_ist)
         orh, orl, or_src = get_opening_range(ticker_raw, as_of=now_ist)
         c              = classify(pick, cmp, rvol, rvol_src,
                                    max_entry_drift_pct=tolerance["max_entry_drift_pct"],
                                    max_pivot_extension_pct=tolerance["max_pivot_extension_pct"],
-                                   opening_range=(orh, orl, or_src))
+                                   opening_range=(orh, orl, or_src),
+                                   price_verified=price_prov.ok, price_source=cmp_src)
+        c["price_fetched_at"] = cmp_fetched_at.strftime("%H:%M:%S") if cmp_fetched_at else None
+        c["price_source"]     = cmp_src
+        c["price_suspect"]    = cmp_suspect
+        c["rvol_elapsed_minutes"] = rvol_elapsed
 
         log.info(
             f"    → {c['status']:25s}  "
-            f"CMP={f'₹{cmp:,.1f}' if cmp else 'N/A':>10}  "
+            f"CMP={f'₹{cmp:,.1f}' if cmp else 'N/A':>10} ({cmp_src})  "
             f"RVOL={f'{rvol:.1f}x ({rvol_src})' if rvol >= 0 else 'N/A':>20}"
         )
         entry = {"pick": pick, "classification": c}
@@ -1973,7 +2226,7 @@ def main():
 
     subject = f"[NSE Momentum {checkpoint_label} {scope_label}] {' | '.join(parts)} | {today_str}"
 
-    html = build_html(email_results, today_str, run_time)
+    html = build_html(email_results, today_str, run_time, meta=meta)
     send_email(subject, html)
     log.info("  Done.")
 

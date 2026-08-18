@@ -74,14 +74,31 @@ def load_today_picks() -> pd.DataFrame:
         return pd.DataFrame()
 
 
+def _load_picks_latest_raw() -> list:
+    """
+    [2026-08-18] picks_latest.json's shape changed from a bare array to
+    {"meta": {...provenance...}, "picks": [...]} so freshness/provenance
+    could be recorded at the file level instead of smuggled into picks[0]
+    (which silently vanished on a 0-pick day). Handles both shapes so a
+    legacy-shaped file already on disk at deploy time doesn't crash the
+    dashboard on first load.
+    """
+    p = ROOT / "picks_latest.json"
+    if not p.exists():
+        return []
+    with open(p, encoding="utf-8") as f:
+        raw = json.load(f)
+    if isinstance(raw, list):
+        return raw   # legacy flat-array shape
+    if isinstance(raw, dict):
+        return raw.get("picks", [])
+    return []
+
+
 @st.cache_data(ttl=120)
 def load_picks_json() -> list:
     """Fallback: read picks_latest.json if trades_v4 is empty for today."""
-    p = ROOT / "picks_latest.json"
-    if p.exists():
-        with open(p, encoding="utf-8") as f:
-            return json.load(f)
-    return []
+    return _load_picks_latest_raw()
 
 
 @st.cache_data(ttl=120)
@@ -131,12 +148,8 @@ def load_pattern_validation() -> pd.DataFrame:
 
 @st.cache_data(ttl=120)
 def load_near_breakout() -> list:
-    p = ROOT / "picks_latest.json"
-    if p.exists():
-        with open(p, encoding="utf-8") as f:
-            data = json.load(f)
-        return [x for x in data if x.get("tier", 0) == 0]
-    return []
+    data = _load_picks_latest_raw()
+    return [x for x in data if x.get("tier", 0) == 0]
 
 
 # ── Header ────────────────────────────────────────────────────────────────────

@@ -34,7 +34,7 @@ def analyse(ticker: str):
         return
 
     ctx = get_market_context()
-    delivery = BhavcopyFetcher().get_delivery_pct()
+    delivery, _bhav_provenance = BhavcopyFetcher().get_delivery_pct()
 
     # Universe lookup
     uni_map = {item[0]: (item[1], item[2], item[3]) for item in NSE_UNIVERSE}

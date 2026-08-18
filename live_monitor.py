@@ -82,8 +82,18 @@ ALERTED_STATE_FILE = "logs/live_monitor_alerted.json"
 
 
 def _load_picks(path: str = "picks_latest.json") -> list:
+    """
+    [2026-08-18] picks_latest.json's shape changed from a bare array to
+    {"meta": {...}, "picks": [...]} -- see orchestrator.py/confirm_picks.py.
+    Handles both so a legacy-shaped file on disk doesn't crash this script.
+    """
     with open(path) as f:
-        return json.load(f)
+        raw = json.load(f)
+    if isinstance(raw, list):
+        return raw
+    if isinstance(raw, dict):
+        return raw.get("picks", [])
+    return []
 
 
 def _load_alerted_state() -> set:

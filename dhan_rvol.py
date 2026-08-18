@@ -130,9 +130,13 @@ def _fetch_intraday_candles(security_id: str, from_date: str, to_date: str,
 
     # Dhan returns parallel arrays: {"open": [...], "high": [...], ..., "timestamp": [...]}
     timestamps = data.get("timestamp", [])
-    volumes = data.get("volume", [])
+    volumes    = data.get("volume", [])
+    opens      = data.get("open",  [None] * len(timestamps))
+    highs      = data.get("high",  [None] * len(timestamps))
+    lows       = data.get("low",   [None] * len(timestamps))
+    closes     = data.get("close", [None] * len(timestamps))
     candles = []
-    for ts, vol in zip(timestamps, volumes):
+    for i, (ts, vol) in enumerate(zip(timestamps, volumes)):
         # v2 /charts/intraday uses the standard Unix epoch (1970). The
         # "custom epoch since 1980" note in some Dhan docs applies to the
         # deprecated v1 API only -- using it here shifted every date
@@ -146,9 +150,44 @@ def _fetch_intraday_candles(security_id: str, from_date: str, to_date: str,
         candle_dt = datetime.fromtimestamp(ts, tz=IST).replace(tzinfo=None)
         candles.append({
             "datetime": candle_dt,
-            "volume": vol,
+            "volume":   vol,
+            "open":     opens[i]  if i < len(opens)  else None,
+            "high":     highs[i]  if i < len(highs)  else None,
+            "low":      lows[i]   if i < len(lows)   else None,
+            "close":    closes[i] if i < len(closes) else None,
         })
     return candles
+
+
+# [2026-08-18, 5b-iv] Structural integrity checks on candles returned by
+# Dhan -- an HTTP 200 with a well-formed JSON body is not the same as data
+# actually being correct (duplicate/misdated candles, broken OHLC
+# relationships). Checked here rather than trusted blindly. Returns a list
+# of violation strings; empty = clean.
+def _check_candle_integrity(candles: list) -> list:
+    violations = []
+    if not candles:
+        return violations
+    seen_ts = set()
+    prev_dt = None
+    for c in candles:
+        dt = c["datetime"]
+        if prev_dt is not None and dt < prev_dt:
+            violations.append(f"timestamps not monotonically increasing at {dt}")
+        if dt in seen_ts:
+            violations.append(f"duplicate timestamp {dt}")
+        seen_ts.add(dt)
+        prev_dt = dt
+
+        o, h, l, cl = c.get("open"), c.get("high"), c.get("low"), c.get("close")
+        if None not in (o, h, l, cl):
+            if h < o or h < cl or h < l:
+                violations.append(f"{dt}: high {h} inconsistent with open/close/low ({o}/{cl}/{l})")
+            if l > o or l > cl:
+                violations.append(f"{dt}: low {l} inconsistent with open/close ({o}/{cl})")
+        if c.get("volume") is not None and c["volume"] < 0:
+            violations.append(f"{dt}: negative volume {c['volume']}")
+    return violations
 
 
 # [FIX] Elapsed-time-matched window, replacing the old fixed 09:15-10:00
@@ -259,6 +298,23 @@ def compute_rvol(symbol: str, security_id: str = None, exchange_segment: str = "
         to_date=today.strftime("%Y-%m-%d"),
         exchange_segment=exchange_segment,
     )
+    # [2026-08-18, 4a] BUG FIX: an HTTP 200 with an EMPTY candle array (a
+    # real, documented Dhan failure mode) used to fall straight through to
+    # _sum_elapsed_volume([], ...) -> 0.0, and this function returned a
+    # SUCCESSFUL result with rvol=0.0 -- indistinguishable downstream from
+    # a genuine "no volume today" reading. That silent fabrication is
+    # exactly what caused a live incident on 2026-08-18 where a real
+    # volume surge (later confirmed independently at 6.24x) was masked at
+    # the point RVOL first got computed. Explicit error instead.
+    if not today_candles:
+        return {"symbol": symbol,
+                "error": f"Dhan returned 0 intraday candles for {today} -- cannot "
+                         f"compute a real RVOL, this is NOT the same as zero volume today"}
+    today_violations = _check_candle_integrity(today_candles)
+    if today_violations:
+        return {"symbol": symbol,
+                "error": f"today's candles failed integrity check: {'; '.join(today_violations[:3])}"}
+
     today_start_dt, today_end_dt = _elapsed_window(as_of, today)
     today_volume = _sum_elapsed_volume(today_candles, today_start_dt, today_end_dt)
     time.sleep(0.25)  # stay under 5 req/sec
@@ -273,6 +329,16 @@ def compute_rvol(symbol: str, security_id: str = None, exchange_segment: str = "
         to_date=newest.strftime("%Y-%m-%d"),
         exchange_segment=exchange_segment,
     )
+    # [5b-iv] Structural integrity on the historical range too -- monotonic/
+    # unique timestamps, sane OHLC relationships. Logged, not fatal (a
+    # partial historical range with SOME good days is still usable for a
+    # 20-day average, unlike today's window where ANY corruption means the
+    # single most important number is untrustworthy) -- surfaced in the
+    # returned dict so callers/logs can see it happened.
+    hist_violations = _check_candle_integrity(hist_candles)
+    if hist_violations:
+        print(f"WARNING dhan_rvol: {symbol} historical candles failed integrity "
+              f"check ({len(hist_violations)} issue(s)): {hist_violations[0]}")
     time.sleep(0.25)
 
     daily_volumes = []
@@ -295,6 +361,67 @@ def compute_rvol(symbol: str, security_id: str = None, exchange_segment: str = "
         "rvol": round(rvol, 2),
         "source": "dhan",
         "elapsed_minutes": round(elapsed_minutes, 1),
+        "fetched_at": as_of,
+        "hist_integrity_violations": len(hist_violations),
+    }
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# [2026-08-18, 5b-iii] Dhan LTP -- makes Dhan the PRIMARY live-price source
+# for confirm_picks.py's get_live_price(), not just RVOL. yfinance's
+# fast_info exposes no trustworthy trade timestamp at all (a documented,
+# unfixable gap -- see confirm_picks.py's get_live_price() docstring), so
+# it cannot be trusted as the authoritative "is this price current" answer.
+# Dhan's own intraday candles already carry a real timestamp per bar; this
+# reuses that same _fetch_intraday_candles() call (already made for RVOL on
+# the same ticker in the same checkpoint) to also answer "what's the latest
+# price, and exactly when was it timestamped" -- nearly free given the RVOL
+# call already happens.
+# ─────────────────────────────────────────────────────────────────────────────
+
+def get_ltp(symbol: str, security_id: str = None, exchange_segment: str = "NSE_EQ",
+            as_of: datetime = None) -> dict:
+    """
+    Returns {"symbol", "price", "fetched_at" (real candle timestamp, IST
+    naive), "source": "dhan"} on success, or {"symbol", "error"} on any
+    failure (security_id unmapped, no candles today, network/API error) --
+    same fail-closed contract as compute_rvol(). Callers must treat a
+    missing/errored result as UNVERIFIED, not silently substitute a guess.
+    """
+    if as_of is None:
+        as_of = datetime.now(IST).replace(tzinfo=None)
+    elif as_of.tzinfo is not None:
+        as_of = as_of.astimezone(IST).replace(tzinfo=None)
+
+    if security_id is None:
+        instrument_map = _load_instrument_map()
+        clean_symbol = symbol.replace(".NS", "")
+        security_id = instrument_map.get(clean_symbol)
+        if security_id is None:
+            return {"symbol": symbol, "error": "security_id not found in instrument map"}
+
+    today = as_of.date()
+    try:
+        candles = _fetch_intraday_candles(
+            security_id, from_date=today.strftime("%Y-%m-%d"),
+            to_date=today.strftime("%Y-%m-%d"), exchange_segment=exchange_segment,
+        )
+    except Exception as e:
+        return {"symbol": symbol, "error": f"Dhan LTP fetch failed: {type(e).__name__}: {e}"}
+
+    if not candles:
+        return {"symbol": symbol, "error": f"Dhan returned 0 intraday candles for {today}"}
+
+    candles_up_to_now = [c for c in candles if c["datetime"] <= as_of] or candles
+    last = candles_up_to_now[-1]
+    if last.get("close") is None:
+        return {"symbol": symbol, "error": "latest candle has no close price"}
+
+    return {
+        "symbol": symbol,
+        "price": float(last["close"]),
+        "fetched_at": last["datetime"],
+        "source": "dhan",
     }
 
 

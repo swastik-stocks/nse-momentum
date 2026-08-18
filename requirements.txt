@@ -16,3 +16,5 @@ nsepython
 libsql-client
 
 python-dotenv
+
+pytest

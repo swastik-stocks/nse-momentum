@@ -372,6 +372,12 @@ class AgentOrchestrator:
         # RegimeClassifier cross-checks VIX / A/D / above_50_ema for contradictions.
         # If contradictions found: confidence=LOW, penalty dampened, T1 cap loosened.
         vix = data_dict.get("vix", 15.0)
+        if data_dict.get("vix_is_fallback", False):
+            log.warning(f"  Regime classification is using a FALLBACK VIX default "
+                         f"({vix}) — live ^INDIAVIX fetch failed tonight. This is "
+                         f"one input among several to regime scoring, not treated "
+                         f"as fatal, but flagged here and in picks_latest.json's "
+                         f"meta so it isn't silently mistaken for a real reading.")
         classifier = RegimeClassifier(
             nifty50_data      = data_dict.get("nifty50_data",   pd.DataFrame()),
             banknifty_data    = data_dict.get("banknifty_data", pd.DataFrame()),
@@ -1327,7 +1333,47 @@ class AgentOrchestrator:
         )
 
         # Save picks_latest.json
+        #
+        # [2026-08-18] SCHEMA CHANGE: was a bare JSON array with each pick
+        # carrying "scan_date": date.today().isoformat() -- wall-clock date
+        # the process happened to run, NOT the actual vintage of the data
+        # inside. That field is what confirm_picks.py's staleness check and
+        # the Portfolio Dashboard both trusted as ground truth, and it could
+        # not detect the exact failure mode that caused the 2026-08-18
+        # incident: every tier silently degrading to old/fallback data while
+        # still stamping "today" on the output.
+        #
+        # New shape: {"meta": {...verified provenance...}, "picks": [...]}.
+        # Wrapping in a top-level object (not smuggling meta into picks[0],
+        # the old implicit pattern) also fixes a related bug: meta silently
+        # disappeared entirely on a quiet-regime day with 0 T1/T2 picks --
+        # exactly the kind of day this system most needs a trustworthy
+        # freshness check on.
+        #
+        # Per-pick "scan_date" is KEPT for confirm_picks.py backward
+        # compatibility, but its MEANING changes: now the verified
+        # meta["bhavcopy_trading_date"], not date.today().
         from datetime import date as _date
+        prov = self.data.get("data_provenance", {}) or {}
+        meta = {
+            "generated_at":            prov.get("generated_at"),
+            "bhavcopy_trading_date":   prov.get("bhavcopy_trading_date"),
+            "bhavcopy_requested_date": prov.get("bhavcopy_requested_date"),
+            "bhavcopy_date_verified":  prov.get("bhavcopy_date_verified", False),
+            "ohlcv_universe_coverage": prov.get("ohlcv_universe_coverage", {}),
+            "vix_is_fallback":         prov.get("vix_is_fallback", True),
+            "code_provenance":         prov.get("code_provenance", {}),
+            "regime":                  self.regime,
+            "regime_name":             self.regime_name,
+            "scan_engine_version":     "v5.5",
+        }
+        # scan_date used by confirm_picks.py's staleness check / per-pick
+        # display: the verified Bhavcopy date if we have one, else fall
+        # back to wall-clock (should only happen for ad-hoc/diagnostic
+        # scripts that don't populate data_provenance at all, e.g.
+        # single_stock.py -- the real evening pipeline always has it).
+        effective_scan_date = meta["bhavcopy_trading_date"] or _date.today().isoformat()
+
         picks_json = []
         for r in t1_accepted + t2:
             picks_json.append({
@@ -1352,7 +1398,7 @@ class AgentOrchestrator:
                 "tier":             r.tier,
                 "pattern":          r.pattern or "",
                 "vcp_w4_pct":       round(r.vcp_w4_pct,     2),
-                "scan_date":        _date.today().isoformat(),
+                "scan_date":        effective_scan_date,
                 "regime":           self.regime,               # v5.4: was missing entirely --
                                                                   # confirm_picks.py's regime-aware
                                                                   # chase tolerance had nothing to read
@@ -1360,10 +1406,13 @@ class AgentOrchestrator:
                 "breadth_source":   r.breadth_source,          # v5.3: audit trail
             })
         with open("picks_latest.json", "w") as f:
-            json.dump(picks_json, f, indent=2)
+            json.dump({"meta": meta, "picks": picks_json}, f, indent=2)
         log.info(
             f"  Saved {len(picks_json)} picks to picks_latest.json "
-            f"(T1={len(t1_accepted)}, T2={len(t2)})"
+            f"(T1={len(t1_accepted)}, T2={len(t2)}) | "
+            f"Bhavcopy verified: {meta['bhavcopy_date_verified']} | "
+            f"commit={meta['code_provenance'].get('git_commit', '?')[:8] if meta['code_provenance'].get('git_commit') else '?'} "
+            f"dirty={meta['code_provenance'].get('git_dirty')}"
         )
 
         # Defensive watchlist saved SEPARATELY — never merged into
@@ -1403,6 +1452,7 @@ class AgentOrchestrator:
             "t2_cap":             T2_CAP,
             "sector_distribution": sector_gate.summary(),
             "dhan_status":        data_fetcher.get_dhan_status(),
+            "data_provenance":    meta,   # [2026-08-18] threaded to emailer.py for header/footer rendering
         }
 
     # ── narrative helpers (unchanged from v5.2) ──────────────────────────────

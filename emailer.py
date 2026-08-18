@@ -191,6 +191,7 @@ def send_email_report(tiers: dict):
     event_risk   = tiers.get("event_risk", "NORMAL")
     t1_cap       = tiers.get("t1_cap", 15)
     dhan_status  = tiers.get("dhan_status", {})   # [NEW] see data_fetcher.get_dhan_status()
+    data_prov    = tiers.get("data_provenance", {})   # [2026-08-18] verified freshness/provenance, see market_calendar/staleness_check.py
     # P2-07: position alerts on held stocks, from Phase 2 (P2-01/02/05/06)
     exit_alerts  = tiers.get("exit_alerts", [])
     trim_signals = tiers.get("trim_signals", [])
@@ -218,7 +219,14 @@ def send_email_report(tiers: dict):
         add_on = []
 
     rlbl, rcol, rbg, rborder, rnote = REGIME_META.get(regime, REGIME_META["C"])
-    date_str = datetime.today().strftime("%d %b %Y")
+    # [2026-08-18] date_str used to be purely datetime.today() — the wall-clock
+    # date the process ran, with no connection to the data's actual vintage.
+    # Now prefers the VERIFIED Bhavcopy trading date from data_provenance
+    # (set by scanner.py's freshness gate); wall-clock is only a fallback for
+    # ad-hoc scripts that don't populate data_provenance at all.
+    bhav_date = data_prov.get("bhavcopy_trading_date")
+    date_str = (datetime.fromisoformat(bhav_date).strftime("%d %b %Y")
+                if bhav_date else datetime.today().strftime("%d %b %Y"))
     penalty  = {"A": 0, "B": 0, "C": -5, "D": -12, "E": -25}.get(regime, 0)
 
     html = _build_html(t1, t2, t3, all_r, near_bo, defensive,
@@ -227,7 +235,7 @@ def send_email_report(tiers: dict):
                        macro_state, event_risk, t1_cap, dhan_status,
                        exit_alerts, trim_signals, add_on,
                        sector_concentration, holding_heat,
-                       signal_attribution)
+                       signal_attribution, data_prov)
 
     msg = MIMEMultipart("alternative")
     exit_subject_flag = f" - Î“ÃœÃ¡{len(exit_alerts)} EXIT ALERT" + ("S" if len(exit_alerts) != 1 else "") if exit_alerts else ""
@@ -985,7 +993,7 @@ def _build_html(t1, t2, t3, all_r, near_bo, defensive,
                 macro_state, event_risk, t1_cap, dhan_status=None,
                 exit_alerts=None, trim_signals=None, add_on=None,
                 sector_concentration=None, holding_heat=None,
-                signal_attribution=None) -> str:
+                signal_attribution=None, data_prov=None) -> str:
 
     mcol = MACRO_COLOR.get(macro_state, "#96690A")
     ecol = EVENT_COLOR.get(event_risk,  "#8895AA")
@@ -1010,6 +1018,41 @@ def _build_html(t1, t2, t3, all_r, near_bo, defensive,
               border-radius:8px;padding:10px 14px;margin-bottom:16px;font-size:12px;color:#C6403D">
     <strong>Î“ÃœÃ¡ Dhan unavailable this run:</strong> {dhan_status.get("message", "reason unknown")}
     <span style="color:#55627A"> Î“Ã‡Ã¶ running on tvDatafeed/Yahoo fallback. Refresh at web.dhan.co.</span>
+  </div>"""
+
+    # [2026-08-18] Data-provenance banner -- makes every key number's data
+    # date/coverage/code-version explicit rather than implicit, per the
+    # non-negotiable "state the exact data date used" requirement. Renders
+    # a compact info line always (not just on failure, unlike dhan_banner),
+    # and escalates to a red warning line specifically for the two
+    # conditions that mean "trust this less": a dirty/local code run, or a
+    # fallback VIX.
+    data_prov = data_prov or {}
+    cov       = data_prov.get("ohlcv_universe_coverage", {}) or {}
+    code_prov = data_prov.get("code_provenance", {}) or {}
+    gen_at    = data_prov.get("generated_at", "")
+    gen_at_disp = gen_at[11:16] if gen_at and len(gen_at) >= 16 else "?"
+    commit    = (code_prov.get("git_commit") or "?")[:8]
+    warn_bits = []
+    if code_prov.get("git_dirty"):
+        warn_bits.append("LOCAL/UNCOMMITTED CODE RUN — not the verified production pipeline")
+    if data_prov.get("vix_is_fallback"):
+        warn_bits.append("VIX is a FALLBACK DEFAULT, not a live reading")
+    if not data_prov.get("bhavcopy_date_verified", True) and data_prov:
+        warn_bits.append("Bhavcopy date could not be verified")
+
+    prov_banner = f"""
+  <div style="background:#F7F9FC;border:1px solid #DFE5EE;border-radius:8px;
+              padding:8px 14px;margin-bottom:16px;font-size:11px;color:#55627A;font-family:monospace">
+    Data as of: Bhavcopy {data_prov.get('bhavcopy_trading_date', '?')} Â· Scan run {gen_at_disp} IST Â·
+    OHLCV coverage {cov.get('fetched_fresh', '?')}/{cov.get('requested', '?')} ({cov.get('pct', '?')}%) Â·
+    commit {commit}
+  </div>""" if data_prov else ""
+    if warn_bits:
+        prov_banner += f"""
+  <div style="background:rgba(198,64,61,0.08);border:1px solid rgba(198,64,61,0.3);
+              border-radius:8px;padding:8px 14px;margin-bottom:16px;font-size:11px;color:#C6403D">
+    <strong>Data quality warning:</strong> {' Â· '.join(warn_bits)}
   </div>"""
 
     # Section 1: trade cards
@@ -1146,6 +1189,7 @@ def _build_html(t1, t2, t3, all_r, near_bo, defensive,
     {"" if penalty == 0 else f'<span style="color:#55627A"> - Score penalty: {penalty} pts applied.</span>'}
   </div>
   {dhan_banner}
+  {prov_banner}
 
   {heatmap_html}
 
