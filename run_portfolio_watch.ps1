@@ -15,7 +15,7 @@
 $ErrorActionPreference = "Stop"
 
 # ── Config — adjust these patterns/paths for your setup ─────────────────────
-$RepoDir            = "C:\Users\User\Desktop\nse_momentum"
+$RepoDir            = "F:\nse_momentum"
 $DownloadsDir        = "C:\Users\hp\Downloads"
 $HufFilePattern      = "portfolio_holding_report_*.xlsx"
 $MayaFilePath        = Join-Path $RepoDir "maya_holdings.csv"   # manually maintained — Omni has no holdings export

@@ -55,7 +55,7 @@ from agents.ml_momentum_agent          import compute_universe_ml_momentum_predi
 from agents.slope_r2_agent             import compute_universe_slope_r2_percentiles
 from agents.volume_dryup_agent         import compute_universe_volume_ratio_percentiles
 from agents.volume_agent               import VolumeAgent
-from agents.market_agent               import MarketAgent
+from agents.market_agent               import MarketAgent, REGIME_CONFIG as MARKET_REGIME_CONFIG
 from sector_score_live                 import LiveSectorBreadth
 from agents.market_breadth_agent       import (
     fetch_nse_wide_breadth,
@@ -359,12 +359,14 @@ class AgentOrchestrator:
             for w in breadth_result["warnings"]:
                 log.warning(f"  BREADTH WARNING: {w}")
 
-        # ── STEP 2: Market regime via existing MarketAgent ────────────────────
-        # MarketAgent handles Nifty EMA stack (unchanged — still correct)
-        self.market_agent   = MarketAgent(data_dict)
-        self.regime         = self.market_agent.get_regime()
-        self.regime_name    = self.market_agent.get_regime_name()
-        self.market_score   = self.market_agent.score()
+        # ── STEP 2: Market regime — MarketAgent (breadth/price) is one input signal ──
+        # MarketAgent explicitly takes whichever of breadth-signal or price-signal
+        # is MORE BULLISH (market_agent.py:83-91, "take the BETTER of breadth and
+        # price signal"). That one-sided tie-break is kept only as an input below,
+        # not as the final regime — see STEP 3.
+        self.market_agent          = MarketAgent(data_dict)
+        market_agent_regime        = self.market_agent.get_regime()
+        market_agent_regime_name   = self.market_agent.get_regime_name()
 
         # ── STEP 3: Regime confidence + sanity checks (BUG-3 FIX) ────────────
         # RegimeClassifier cross-checks VIX / A/D / above_50_ema for contradictions.
@@ -382,11 +384,32 @@ class AgentOrchestrator:
         )
         regime_result = classifier.classify()
 
-        # Regime letter and penalty both come from MarketAgent's EMA-based classification.
-        # RegimeClassifier is used ONLY for sanity checks and confidence scoring —
-        # not for the penalty, which must match the displayed regime letter.
-        REGIME_PENALTIES = {"A": 0, "B": 0, "C": -5, "D": -12, "E": -20}
-        self.regime_penalty     = REGIME_PENALTIES.get(self.regime, -5)
+        # RegimeClassifier is authoritative for the regime LETTER: it weighs
+        # VIX + A/D + breadth + EMA structure jointly and runs contradiction
+        # checks (R1-R4), whereas MarketAgent sees only breadth+price and
+        # explicitly takes whichever signal is more bullish (a one-sided
+        # tie-break, not a real reconciliation). Verified against
+        # 2026-08-07 and 2026-08-15 calibration logs: both days MarketAgent
+        # said B (Bull) while RegimeClassifier said C (Range Bound) — and
+        # both went on to post a 60-85% BREAKOUT_NO_VOLUME trap rate at the
+        # 10am confirmation checkpoint. The fuller classifier's read matched
+        # what actually happened; MarketAgent's optimistic tie-break didn't.
+        self.regime          = regime_result["regime"]
+        self.regime_name     = regime_result["regime_label"]
+        self.market_score    = MARKET_REGIME_CONFIG[self.regime]["score"]
+
+        if self.regime != market_agent_regime:
+            log.warning(
+                f"  REGIME ENGINES DISAGREED: MarketAgent said "
+                f"{market_agent_regime} ({market_agent_regime_name}), "
+                f"RegimeClassifier said {self.regime} ({self.regime_name}) — "
+                f"using RegimeClassifier's read (see STEP 2/3 comments)."
+            )
+
+        # regime_result["penalty"] is already dampened when confidence=LOW
+        # (RegimeClassifier's own documented purpose — previously computed
+        # here but silently discarded in favor of an undamped lookup).
+        self.regime_penalty     = regime_result["penalty"]
         self.regime_confidence  = regime_result["confidence"]     # HIGH or LOW
         self.regime_sanity_flags= regime_result["sanity_flags"]   # list of contradictions
 

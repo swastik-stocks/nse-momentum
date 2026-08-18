@@ -4,7 +4,7 @@ REM  NSE Momentum v4.3 — Evening Scan (4:00 PM)
 REM  Place this file in: C:\Users\User\Desktop\nse_momentum\
 REM ============================================================
 
-cd /d "C:\Users\User\Desktop\nse_momentum"
+cd /d "F:\nse_momentum"
 
 REM Activate virtual environment (if using venv)
 REM Uncomment the line below if you use a venv:

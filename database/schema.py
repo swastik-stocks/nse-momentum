@@ -191,6 +191,68 @@ def init_all_tables():
     );
 
     -- ─────────────────────────────────────────────────────────
+    -- CONFIRMATION OUTCOMES (morning checkpoint results per pick —
+    -- previously only lived in loose logs/confirm_state_YYYYMMDD.json
+    -- files with no retention guarantee. Written by confirm_picks.py
+    -- once a pick reaches a TERMINAL_STATUS (CONFIRMED/CONFIRMED_LOW_VOL/
+    -- BREAKOUT_NO_VOLUME/MISSED/BROKEN). Lets trap rate (BREAKOUT_NO_VOLUME
+    -- share) be queried against regime over time instead of eyeballing
+    -- individual emails — see 2026-08-17 regime/trap-rate investigation.)
+    -- ─────────────────────────────────────────────────────────
+    CREATE TABLE IF NOT EXISTS confirmation_outcomes (
+        confirm_date        TEXT NOT NULL,
+        ticker               TEXT NOT NULL,
+        scan_date            TEXT,
+        tier                 INTEGER,
+        pattern              TEXT,
+        score                INTEGER,
+        regime               TEXT,
+        regime_confidence    TEXT,
+        status               TEXT,
+        rvol                 REAL,
+        rvol_src             TEXT,
+        gap_pct              REAL,
+        drift_pct            REAL,
+        checkpoint           TEXT,
+        fetched_at           TEXT,
+        PRIMARY KEY (confirm_date, ticker)
+    );
+    CREATE INDEX IF NOT EXISTS idx_co_regime ON confirmation_outcomes(regime);
+    CREATE INDEX IF NOT EXISTS idx_co_status ON confirmation_outcomes(status);
+
+    -- ─────────────────────────────────────────────────────────
+    -- BTST OUTCOMES (15:15 "hold overnight?" scan results — the
+    -- counterpart to confirmation_outcomes' "enter?" decision above.
+    -- Only covers tickers that were already CONFIRMED/CONFIRMED_LOW_VOL
+    -- at a morning checkpoint (see run_btst_scan). entry_status links
+    -- back to that morning decision so the two can be joined per
+    -- (confirm_date, ticker) — e.g. "of stocks confirmed to enter, what
+    -- fraction were still BTST_CANDIDATE by the close?". Previously this
+    -- scan had NO persistence at all — email only.)
+    -- ─────────────────────────────────────────────────────────
+    CREATE TABLE IF NOT EXISTS btst_outcomes (
+        confirm_date        TEXT NOT NULL,
+        ticker               TEXT NOT NULL,
+        scan_date            TEXT,
+        tier                 INTEGER,
+        pattern              TEXT,
+        score                INTEGER,
+        regime               TEXT,
+        regime_confidence    TEXT,
+        entry_status         TEXT,
+        status               TEXT,
+        rvol                 REAL,
+        rvol_src             TEXT,
+        pct_off_high         REAL,
+        pct_captured         REAL,
+        checkpoint           TEXT,
+        fetched_at           TEXT,
+        PRIMARY KEY (confirm_date, ticker)
+    );
+    CREATE INDEX IF NOT EXISTS idx_bo_regime ON btst_outcomes(regime);
+    CREATE INDEX IF NOT EXISTS idx_bo_status ON btst_outcomes(status);
+
+    -- ─────────────────────────────────────────────────────────
     -- PORTFOLIO (open positions tracker)
     -- ─────────────────────────────────────────────────────────
     CREATE TABLE IF NOT EXISTS portfolio (

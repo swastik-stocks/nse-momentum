@@ -51,6 +51,7 @@ from email.mime.text import MIMEText
 from dotenv import load_dotenv
 
 from market_calendar.staleness_check import check_staleness, StaleDataError
+from database.schema import get_connection, init_all_tables
 import dhan_rvol
 from agents.intraday_vol_adjusted_agent import IntradayVolAdjustedAgent
 
@@ -1556,6 +1557,146 @@ def _save_state(path: str, state: dict):
         json.dump(state, f, indent=2, default=str)
 
 
+def _persist_confirmation_outcomes(today_iso: str, checkpoint_label: str,
+                                    newly_terminal: list):
+    """
+    Durable counterpart to _save_state()'s JSON file — writes each
+    newly-terminal pick into database.schema's confirmation_outcomes
+    table so trap rate (BREAKOUT_NO_VOLUME share) can be queried against
+    regime over time. Previously this data only existed in
+    logs/confirm_state_YYYYMMDD.json files with no retention guarantee
+    (only 2 of many days' worth survived on disk as of 2026-08-17).
+
+    Called with ONLY the picks that became terminal THIS run (not the
+    full cached state) — TERMINAL_STATUSES are sticky and never
+    re-classified, so re-inserting already-persisted rows on a later
+    checkpoint the same day would be redundant, not wrong (PRIMARY KEY
+    (confirm_date, ticker) makes it an idempotent upsert either way),
+    but there's no reason to do the extra DB work.
+
+    Best-effort: a DB write failure here must never block the email
+    send or crash the checkpoint run — same fail-open convention as
+    every other side-channel logging call in this module.
+    """
+    if not newly_terminal:
+        return
+    try:
+        init_all_tables()
+        conn = get_connection()
+        now_iso = datetime.now(IST).isoformat()
+        rows = []
+        for entry in newly_terminal:
+            pick = entry["pick"]
+            c    = entry["classification"]
+            rows.append((
+                today_iso,
+                pick.get("ticker", ""),
+                pick.get("scan_date"),
+                pick.get("tier"),
+                pick.get("pattern"),
+                pick.get("score"),
+                pick.get("regime"),
+                pick.get("regime_confidence"),
+                c.get("status"),
+                c.get("rvol"),
+                c.get("rvol_src"),
+                c.get("gap_pct"),
+                c.get("drift_pct"),
+                checkpoint_label,
+                now_iso,
+            ))
+        conn.executemany(
+            """INSERT OR REPLACE INTO confirmation_outcomes
+               (confirm_date, ticker, scan_date, tier, pattern, score,
+                regime, regime_confidence, status, rvol, rvol_src,
+                gap_pct, drift_pct, checkpoint, fetched_at)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            rows,
+        )
+        conn.commit()
+        conn.close()
+        log.info(f"  Persisted {len(rows)} confirmation outcome(s) to DB "
+                 f"(confirmation_outcomes table)")
+    except Exception as e:
+        log.warning(f"  Could not persist confirmation outcomes to DB "
+                    f"(non-fatal, JSON state file is unaffected): "
+                    f"{type(e).__name__}: {e}")
+
+
+def _persist_btst_outcomes(today_iso: str, checkpoint_label: str, results: list):
+    """
+    Durable counterpart to _persist_confirmation_outcomes(), for the
+    15:15 "hold overnight?" decision (classify_btst()) rather than the
+    morning "enter?" decision (classify()). Previously run_btst_scan()
+    had NO persistence whatsoever -- results only ever reached an email,
+    so there was no way to ask e.g. "of stocks confirmed to enter, what
+    fraction were still BTST_CANDIDATE by the close, and does that vary
+    by regime?" without re-reading old emails by hand.
+
+    entry_status (CONFIRMED / CONFIRMED_LOW_VOL, stashed on each result
+    dict by run_btst_scan) links each row back to the morning decision
+    that made it eligible for this scan at all -- joins to
+    confirmation_outcomes on (confirm_date, ticker) for that link, though
+    the two rows are NOT the same day's confirm_date in general (a stock
+    entered on Monday's morning checkpoint gets BTST-evaluated the SAME
+    Monday afternoon, so confirm_date is actually shared here — see
+    run_btst_scan's same-day-only candidate pool).
+
+    Writes ALL results every run (not just newly-terminal, unlike the
+    morning function) -- run_btst_scan doesn't have TERMINAL_STATUSES/
+    multi-checkpoint caching (it's a single 15:15 run, not repeated
+    through the morning), so there's no "already persisted" state to
+    avoid re-writing. PRIMARY KEY (confirm_date, ticker) makes repeat
+    runs on the same day idempotent regardless.
+
+    Best-effort / fail-open, same as _persist_confirmation_outcomes().
+    """
+    if not results:
+        return
+    try:
+        init_all_tables()
+        conn = get_connection()
+        now_iso = datetime.now(IST).isoformat()
+        rows = []
+        for entry in results:
+            pick = entry["pick"]
+            c    = entry["classification"]
+            rows.append((
+                today_iso,
+                pick.get("ticker", ""),
+                pick.get("scan_date"),
+                pick.get("tier"),
+                pick.get("pattern"),
+                pick.get("score"),
+                pick.get("regime"),
+                pick.get("regime_confidence"),
+                entry.get("entry_status"),
+                c.get("status"),
+                c.get("rvol"),
+                c.get("rvol_src"),
+                c.get("pct_off_high"),
+                c.get("pct_captured"),
+                checkpoint_label,
+                now_iso,
+            ))
+        conn.executemany(
+            """INSERT OR REPLACE INTO btst_outcomes
+               (confirm_date, ticker, scan_date, tier, pattern, score,
+                regime, regime_confidence, entry_status, status, rvol,
+                rvol_src, pct_off_high, pct_captured, checkpoint, fetched_at)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            rows,
+        )
+        conn.commit()
+        conn.close()
+        log.info(f"  Persisted {len(rows)} BTST outcome(s) to DB "
+                 f"(btst_outcomes table)")
+    except Exception as e:
+        log.warning(f"  Could not persist BTST outcomes to DB "
+                    f"(non-fatal, email already sent): "
+                    f"{type(e).__name__}: {e}")
+
+
 def _get_tolerance(regime_code: str | None) -> dict:
     """
     [FIX-3] Looks up regime-aware drift/extension tolerance. Falls back
@@ -1600,7 +1741,7 @@ def run_btst_scan(today_iso: str, today_str: str, run_time: str):
     state = _load_state(state_path)
 
     candidates = [
-        (ticker, entry["pick"])
+        (ticker, entry["pick"], entry["classification"]["status"])
         for ticker, entry in state.items()
         if entry["classification"]["status"] in ("CONFIRMED", "CONFIRMED_LOW_VOL")
     ]
@@ -1612,7 +1753,7 @@ def run_btst_scan(today_iso: str, today_str: str, run_time: str):
 
     now_ist = datetime.now(IST)
     results = []
-    for ticker_key, pick in candidates:
+    for ticker_key, pick, entry_status in candidates:
         ticker_raw = pick.get("ticker_raw") or ticker_key
         if not ticker_raw.endswith(".NS"):
             ticker_raw += ".NS"
@@ -1636,7 +1777,8 @@ def run_btst_scan(today_iso: str, today_str: str, run_time: str):
         off_high_disp = f"{c['pct_off_high']:.1f}%" if c['pct_off_high'] is not None else "N/A"
         log.info(f"    → {c['status']:15s}  CMP={cmp_disp:>10}  RVOL={rvol_disp:>8}  off_high={off_high_disp}")
 
-        results.append({"pick": pick, "classification": c, "intraday_diag": intraday_diag})
+        results.append({"pick": pick, "classification": c, "intraday_diag": intraday_diag,
+                         "entry_status": entry_status})
         time.sleep(0.3)
 
     candidate_n = sum(1 for r in results if r["classification"]["status"] == "BTST_CANDIDATE")
@@ -1646,6 +1788,7 @@ def run_btst_scan(today_iso: str, today_str: str, run_time: str):
 
     html = build_btst_html(results, today_str, run_time)
     send_email(subject, html)
+    _persist_btst_outcomes(today_iso, run_time, results)
     log.info("  Done.")
 
 
@@ -1774,6 +1917,7 @@ def main():
         time.sleep(0.3)
 
     _save_state(state_path, prior_state)
+    _persist_confirmation_outcomes(today_iso, checkpoint_label, newly_terminal)
 
     # ── Decide whether/what to send ──────────────────────────────────────────
     # First checkpoint of the day: always send (baseline picture).

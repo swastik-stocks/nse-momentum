@@ -1,6 +1,6 @@
 @echo off
 title NSE Momentum Scanner v4.3
-cd /d C:\Users\User\Desktop\nse_momentum
+cd /d F:\nse_momentum
 call venv\Scripts\activate.bat
 echo.
 echo ============================================================

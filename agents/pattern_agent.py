@@ -552,7 +552,22 @@ class PatternAgent:
             handle_range = ((max(close[-self._w15:]) - min(close[-self._w15:])) / max(close[-self._w15:])
                             if max(close[-self._w15:]) > 0 else 1)
             handle_low_ok = float(min(low[-self._w15:])) >= cup_low
-            if recovery and handle_range <= 0.08 and handle_low_ok:
+            # [FIX 2026-08-17] cup_high is read from a window 30-60 bars back,
+            # with no check on how far CURRENT price has already moved past
+            # it. Without this, a stock that broke out of its cup weeks ago
+            # and has simply kept trending (recovery/handle_range above stay
+            # satisfied for any smooth sustained uptrend) fires this pattern
+            # off a stale pivot -- e.g. TVSMOTOR.NS on 2026-08-17: cup_high
+            # pinned to its 28-Jul level (~4075), 7.4% below actual CMP
+            # (4385.9), presented as a fresh "SETUP READY, not yet confirmed"
+            # breakout three weeks after the fact -- and it wasn't a one-off:
+            # 13 of that day's 20 top picks showed the same 3-8% stale gap.
+            # Every OTHER live pattern already guards this implicitly by
+            # requiring price near its breakout level NOW (Swing High
+            # Breakout: price >= recent_swing*0.995; Flat Base/Base Breakout:
+            # price >= level*0.99) -- Cup & Handle was the one gap.
+            not_extended = price <= cup_high * 1.03
+            if recovery and handle_range <= 0.08 and handle_low_ok and not_extended:
                 detections.append(("Cup & Handle", cup_high * 1.002))
 
         # DOUBLE BOTTOM — pruned: net avg R=-0.14, N=692, p=1.0000 (05 Aug confirmation)

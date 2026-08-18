@@ -15,6 +15,7 @@ from orchestrator import AgentOrchestrator
 from nse_universe import NSE_UNIVERSE, UNIVERSE_CONFIG
 from emailer      import send_email_report
 from trade_logger import init_tables
+from sanity_gate  import run_sanity_gate, send_sanity_alert_email
 
 BASE_DIR = Path(__file__).parent
 LOG_DIR  = BASE_DIR / "logs";    LOG_DIR.mkdir(exist_ok=True)
@@ -169,6 +170,12 @@ def run_scan(dry_run: bool = False, max_tickers: int = None):
              f"Breadth: {orc.breadth_score}/10")
 
     tiers = orc.run_universe(universe, stock_data, delivery, dry_run=dry_run)
+
+    #      Pre-send sanity gate (2026-08-17) — drops any pick whose entry
+    #      price has drifted too far from CMP or whose SL/target ordering
+    #      is broken, BEFORE it can reach an email. See sanity_gate.py
+    #      module docstring for why this exists.
+    tiers, sanity_report = run_sanity_gate(tiers)
     t1, t2, t3, all_r = tiers["tier1"], tiers["tier2"], tiers["tier3"], tiers["all_results"]
 
     log.info(f"\n[5/6] Scoring complete:")
@@ -193,6 +200,13 @@ def run_scan(dry_run: bool = False, max_tickers: int = None):
             "regime_name": tiers["regime_name"],
             "breadth": tiers["breadth"],
             "tier_counts": {"tier1": len(t1), "tier2": len(t2), "tier3": len(t3)},
+            "sanity_gate": {
+                "checked": sanity_report.checked,
+                "excluded_count": sanity_report.excluded_count,
+                "failure_rate": round(sanity_report.failure_rate, 3),
+                "systemic_alert": sanity_report.systemic_alert,
+                "excluded": sanity_report.excluded,
+            },
             "all_results": [
                 {
                     "ticker": r.ticker, "pattern": r.pattern, "total_score": r.total_score,
@@ -207,13 +221,26 @@ def run_scan(dry_run: bool = False, max_tickers: int = None):
             json.dump(serializable, f, indent=2)
         log.info(f"      Results written to {dump_path}")
     else:
-        #      Email
-        log.info("\n[6/6] Sending email report...")
-        try:
-            send_email_report(tiers)
-            log.info("      Email sent successfully.")
-        except Exception as e:
-            log.error(f"      Email failed: {e}")
+        if sanity_report.systemic_alert:
+            #      Sanity gate found too high a failure rate to trust the
+            #      rest of the report — hold the normal send and alert
+            #      instead of shipping a degraded-but-plausible-looking
+            #      email. See sanity_gate.py module docstring.
+            log.error("\n[6/6] SANITY GATE SYSTEMIC ALERT — holding normal report, "
+                      "sending alert email instead.")
+            try:
+                send_sanity_alert_email(sanity_report, tiers["regime"], tiers["regime_name"])
+                log.info("      Alert email sent.")
+            except Exception as e:
+                log.error(f"      Alert email failed: {e}")
+        else:
+            #      Email
+            log.info("\n[6/6] Sending email report...")
+            try:
+                send_email_report(tiers)
+                log.info("      Email sent successfully.")
+            except Exception as e:
+                log.error(f"      Email failed: {e}")
 
     log.info("\n" + "=" * 60)
     log.info("  Scan complete.")

@@ -43,28 +43,28 @@ BASE_DIR      = Path(__file__).parent
 RECIPIENT_NAME = "Swastik"
 
 REGIME_META = {
-    "A": ("STRONG BULL",  "#00E676", "rgba(0,230,118,0.12)", "rgba(0,230,118,0.35)",
+    "A": ("STRONG BULL",  "#0E8F63", "rgba(14,143,99,0.12)", "rgba(14,143,99,0.35)",
           "All conditions optimal. Highest probability entry window."),
-    "B": ("BULL",         "#00D4AA", "rgba(0,212,170,0.10)", "rgba(0,212,170,0.3)",
+    "B": ("BULL",         "#0E7A6B", "rgba(14,122,107,0.10)", "rgba(14,122,107,0.3)",
           "Good conditions. Standard position sizing appropriate."),
-    "C": ("RANGE BOUND",  "#FFB300", "rgba(255,179,0,0.10)", "rgba(255,179,0,0.3)",
+    "C": ("RANGE BOUND",  "#96690A", "rgba(150,105,10,0.10)", "rgba(150,105,10,0.3)",
           "Choppy market. Tighter stops, smaller sizes, wait for clear breakout."),
-    "D": ("CORRECTION",   "#FF8C00", "rgba(255,140,0,0.10)", "rgba(255,140,0,0.3)",
+    "D": ("CORRECTION",   "#B84D0A", "rgba(184,77,10,0.10)", "rgba(184,77,10,0.3)",
           "Market pulling back. Higher failure rate on breakouts. Watchlist mode."),
-    "E": ("BEAR MARKET",  "#FF5252", "rgba(255,82,82,0.10)", "rgba(255,82,82,0.3)",
+    "E": ("BEAR MARKET",  "#C6403D", "rgba(198,64,61,0.10)", "rgba(198,64,61,0.3)",
           "Avoid new longs. Capital preservation is the priority."),
 }
 
-MACRO_COLOR = {"SUPPORTIVE": "#00E676", "MIXED": "#FFB300", "HOSTILE": "#FF5252"}
-EVENT_COLOR = {"NORMAL": "#5E7A96",     "WATCH": "#FFB300",  "HIGH_RISK": "#FF5252"}
-BQ_COLOR    = {"MAJOR": "#00E676",      "MINOR": "#FFB300",  "RECOVERY": "#4D9EFF"}
+MACRO_COLOR = {"SUPPORTIVE": "#0E8F63", "MIXED": "#96690A", "HOSTILE": "#C6403D"}
+EVENT_COLOR = {"NORMAL": "#8895AA",     "WATCH": "#96690A",  "HIGH_RISK": "#C6403D"}
+BQ_COLOR    = {"MAJOR": "#0E8F63",      "MINOR": "#96690A",  "RECOVERY": "#2A5FB0"}
 
 # Deliberately muted/neutral Î“Ã‡Ã¶ NOT the green/orange/red buy-signal palette
 # used elsewhere in this file. A defensive pick should never visually read
 # like a Tier 1/2/3 trade card at a glance.
-DEFENSIVE_COLOR  = "#8FA3B8"
-DEFENSIVE_BG     = "rgba(143,163,184,0.08)"
-DEFENSIVE_BORDER = "rgba(143,163,184,0.25)"
+DEFENSIVE_COLOR  = "#5D6E85"
+DEFENSIVE_BG     = "rgba(93,110,133,0.08)"
+DEFENSIVE_BORDER = "rgba(93,110,133,0.25)"
 
 # Section 6 (Position Alerts) colors Î“Ã‡Ã¶ deliberately reuse existing meanings
 # from elsewhere in this file rather than invent a new palette: EXIT reuses
@@ -73,15 +73,15 @@ DEFENSIVE_BORDER = "rgba(143,163,184,0.25)"
 # means "aggressive opportunity" Î“Ã‡Ã¶ the opposite of what TRIM signals); ADD-ON
 # reuses Tier 1's green since it genuinely is a fresh breakout signal, just
 # on a stock you already own instead of a new one.
-EXIT_COLOR   = "#FF5252"
-EXIT_BG      = "rgba(255,82,82,0.08)"
-EXIT_BORDER  = "rgba(255,82,82,0.3)"
-TRIM_COLOR   = "#FF8C00"
-TRIM_BG      = "rgba(255,140,0,0.08)"
-TRIM_BORDER  = "rgba(255,140,0,0.3)"
-ADDON_COLOR  = "#00E676"
-ADDON_BG     = "rgba(0,230,118,0.08)"
-ADDON_BORDER = "rgba(0,230,118,0.3)"
+EXIT_COLOR   = "#C6403D"
+EXIT_BG      = "rgba(198,64,61,0.08)"
+EXIT_BORDER  = "rgba(198,64,61,0.3)"
+TRIM_COLOR   = "#B84D0A"
+TRIM_BG      = "rgba(184,77,10,0.08)"
+TRIM_BORDER  = "rgba(184,77,10,0.3)"
+ADDON_COLOR  = "#0E8F63"
+ADDON_BG     = "rgba(14,143,99,0.08)"
+ADDON_BORDER = "rgba(14,143,99,0.3)"
 
 # Section 6 (P4-04) Î“Ã‡Ã¶ Sector Concentration colors. â‰¡Æ’Ã¶â”¤-equivalent (concentrated
 # + weak breadth) reuses EXIT's red Î“Ã‡Ã¶ same severity as a stop-loss breach,
@@ -90,12 +90,12 @@ ADDON_BORDER = "rgba(0,230,118,0.3)"
 # meaning it has everywhere else in this file, not TRIM's orange (TRIM means
 # a specific stock is deteriorating; this means a sector-level bet exists,
 # which may be fine if the sector stays strong).
-CONC_WEAK_COLOR  = "#FF5252"
-CONC_WEAK_BG     = "rgba(255,82,82,0.08)"
-CONC_WEAK_BORDER = "rgba(255,82,82,0.3)"
-CONC_COLOR       = "#FFB300"
-CONC_BG          = "rgba(255,179,0,0.08)"
-CONC_BORDER      = "rgba(255,179,0,0.3)"
+CONC_WEAK_COLOR  = "#C6403D"
+CONC_WEAK_BG     = "rgba(198,64,61,0.08)"
+CONC_WEAK_BORDER = "rgba(198,64,61,0.3)"
+CONC_COLOR       = "#96690A"
+CONC_BG          = "rgba(150,105,10,0.08)"
+CONC_BORDER      = "rgba(150,105,10,0.3)"
 
 # Kept identical to PortfolioDashboard/app.py's CONCENTRATION_THRESHOLD_PCT /
 # WEAK_SECTOR_SMA50_PCT (P3-08). Duplicated, not imported -- nse_momentum and
@@ -106,6 +106,40 @@ CONC_BORDER      = "rgba(255,179,0,0.3)"
 # linked.
 CONCENTRATION_THRESHOLD_PCT = 25.0
 WEAK_SECTOR_SMA50_PCT = 50.0
+
+# Section 1a Î“Ã‡Ã¶ Tier 1/2 at-a-glance heatmap. Colors reuse pass/fail cutoffs
+# that already exist elsewhere in the codebase Î“Ã‡Ã¶ deliberately NOT new
+# thresholds invented for this table, so "green" here always means the same
+# thing it means in the rest of the pipeline:
+#   RS_OUTPERFORM_MIN   -- agents/rs_agent.py's own scoring breakpoint
+#                           (elif p >= 70: base = 15)
+#   RVOL_CONFIRM_MIN /
+#   RVOL_LOW_VOL_MIN    -- confirm_picks.py's CONFIRMED / CONFIRMED_LOW_VOL
+#                           cutoffs (RVOL_CONFIRM_MIN, RVOL_LOW_VOL_MIN)
+#   HEAT_DELIVERY_MIN   -- sector_breadth.py's HIGH_DELIVERY_THRESHOLD /
+#                           institutional_proxy_agent.py's own threshold
+#   HEAT_MIN_RRR        -- agents/risk_agent.py's MIN_RRR per universe (the
+#                           real R:R gate). Duplicated, not imported, same
+#                           reasoning as CONCENTRATION_THRESHOLD_PCT above.
+#                           A stock reads GREEN on R:R only if it clears this
+#                           by HEAT_RRR_MARGIN -- comfortably past the gate,
+#                           not just past it.
+# Score, Confidence, Entry and Risk-to-stop are deliberately left uncolored:
+# Score/Confidence are the agents' own composite of everything else in the
+# row (coloring them too would double-count the same evidence), and
+# risk_agent.py's per-universe stop cap doesn't hold cleanly enough against
+# real picks yet to trust as a green/red signal -- see emailer.py commit
+# notes. Entry is just a price to act on, not a signal.
+RS_OUTPERFORM_MIN = 70.0
+RVOL_CONFIRM_MIN  = 1.5
+RVOL_LOW_VOL_MIN  = 1.0
+HEAT_DELIVERY_MIN = 50.0
+HEAT_MIN_RRR      = {"LARGE": 1.5, "MID": 1.8, "SMALL": 2.0}
+HEAT_RRR_MARGIN    = 1.5
+
+HEAT_PASS_BG, HEAT_PASS_FG = "#DDF3E8", "#0B7A4F"
+HEAT_MID_BG,  HEAT_MID_FG  = "#FBEED4", "#8A5A0C"
+HEAT_FAIL_BG, HEAT_FAIL_FG = "#F1F3F7", "#8895AA"
 
 
 def _load_recipients() -> list:
@@ -218,10 +252,100 @@ def send_email_report(tiers: dict):
         raise
 
 
+def _heat_cell(label: str, kind: str) -> str:
+    """kind: 'pass' | 'mid' | 'fail' -- see threshold constants above."""
+    bg, fg = {
+        "pass": (HEAT_PASS_BG, HEAT_PASS_FG),
+        "mid":  (HEAT_MID_BG,  HEAT_MID_FG),
+        "fail": (HEAT_FAIL_BG, HEAT_FAIL_FG),
+    }[kind]
+    weight = "700" if kind == "pass" else "600" if kind == "mid" else "400"
+    return (f'<span style="background:{bg};color:{fg};font-weight:{weight};'
+            f'border-radius:6px;padding:3px 8px;display:inline-block;'
+            f'min-width:42px;text-align:center">{label}</span>')
+
+
+def _heatmap_table(stocks: list, tier_label: str, accent_color: str) -> str:
+    """
+    Section 1a -- Tier 1/2 at-a-glance heatmap. Stacks a tier's picks as
+    rows so they can be scanned/compared in one view instead of reading
+    each trade card in full, per the reasoning in the constants block
+    above: colors are read from real pass/fail thresholds elsewhere in
+    the codebase, not invented for this table, and Score/Confidence/Entry/
+    Risk-to-stop are shown plain rather than colored (composite-metric
+    double-counting risk for the first two, an unverified stop-cap for
+    the last -- see the comment above HEAT_MIN_RRR).
+    """
+    if not stocks:
+        return ""
+
+    rows_html = ""
+    for r in stocks:
+        universe = getattr(r, "universe", "MID") or "MID"
+        min_rrr  = HEAT_MIN_RRR.get(universe, HEAT_MIN_RRR["MID"])
+
+        rs = r.rs_percentile
+        rs_kind = "pass" if rs >= RS_OUTPERFORM_MIN else "fail"
+
+        rvol = r.rvol
+        rvol_kind = ("pass" if rvol >= RVOL_CONFIRM_MIN else
+                     "mid"  if rvol >= RVOL_LOW_VOL_MIN else "fail")
+
+        deliv = r.del_pct
+        deliv_kind = "pass" if deliv >= HEAT_DELIVERY_MIN else "fail"
+
+        rrr = r.rrr
+        rrr_kind = ("pass" if rrr >= min_rrr * HEAT_RRR_MARGIN else
+                    "mid"  if rrr >= min_rrr else "fail")
+
+        n_green = sum(k == "pass" for k in (rs_kind, rvol_kind, deliv_kind, rrr_kind))
+
+        rows_html += f"""
+<tr style="border-bottom:1px solid #DFE5EE">
+  <td style="padding:8px 10px;font-weight:700;color:#101826;font-family:monospace">{r.ticker.replace('.NS','')}</td>
+  <td style="padding:8px 10px;text-align:right;font-family:monospace;color:#55627A">Rs.{r.entry:,.1f}</td>
+  <td style="padding:8px 10px;text-align:right;font-family:monospace">{_heat_cell(f"{rs:.0f}th", rs_kind)}</td>
+  <td style="padding:8px 10px;text-align:right;font-family:monospace">{_heat_cell(f"{rvol:.1f}x", rvol_kind)}</td>
+  <td style="padding:8px 10px;text-align:right;font-family:monospace">{_heat_cell(f"{deliv:.0f}%", deliv_kind)}</td>
+  <td style="padding:8px 10px;text-align:right;font-family:monospace">{_heat_cell(f"{rrr:.1f}x", rrr_kind)}</td>
+  <td style="padding:8px 10px;text-align:right;font-family:monospace;color:#55627A">{r.stop_pct:.1f}%</td>
+  <td style="padding:8px 10px;text-align:right;font-family:monospace;color:#55627A">{r.total_score}</td>
+  <td style="padding:8px 10px;text-align:right;font-family:monospace;color:#55627A">{r.confidence_pct:.0f}%</td>
+  <td style="padding:8px 10px;font-size:11px;color:#8895AA">
+    <b style="color:{accent_color};font-family:monospace">{n_green}</b>/4 green
+  </td>
+</tr>"""
+
+    return f"""
+<div style="margin-bottom:14px">
+  <div style="font-family:monospace;font-size:10px;letter-spacing:0.1em;color:{accent_color};
+              text-transform:uppercase;margin-bottom:8px">{tier_label} -- At A Glance</div>
+  <div style="overflow-x:auto;border:1px solid #DFE5EE;border-radius:8px">
+  <table style="width:100%;border-collapse:collapse;font-size:12px;min-width:600px">
+    <thead>
+      <tr style="background:#F7F9FC;border-bottom:1px solid #DFE5EE">
+        <th style="padding:8px 10px;text-align:left;color:#8895AA;font-size:9px">TICKER</th>
+        <th style="padding:8px 10px;text-align:right;color:#8895AA;font-size:9px">ENTRY</th>
+        <th style="padding:8px 10px;text-align:right;color:#8895AA;font-size:9px">RS %ILE</th>
+        <th style="padding:8px 10px;text-align:right;color:#8895AA;font-size:9px">RVOL</th>
+        <th style="padding:8px 10px;text-align:right;color:#8895AA;font-size:9px">DELIVERY</th>
+        <th style="padding:8px 10px;text-align:right;color:#8895AA;font-size:9px">R:R</th>
+        <th style="padding:8px 10px;text-align:right;color:#8895AA;font-size:9px">RISK TO STOP</th>
+        <th style="padding:8px 10px;text-align:right;color:#8895AA;font-size:9px">SCORE</th>
+        <th style="padding:8px 10px;text-align:right;color:#8895AA;font-size:9px">CONF.</th>
+        <th style="padding:8px 10px;text-align:left;color:#8895AA;font-size:9px">READS</th>
+      </tr>
+    </thead>
+    <tbody>{rows_html}</tbody>
+  </table>
+  </div>
+</div>"""
+
+
 def _tier_card(r, tier_label: str, tier_color: str) -> str:
     # MAJOR/MINOR/RECOVERY label
     bq      = getattr(r, "breakout_quality", "") or "MINOR"
-    bq_col  = BQ_COLOR.get(bq, "#FFB300")
+    bq_col  = BQ_COLOR.get(bq, "#96690A")
     bq_html = (f'<span style="font-size:9px;color:{bq_col};'
                f'border:1px solid {bq_col};border-radius:3px;'
                f'padding:1px 5px;margin-left:6px">{bq}</span>')
@@ -234,8 +358,8 @@ def _tier_card(r, tier_label: str, tier_color: str) -> str:
     low_edge_html = ""
     if getattr(r, "low_edge_pattern", False):
         low_edge_html = (
-            '<span style="font-size:9px;color:#FF7043;'
-            'border:1px solid #FF7043;border-radius:3px;'
+            '<span style="font-size:9px;color:#BA4A1E;'
+            'border:1px solid #BA4A1E;border-radius:3px;'
             'padding:1px 5px;margin-left:6px" '
             'title="This pattern\'s prior expectancy estimate is disputed Î“Ã‡Ã¶ '
             'score cleared on other factors, not pattern strength">'
@@ -244,7 +368,7 @@ def _tier_card(r, tier_label: str, tier_color: str) -> str:
 
     # Confirmation state
     conf       = getattr(r, "confirmation_state", "SETUP_READY")
-    conf_col   = "#00E676" if conf == "BREAKOUT_CONFIRMED" else "#FFB300"
+    conf_col   = "#0E8F63" if conf == "BREAKOUT_CONFIRMED" else "#96690A"
     conf_label = "CONFIRMED" if conf == "BREAKOUT_CONFIRMED" else "SETUP READY"
 
     # Asymmetry
@@ -264,33 +388,33 @@ def _tier_card(r, tier_label: str, tier_color: str) -> str:
     rr_actual  = r.rrr   # consistent with table display
 
     working_html = "".join(
-        f'<li style="margin:3px 0;color:#9AAFC4">OK {w}</li>'
+        f'<li style="margin:3px 0;color:#55627A">OK {w}</li>'
         for w in (r.what_is_working or [])[:3]
     )
     missing_html = "".join(
-        f'<li style="margin:3px 0;color:#FFB300">! {m}</li>'
+        f'<li style="margin:3px 0;color:#96690A">! {m}</li>'
         for m in (r.what_is_missing or [])[:2]
     )
     trigger_html = "".join(
-        f'<li style="margin:3px 0;color:#4D9EFF">- {t}</li>'
+        f'<li style="margin:3px 0;color:#2A5FB0">- {t}</li>'
         for t in (r.trigger_conditions or [])[:2]
     )
     risk_html = "".join(
-        f'<li style="margin:3px 0;color:#FF8C00">! {rk}</li>'
+        f'<li style="margin:3px 0;color:#B84D0A">! {rk}</li>'
         for rk in (r.risk_factors or [])[:2]
     )
 
     return f"""
-<div style="background:#0E1622;border:1px solid #1F3046;border-left:3px solid {tier_color};
+<div style="background:#FFFFFF;border:1px solid #DFE5EE;border-left:3px solid {tier_color};
             border-radius:8px;padding:16px 18px;margin-bottom:12px;">
   <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;">
     <div>
       <span style="font-family:monospace;font-size:10px;color:{tier_color};
                    letter-spacing:0.15em;text-transform:uppercase">{tier_label}</span>
-      <div style="font-size:17px;font-weight:700;color:#FFFFFF;margin:3px 0">
+      <div style="font-size:17px;font-weight:700;color:#101826;margin:3px 0">
         {r.ticker.replace('.NS','')} {bq_html}{low_edge_html}
       </div>
-      <div style="font-size:11px;color:#5E7A96">{r.name} - {r.sector} - {r.universe}</div>
+      <div style="font-size:11px;color:#8895AA">{r.name} - {r.sector} - {r.universe}</div>
       <div style="margin-top:4px">
         <span style="font-size:9px;color:{conf_col};border:1px solid {conf_col};
                      border-radius:3px;padding:1px 5px">{conf_label}</span>
@@ -298,14 +422,14 @@ def _tier_card(r, tier_label: str, tier_color: str) -> str:
     </div>
     <div style="text-align:right">
       <div style="font-family:monospace;font-size:22px;font-weight:700;color:{tier_color}">{r.total_score}</div>
-      <div style="font-family:monospace;font-size:9px;color:#5E7A96">/ 100 pts</div>
-      <div style="font-size:10px;color:#9AAFC4;margin-top:2px">Conf: {r.confidence_pct:.0f}%</div>
+      <div style="font-family:monospace;font-size:9px;color:#8895AA">/ 100 pts</div>
+      <div style="font-size:10px;color:#55627A;margin-top:2px">Conf: {r.confidence_pct:.0f}%</div>
     </div>
   </div>
 
-  <div style="background:#070B11;border-radius:6px;padding:10px 14px;margin-bottom:10px;
+  <div style="background:#F7F9FC;border-radius:6px;padding:10px 14px;margin-bottom:10px;
               font-family:monospace;font-size:11px;">
-    <div style="display:flex;gap:16px;flex-wrap:wrap;color:#9AAFC4">
+    <div style="display:flex;gap:16px;flex-wrap:wrap;color:#55627A">
       <span>{r.pattern}</span>
       <span>RS {r.rs_percentile:.0f}th%</span>
       <span title="End-of-day RVOL: today's closed daily volume vs 20-day average. Not the same metric as the 10am confirmation email's intraday RVOL.">RVOL {r.rvol:.1f}x (EOD)</span>
@@ -313,24 +437,24 @@ def _tier_card(r, tier_label: str, tier_color: str) -> str:
       <span>Del {r.del_pct:.0f}%</span>
     </div>
     <div style="margin-top:8px;display:flex;gap:14px;flex-wrap:wrap;font-size:12px">
-      <span style="color:#00D4AA">Entry Rs.{r.entry:.1f}</span>
-      <span style="color:#FF5252">SL Rs.{r.stop_loss:.1f} ({risk_pct:.1f}% risk)</span>
-      <span style="color:#F0B429">T1 Rs.{r.target1:.1f} (+{reward_pct:.1f}%)</span>
-      <span style="color:#BB86FC">T2 Rs.{r.target2:.1f}</span>
-      <span style="color:#00E676">R:R {rr_actual:.1f}x</span>
+      <span style="color:#0E7A6B">Entry Rs.{r.entry:.1f}</span>
+      <span style="color:#C6403D">SL Rs.{r.stop_loss:.1f} ({risk_pct:.1f}% risk)</span>
+      <span style="color:#A8680E">T1 Rs.{r.target1:.1f} (+{reward_pct:.1f}%)</span>
+      <span style="color:#7C4FC4">T2 Rs.{r.target2:.1f}</span>
+      <span style="color:#0E8F63">R:R {rr_actual:.1f}x</span>
     </div>
   </div>
 
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:11px">
     <div>
-      <div style="color:#5E7A96;font-size:9px;text-transform:uppercase;
+      <div style="color:#8895AA;font-size:9px;text-transform:uppercase;
                   letter-spacing:0.1em;margin-bottom:4px">What is working</div>
       <ul style="margin:0;padding:0 0 0 14px">{working_html}</ul>
     </div>
     <div>
-      {"" if not missing_html else f'<div style="color:#5E7A96;font-size:9px;text-transform:uppercase;margin-bottom:4px">Missing</div><ul style="margin:0;padding:0 0 0 14px">{missing_html}</ul>'}
-      {"" if not trigger_html else f'<div style="color:#5E7A96;font-size:9px;text-transform:uppercase;margin-bottom:4px;margin-top:6px">Trigger to act</div><ul style="margin:0;padding:0 0 0 14px">{trigger_html}</ul>'}
-      {"" if not risk_html else f'<div style="color:#5E7A96;font-size:9px;text-transform:uppercase;margin-bottom:4px;margin-top:6px">Risk factors</div><ul style="margin:0;padding:0 0 0 14px">{risk_html}</ul>'}
+      {"" if not missing_html else f'<div style="color:#8895AA;font-size:9px;text-transform:uppercase;margin-bottom:4px">Missing</div><ul style="margin:0;padding:0 0 0 14px">{missing_html}</ul>'}
+      {"" if not trigger_html else f'<div style="color:#8895AA;font-size:9px;text-transform:uppercase;margin-bottom:4px;margin-top:6px">Trigger to act</div><ul style="margin:0;padding:0 0 0 14px">{trigger_html}</ul>'}
+      {"" if not risk_html else f'<div style="color:#8895AA;font-size:9px;text-transform:uppercase;margin-bottom:4px;margin-top:6px">Risk factors</div><ul style="margin:0;padding:0 0 0 14px">{risk_html}</ul>'}
     </div>
   </div>
 </div>"""
@@ -342,26 +466,26 @@ def _near_breakout_section(near_bo: list) -> str:
     rows = ""
     for nb in near_bo:
         rows += f"""
-<tr style="border-bottom:1px solid #1F3046">
-  <td style="padding:7px 10px;font-weight:600;color:#E8F0F8;font-family:monospace">
+<tr style="border-bottom:1px solid #DFE5EE">
+  <td style="padding:7px 10px;font-weight:600;color:#101826;font-family:monospace">
     {nb['ticker'].replace('.NS','')}
   </td>
-  <td style="padding:7px 10px;color:#9AAFC4;font-size:11px">{nb['name']}</td>
-  <td style="padding:7px 10px;color:#9AAFC4;font-size:11px">{nb['pattern']}</td>
-  <td style="padding:7px 10px;font-family:monospace;color:#00D4AA">Rs.{nb['price']:.1f}</td>
-  <td style="padding:7px 10px;font-family:monospace;color:#F0B429">Rs.{nb['breakout']:.1f}</td>
-  <td style="padding:7px 10px;font-family:monospace;color:#FFB300">{nb['gap_pct']:.1f}% away</td>
-  <td style="padding:7px 10px;font-family:monospace;color:#9AAFC4">{nb.get('rsi',0):.0f}</td>
-  <td style="padding:7px 10px;font-size:10px;color:#5E7A96">{nb['universe']}</td>
+  <td style="padding:7px 10px;color:#55627A;font-size:11px">{nb['name']}</td>
+  <td style="padding:7px 10px;color:#55627A;font-size:11px">{nb['pattern']}</td>
+  <td style="padding:7px 10px;font-family:monospace;color:#0E7A6B">Rs.{nb['price']:.1f}</td>
+  <td style="padding:7px 10px;font-family:monospace;color:#A8680E">Rs.{nb['breakout']:.1f}</td>
+  <td style="padding:7px 10px;font-family:monospace;color:#96690A">{nb['gap_pct']:.1f}% away</td>
+  <td style="padding:7px 10px;font-family:monospace;color:#55627A">{nb.get('rsi',0):.0f}</td>
+  <td style="padding:7px 10px;font-size:10px;color:#8895AA">{nb['universe']}</td>
 </tr>"""
 
     return f"""
-  <div style="font-family:monospace;font-size:9px;letter-spacing:0.2em;color:#5E7A96;
+  <div style="font-family:monospace;font-size:9px;letter-spacing:0.2em;color:#8895AA;
               text-transform:uppercase;margin:24px 0 10px">
     Section 4 - Near-Breakout Watchlist (set alerts, do not buy yet)
   </div>
-  <div style="background:#0A1018;border:1px solid #1F3046;border-radius:8px;
-              padding:10px 14px;margin-bottom:12px;font-size:11px;color:#9AAFC4">
+  <div style="background:#F7F9FC;border:1px solid #DFE5EE;border-radius:8px;
+              padding:10px 14px;margin-bottom:12px;font-size:11px;color:#55627A">
     These stocks are within 3% of their breakout level with valid patterns forming.
     They have NOT triggered yet. Set an alert at the breakout level. Buy only on a
     confirmed close above breakout on volume >= 1.5x average.
@@ -369,15 +493,15 @@ def _near_breakout_section(near_bo: list) -> str:
   <div style="overflow-x:auto">
   <table style="width:100%;border-collapse:collapse;font-size:12px">
     <thead>
-      <tr style="background:#0A1018;border-bottom:1px solid #1F3046">
-        <th style="padding:7px 10px;text-align:left;color:#5E7A96;font-size:9px">TICKER</th>
-        <th style="padding:7px 10px;text-align:left;color:#5E7A96;font-size:9px">NAME</th>
-        <th style="padding:7px 10px;text-align:left;color:#5E7A96;font-size:9px">PATTERN</th>
-        <th style="padding:7px 10px;text-align:left;color:#5E7A96;font-size:9px">CMP</th>
-        <th style="padding:7px 10px;text-align:left;color:#5E7A96;font-size:9px">BREAKOUT</th>
-        <th style="padding:7px 10px;text-align:left;color:#5E7A96;font-size:9px">GAP</th>
-        <th style="padding:7px 10px;text-align:left;color:#5E7A96;font-size:9px">RSI</th>
-        <th style="padding:7px 10px;text-align:left;color:#5E7A96;font-size:9px">UNI</th>
+      <tr style="background:#F7F9FC;border-bottom:1px solid #DFE5EE">
+        <th style="padding:7px 10px;text-align:left;color:#8895AA;font-size:9px">TICKER</th>
+        <th style="padding:7px 10px;text-align:left;color:#8895AA;font-size:9px">NAME</th>
+        <th style="padding:7px 10px;text-align:left;color:#8895AA;font-size:9px">PATTERN</th>
+        <th style="padding:7px 10px;text-align:left;color:#8895AA;font-size:9px">CMP</th>
+        <th style="padding:7px 10px;text-align:left;color:#8895AA;font-size:9px">BREAKOUT</th>
+        <th style="padding:7px 10px;text-align:left;color:#8895AA;font-size:9px">GAP</th>
+        <th style="padding:7px 10px;text-align:left;color:#8895AA;font-size:9px">RSI</th>
+        <th style="padding:7px 10px;text-align:left;color:#8895AA;font-size:9px">UNI</th>
       </tr>
     </thead>
     <tbody>{rows}</tbody>
@@ -400,30 +524,30 @@ def _defensive_section(defensive: list, regime: str) -> str:
     for d in defensive:
         note_html = ""
         if d.get("note"):
-            note_html = (f'<div style="font-size:10px;color:#6B7F94;margin-top:2px">'
+            note_html = (f'<div style="font-size:10px;color:#55627A;margin-top:2px">'
                          f'{d["note"]}</div>')
         rows += f"""
-<tr style="border-bottom:1px solid #1F3046">
-  <td style="padding:7px 10px;font-weight:600;color:#E8F0F8;font-family:monospace">
+<tr style="border-bottom:1px solid #DFE5EE">
+  <td style="padding:7px 10px;font-weight:600;color:#101826;font-family:monospace">
     {d['ticker']}
     {note_html}
   </td>
-  <td style="padding:7px 10px;color:#9AAFC4;font-size:11px">{d['sector']}</td>
-  <td style="padding:7px 10px;font-size:10px;color:#5E7A96">{d['tier']}</td>
+  <td style="padding:7px 10px;color:#55627A;font-size:11px">{d['sector']}</td>
+  <td style="padding:7px 10px;font-size:10px;color:#8895AA">{d['tier']}</td>
   <td style="padding:7px 10px;font-family:monospace;color:{DEFENSIVE_COLOR}">{d['rs_universe_pct']:.0f}th</td>
   <td style="padding:7px 10px;font-family:monospace;color:{DEFENSIVE_COLOR}">{d['rs_sector_pct']:.0f}th</td>
-  <td style="padding:7px 10px;font-family:monospace;color:#9AAFC4">{d['stock_dd_pct']:.1f}%</td>
-  <td style="padding:7px 10px;font-family:monospace;color:#5E7A96">{d['nifty_dd_pct']:.1f}%</td>
-  <td style="padding:7px 10px;font-family:monospace;color:#9AAFC4">Rs.{d['adt_cr']:.0f}Cr</td>
+  <td style="padding:7px 10px;font-family:monospace;color:#55627A">{d['stock_dd_pct']:.1f}%</td>
+  <td style="padding:7px 10px;font-family:monospace;color:#8895AA">{d['nifty_dd_pct']:.1f}%</td>
+  <td style="padding:7px 10px;font-family:monospace;color:#55627A">Rs.{d['adt_cr']:.0f}Cr</td>
 </tr>"""
 
     return f"""
-  <div style="font-family:monospace;font-size:9px;letter-spacing:0.2em;color:#5E7A96;
+  <div style="font-family:monospace;font-size:9px;letter-spacing:0.2em;color:#8895AA;
               text-transform:uppercase;margin:24px 0 10px">
     Section 5 - Defensive / Relative-Strength Watchlist
   </div>
   <div style="background:{DEFENSIVE_BG};border:1px solid {DEFENSIVE_BORDER};border-radius:8px;
-              padding:10px 14px;margin-bottom:12px;font-size:11px;color:#9AAFC4">
+              padding:10px 14px;margin-bottom:12px;font-size:11px;color:#55627A">
     Regime {regime} triggered a capital-preservation scan Î“Ã‡Ã¶ no new Tier 1/2 entries
     are being generated today. These names are relatively less damaged than NIFTY
     (higher relative strength, shallower drawdown over the same window) Î“Ã‡Ã¶ useful
@@ -435,15 +559,15 @@ def _defensive_section(defensive: list, regime: str) -> str:
   <div style="overflow-x:auto">
   <table style="width:100%;border-collapse:collapse;font-size:12px">
     <thead>
-      <tr style="background:#0A1018;border-bottom:1px solid #1F3046">
-        <th style="padding:7px 10px;text-align:left;color:#5E7A96;font-size:9px">TICKER</th>
-        <th style="padding:7px 10px;text-align:left;color:#5E7A96;font-size:9px">SECTOR</th>
-        <th style="padding:7px 10px;text-align:left;color:#5E7A96;font-size:9px">TIER</th>
-        <th style="padding:7px 10px;text-align:left;color:#5E7A96;font-size:9px">RS (UNIVERSE)</th>
-        <th style="padding:7px 10px;text-align:left;color:#5E7A96;font-size:9px">RS (SECTOR)</th>
-        <th style="padding:7px 10px;text-align:left;color:#5E7A96;font-size:9px">STOCK DD</th>
-        <th style="padding:7px 10px;text-align:left;color:#5E7A96;font-size:9px">NIFTY DD</th>
-        <th style="padding:7px 10px;text-align:left;color:#5E7A96;font-size:9px">ADT</th>
+      <tr style="background:#F7F9FC;border-bottom:1px solid #DFE5EE">
+        <th style="padding:7px 10px;text-align:left;color:#8895AA;font-size:9px">TICKER</th>
+        <th style="padding:7px 10px;text-align:left;color:#8895AA;font-size:9px">SECTOR</th>
+        <th style="padding:7px 10px;text-align:left;color:#8895AA;font-size:9px">TIER</th>
+        <th style="padding:7px 10px;text-align:left;color:#8895AA;font-size:9px">RS (UNIVERSE)</th>
+        <th style="padding:7px 10px;text-align:left;color:#8895AA;font-size:9px">RS (SECTOR)</th>
+        <th style="padding:7px 10px;text-align:left;color:#8895AA;font-size:9px">STOCK DD</th>
+        <th style="padding:7px 10px;text-align:left;color:#8895AA;font-size:9px">NIFTY DD</th>
+        <th style="padding:7px 10px;text-align:left;color:#8895AA;font-size:9px">ADT</th>
       </tr>
     </thead>
     <tbody>{rows}</tbody>
@@ -469,7 +593,7 @@ def _position_alerts_section(exit_alerts: list, trim_signals: list, add_on: list
         return ""
 
     section_header = f"""
-  <div style="font-family:monospace;font-size:9px;letter-spacing:0.2em;color:#5E7A96;
+  <div style="font-family:monospace;font-size:9px;letter-spacing:0.2em;color:#8895AA;
               text-transform:uppercase;margin:24px 0 10px">
     Section 6 - Position Alerts (Your Holdings)
   </div>"""
@@ -481,14 +605,14 @@ def _position_alerts_section(exit_alerts: list, trim_signals: list, add_on: list
             ec = h["exit_check"]
             ts = h["technical_stop"]
             rows += f"""
-<tr style="border-bottom:1px solid #1F3046">
-  <td style="padding:7px 10px;font-weight:700;color:#E8F0F8;font-family:monospace">
+<tr style="border-bottom:1px solid #DFE5EE">
+  <td style="padding:7px 10px;font-weight:700;color:#101826;font-family:monospace">
     {h['ticker'].replace('.NS','')}
   </td>
-  <td style="padding:7px 10px;font-family:monospace;color:#9AAFC4">Rs.{ec['avg_price']:.2f}</td>
+  <td style="padding:7px 10px;font-family:monospace;color:#55627A">Rs.{ec['avg_price']:.2f}</td>
   <td style="padding:7px 10px;font-family:monospace;color:{EXIT_COLOR}">Rs.{ts['current_price']:.2f}</td>
   <td style="padding:7px 10px;font-family:monospace;color:{EXIT_COLOR}">Rs.{ec['effective_stop']:.2f}</td>
-  <td style="padding:7px 10px;font-size:10px;color:#5E7A96">{ec['source']}</td>
+  <td style="padding:7px 10px;font-size:10px;color:#8895AA">{ec['source']}</td>
 </tr>"""
         exit_html = f"""
   <div style="background:{EXIT_BG};border:1px solid {EXIT_BORDER};border-radius:8px;
@@ -496,7 +620,7 @@ def _position_alerts_section(exit_alerts: list, trim_signals: list, add_on: list
     <div style="font-size:12px;font-weight:700;color:{EXIT_COLOR};margin-bottom:6px">
       Î“ÃœÃ¡ {len(exit_alerts)} EXIT ALERT{"S" if len(exit_alerts) != 1 else ""} Î“Ã‡Ã¶ price below effective stop
     </div>
-    <div style="font-size:11px;color:#9AAFC4;margin-bottom:10px">
+    <div style="font-size:11px;color:#55627A;margin-bottom:10px">
       Effective stop = max(hard stop from your real avg cost, today's technical stop) Î“Ã‡Ã¶
       ratchet-only, same rule day5_stop_ratchet.py applies to scanner-originated trades.
       <strong style="color:{EXIT_COLOR}">Not an automatic sell order</strong> Î“Ã‡Ã¶ a data
@@ -504,12 +628,12 @@ def _position_alerts_section(exit_alerts: list, trim_signals: list, add_on: list
     </div>
     <table style="width:100%;border-collapse:collapse;font-size:12px">
       <thead>
-        <tr style="background:#0A1018;border-bottom:1px solid #1F3046">
-          <th style="padding:7px 10px;text-align:left;color:#5E7A96;font-size:9px">TICKER</th>
-          <th style="padding:7px 10px;text-align:left;color:#5E7A96;font-size:9px">AVG COST</th>
-          <th style="padding:7px 10px;text-align:left;color:#5E7A96;font-size:9px">CURRENT</th>
-          <th style="padding:7px 10px;text-align:left;color:#5E7A96;font-size:9px">STOP</th>
-          <th style="padding:7px 10px;text-align:left;color:#5E7A96;font-size:9px">STOP SOURCE</th>
+        <tr style="background:#F7F9FC;border-bottom:1px solid #DFE5EE">
+          <th style="padding:7px 10px;text-align:left;color:#8895AA;font-size:9px">TICKER</th>
+          <th style="padding:7px 10px;text-align:left;color:#8895AA;font-size:9px">AVG COST</th>
+          <th style="padding:7px 10px;text-align:left;color:#8895AA;font-size:9px">CURRENT</th>
+          <th style="padding:7px 10px;text-align:left;color:#8895AA;font-size:9px">STOP</th>
+          <th style="padding:7px 10px;text-align:left;color:#8895AA;font-size:9px">STOP SOURCE</th>
         </tr>
       </thead>
       <tbody>{rows}</tbody>
@@ -521,8 +645,8 @@ def _position_alerts_section(exit_alerts: list, trim_signals: list, add_on: list
         rows = ""
         for t in sorted(trim_signals, key=lambda x: x["rs_percentile"]):
             rows += f"""
-<tr style="border-bottom:1px solid #1F3046">
-  <td style="padding:7px 10px;font-weight:600;color:#E8F0F8;font-family:monospace">
+<tr style="border-bottom:1px solid #DFE5EE">
+  <td style="padding:7px 10px;font-weight:600;color:#101826;font-family:monospace">
     {t['ticker'].replace('.NS','')}
   </td>
   <td style="padding:7px 10px;font-family:monospace;color:{TRIM_COLOR}">{t['rs_percentile']:.0f}th pct</td>
@@ -533,16 +657,16 @@ def _position_alerts_section(exit_alerts: list, trim_signals: list, add_on: list
     <div style="font-size:12px;font-weight:700;color:{TRIM_COLOR};margin-bottom:6px">
       {len(trim_signals)} TRIM signal{"s" if len(trim_signals) != 1 else ""} Î“Ã‡Ã¶ RS deteriorating, not yet stopped out
     </div>
-    <div style="font-size:11px;color:#9AAFC4;margin-bottom:10px">
+    <div style="font-size:11px;color:#55627A;margin-bottom:10px">
       Relative strength below the 40th percentile Î“Ã‡Ã¶ below where "outperforming" starts
       (70th pct elsewhere in this email). Not an EXIT alert; a graduated warning worth
       watching, not yet a stop breach.
     </div>
     <table style="width:100%;border-collapse:collapse;font-size:12px">
       <thead>
-        <tr style="background:#0A1018;border-bottom:1px solid #1F3046">
-          <th style="padding:7px 10px;text-align:left;color:#5E7A96;font-size:9px">TICKER</th>
-          <th style="padding:7px 10px;text-align:left;color:#5E7A96;font-size:9px">RS PERCENTILE</th>
+        <tr style="background:#F7F9FC;border-bottom:1px solid #DFE5EE">
+          <th style="padding:7px 10px;text-align:left;color:#8895AA;font-size:9px">TICKER</th>
+          <th style="padding:7px 10px;text-align:left;color:#8895AA;font-size:9px">RS PERCENTILE</th>
         </tr>
       </thead>
       <tbody>{rows}</tbody>
@@ -555,16 +679,16 @@ def _position_alerts_section(exit_alerts: list, trim_signals: list, add_on: list
         for h in add_on:
             r = h["result"]
             rows += f"""
-<tr style="border-bottom:1px solid #1F3046">
-  <td style="padding:7px 10px;font-weight:600;color:#E8F0F8;font-family:monospace">
+<tr style="border-bottom:1px solid #DFE5EE">
+  <td style="padding:7px 10px;font-weight:600;color:#101826;font-family:monospace">
     {h['ticker'].replace('.NS','')}
   </td>
-  <td style="padding:7px 10px;color:#9AAFC4;font-size:11px">{r.pattern}</td>
+  <td style="padding:7px 10px;color:#55627A;font-size:11px">{r.pattern}</td>
   <td style="padding:7px 10px;font-family:monospace;color:{ADDON_COLOR}">{r.total_score}</td>
   <td style="padding:7px 10px;font-family:monospace;color:{ADDON_COLOR}">{r.rvol:.1f}x</td>
   <td style="padding:7px 10px;font-family:monospace;color:{ADDON_COLOR}">{r.rs_percentile:.0f}th</td>
-  <td style="padding:7px 10px;font-family:monospace;color:#00D4AA">Rs.{r.entry:.1f}</td>
-  <td style="padding:7px 10px;font-family:monospace;color:#FF5252">Rs.{r.stop_loss:.1f}</td>
+  <td style="padding:7px 10px;font-family:monospace;color:#0E7A6B">Rs.{r.entry:.1f}</td>
+  <td style="padding:7px 10px;font-family:monospace;color:#C6403D">Rs.{r.stop_loss:.1f}</td>
 </tr>"""
         addon_html = f"""
   <div style="background:{ADDON_BG};border:1px solid {ADDON_BORDER};border-radius:8px;
@@ -572,7 +696,7 @@ def _position_alerts_section(exit_alerts: list, trim_signals: list, add_on: list
     <div style="font-size:12px;font-weight:700;color:{ADDON_COLOR};margin-bottom:6px">
       {len(add_on)} ADD-ON candidate{"s" if len(add_on) != 1 else ""} Î“Ã‡Ã¶ held stock(s) with a fresh breakout
     </div>
-    <div style="font-size:11px;color:#9AAFC4;margin-bottom:10px">
+    <div style="font-size:11px;color:#55627A;margin-bottom:10px">
       Already in Tier 1/2 above under its own ticker Î“Ã‡Ã¶ flagged here separately because
       you already own it. Sizing/blended-cost-stop rules for adding to an existing
       position are not yet built (P2-03/P2-04) Î“Ã‡Ã¶ treat this as information, not a sizing
@@ -580,14 +704,14 @@ def _position_alerts_section(exit_alerts: list, trim_signals: list, add_on: list
     </div>
     <table style="width:100%;border-collapse:collapse;font-size:12px">
       <thead>
-        <tr style="background:#0A1018;border-bottom:1px solid #1F3046">
-          <th style="padding:7px 10px;text-align:left;color:#5E7A96;font-size:9px">TICKER</th>
-          <th style="padding:7px 10px;text-align:left;color:#5E7A96;font-size:9px">PATTERN</th>
-          <th style="padding:7px 10px;text-align:left;color:#5E7A96;font-size:9px">SCORE</th>
-          <th style="padding:7px 10px;text-align:left;color:#5E7A96;font-size:9px">RVOL</th>
-          <th style="padding:7px 10px;text-align:left;color:#5E7A96;font-size:9px">RS</th>
-          <th style="padding:7px 10px;text-align:left;color:#5E7A96;font-size:9px">ENTRY</th>
-          <th style="padding:7px 10px;text-align:left;color:#5E7A96;font-size:9px">SL</th>
+        <tr style="background:#F7F9FC;border-bottom:1px solid #DFE5EE">
+          <th style="padding:7px 10px;text-align:left;color:#8895AA;font-size:9px">TICKER</th>
+          <th style="padding:7px 10px;text-align:left;color:#8895AA;font-size:9px">PATTERN</th>
+          <th style="padding:7px 10px;text-align:left;color:#8895AA;font-size:9px">SCORE</th>
+          <th style="padding:7px 10px;text-align:left;color:#8895AA;font-size:9px">RVOL</th>
+          <th style="padding:7px 10px;text-align:left;color:#8895AA;font-size:9px">RS</th>
+          <th style="padding:7px 10px;text-align:left;color:#8895AA;font-size:9px">ENTRY</th>
+          <th style="padding:7px 10px;text-align:left;color:#8895AA;font-size:9px">SL</th>
         </tr>
       </thead>
       <tbody>{rows}</tbody>
@@ -644,32 +768,32 @@ def _portfolio_heat_alert(holding_heat: dict, heat_warning_pct: float = 5.0) -> 
     rows = ""
     for ticker, d in close_to_stop:
         rows += f"""
-<tr style="border-bottom:1px solid #1F3046">
-  <td style="padding:7px 10px;font-weight:700;color:#E8F0F8;font-family:monospace">
+<tr style="border-bottom:1px solid #DFE5EE">
+  <td style="padding:7px 10px;font-weight:700;color:#101826;font-family:monospace">
     {ticker.replace('.NS','')}
   </td>
-  <td style="padding:7px 10px;font-family:monospace;color:#FF8C00">{d['distance_pct']:.1f}% to stop</td>
-  <td style="padding:7px 10px;font-family:monospace;color:#9AAFC4">Stop â‚¹{d['stop']:.2f} ({d['method']})</td>
-  <td style="padding:7px 10px;font-family:monospace;color:#9AAFC4">CMP â‚¹{d['current_price']:.2f}</td>
+  <td style="padding:7px 10px;font-family:monospace;color:#B84D0A">{d['distance_pct']:.1f}% to stop</td>
+  <td style="padding:7px 10px;font-family:monospace;color:#55627A">Stop â‚¹{d['stop']:.2f} ({d['method']})</td>
+  <td style="padding:7px 10px;font-family:monospace;color:#55627A">CMP â‚¹{d['current_price']:.2f}</td>
 </tr>"""
 
     return f"""
-  <div style="background:rgba(255,140,0,0.08);border:1px solid rgba(255,140,0,0.3);
+  <div style="background:rgba(184,77,10,0.08);border:1px solid rgba(184,77,10,0.3);
               border-radius:8px;padding:12px 14px;margin-bottom:14px">
-    <div style="font-size:12px;font-weight:700;color:#FF8C00;margin-bottom:6px">
+    <div style="font-size:12px;font-weight:700;color:#B84D0A;margin-bottom:6px">
       âš  {len(close_to_stop)} position(s) within {heat_warning_pct:.0f}% of their stop
     </div>
-    <div style="font-size:11px;color:#9AAFC4;margin-bottom:10px">
+    <div style="font-size:11px;color:#55627A;margin-bottom:10px">
       These holdings are trading close to their technical stop-loss level.
       Not an automatic sell â€” a visibility flag for your own review.
     </div>
     <table style="width:100%;border-collapse:collapse;font-size:12px">
       <thead>
-        <tr style="background:#0A1018;border-bottom:1px solid #1F3046">
-          <th style="padding:7px 10px;text-align:left;color:#5E7A96;font-size:9px">TICKER</th>
-          <th style="padding:7px 10px;text-align:left;color:#5E7A96;font-size:9px">DISTANCE</th>
-          <th style="padding:7px 10px;text-align:left;color:#5E7A96;font-size:9px">STOP</th>
-          <th style="padding:7px 10px;text-align:left;color:#5E7A96;font-size:9px">CMP</th>
+        <tr style="background:#F7F9FC;border-bottom:1px solid #DFE5EE">
+          <th style="padding:7px 10px;text-align:left;color:#8895AA;font-size:9px">TICKER</th>
+          <th style="padding:7px 10px;text-align:left;color:#8895AA;font-size:9px">DISTANCE</th>
+          <th style="padding:7px 10px;text-align:left;color:#8895AA;font-size:9px">STOP</th>
+          <th style="padding:7px 10px;text-align:left;color:#8895AA;font-size:9px">CMP</th>
         </tr>
       </thead>
       <tbody>{rows}</tbody>
@@ -707,11 +831,11 @@ def _sector_concentration_section(sector_concentration: list) -> str:
         row_color = CONC_WEAK_COLOR if is_weak else CONC_COLOR
         sma50_str = f"{r['sector_sma50']:.1f}%" if r["sector_sma50"] is not None else "Î“Ã‡Ã¶"
         rows += f"""
-<tr style="border-bottom:1px solid #1F3046">
-  <td style="padding:7px 10px;font-weight:600;color:#E8F0F8">{r['sector']}</td>
+<tr style="border-bottom:1px solid #DFE5EE">
+  <td style="padding:7px 10px;font-weight:600;color:#101826">{r['sector']}</td>
   <td style="padding:7px 10px;font-family:monospace;color:{row_color}">Rs.{r['invested_value']:,.0f}</td>
   <td style="padding:7px 10px;font-family:monospace;color:{row_color}">{r['pct_of_portfolio']:.1f}%</td>
-  <td style="padding:7px 10px;font-family:monospace;color:#9AAFC4">{sma50_str}</td>
+  <td style="padding:7px 10px;font-family:monospace;color:#55627A">{sma50_str}</td>
 </tr>"""
 
     header_color = CONC_WEAK_COLOR if weak else CONC_COLOR
@@ -729,7 +853,7 @@ def _sector_concentration_section(sector_concentration: list) -> str:
     <div style="font-size:12px;font-weight:700;color:{header_color};margin-bottom:6px">
       Î“ÃœÃ» {" + ".join(label_bits)} Î“Ã‡Ã¶ Î“Ã«Ã‘{CONCENTRATION_THRESHOLD_PCT:.0f}% of portfolio in one sector
     </div>
-    <div style="font-size:11px;color:#9AAFC4;margin-bottom:10px">
+    <div style="font-size:11px;color:#55627A;margin-bottom:10px">
       â‰¡Æ’Ã¶â”¤ rows are also below {WEAK_SECTOR_SMA50_PCT:.0f}% of that sector's stocks above SMA50 Î“Ã‡Ã¶
       concentrated AND the sector itself is currently weak. â‰¡Æ’Æ’Ã­ rows are concentrated but the
       sector's breadth hasn't turned weak yet. Not an instruction to sell or rebalance Î“Ã‡Ã¶
@@ -738,11 +862,11 @@ def _sector_concentration_section(sector_concentration: list) -> str:
     </div>
     <table style="width:100%;border-collapse:collapse;font-size:12px">
       <thead>
-        <tr style="background:#0A1018;border-bottom:1px solid #1F3046">
-          <th style="padding:7px 10px;text-align:left;color:#5E7A96;font-size:9px">SECTOR</th>
-          <th style="padding:7px 10px;text-align:left;color:#5E7A96;font-size:9px">INVESTED</th>
-          <th style="padding:7px 10px;text-align:left;color:#5E7A96;font-size:9px">% OF PORTFOLIO</th>
-          <th style="padding:7px 10px;text-align:left;color:#5E7A96;font-size:9px">SECTOR SMA50 BREADTH</th>
+        <tr style="background:#F7F9FC;border-bottom:1px solid #DFE5EE">
+          <th style="padding:7px 10px;text-align:left;color:#8895AA;font-size:9px">SECTOR</th>
+          <th style="padding:7px 10px;text-align:left;color:#8895AA;font-size:9px">INVESTED</th>
+          <th style="padding:7px 10px;text-align:left;color:#8895AA;font-size:9px">% OF PORTFOLIO</th>
+          <th style="padding:7px 10px;text-align:left;color:#8895AA;font-size:9px">SECTOR SMA50 BREADTH</th>
         </tr>
       </thead>
       <tbody>{rows}</tbody>
@@ -782,7 +906,7 @@ def _signal_attribution_section(attribution: dict) -> str:
 
     def _rows_html(data: dict) -> str:
         if not data:
-            return "<tr><td colspan='5' style='padding:7px 10px;color:#5E7A96'>No data</td></tr>"
+            return "<tr><td colspan='5' style='padding:7px 10px;color:#8895AA'>No data</td></tr>"
         html = ""
         for k, s in sorted(data.items(), key=lambda x: -(x[1].get("avg_net_pnl_pct") or 0)):
             if not s:
@@ -791,12 +915,12 @@ def _signal_attribution_section(attribution: dict) -> str:
             avg   = s.get("avg_net_pnl_pct", 0)
             total = s.get("total_net_pnl", 0)
             n     = s.get("n", 0)
-            val_color = "#00D4AA" if avg >= 0 else "#FF5252"
+            val_color = "#0E7A6B" if avg >= 0 else "#C6403D"
             html += f"""
-<tr style="border-bottom:1px solid #1F3046">
-  <td style="padding:6px 10px;color:#E8F0F8;font-size:11px">{k}</td>
-  <td style="padding:6px 10px;font-family:monospace;color:#9AAFC4;font-size:11px">{n}</td>
-  <td style="padding:6px 10px;font-family:monospace;color:#9AAFC4;font-size:11px">{wr:.0f}%</td>
+<tr style="border-bottom:1px solid #DFE5EE">
+  <td style="padding:6px 10px;color:#101826;font-size:11px">{k}</td>
+  <td style="padding:6px 10px;font-family:monospace;color:#55627A;font-size:11px">{n}</td>
+  <td style="padding:6px 10px;font-family:monospace;color:#55627A;font-size:11px">{wr:.0f}%</td>
   <td style="padding:6px 10px;font-family:monospace;color:{val_color};font-size:11px">{avg:+.2f}%</td>
   <td style="padding:6px 10px;font-family:monospace;color:{val_color};font-size:11px">₹{total:,.0f}</td>
 </tr>"""
@@ -805,23 +929,23 @@ def _signal_attribution_section(attribution: dict) -> str:
     def _subsection(title: str, data: dict) -> str:
         return f"""
 <div style="margin-bottom:10px">
-  <div style="font-size:10px;font-weight:700;color:#5E7A96;text-transform:uppercase;
+  <div style="font-size:10px;font-weight:700;color:#8895AA;text-transform:uppercase;
               letter-spacing:0.1em;margin-bottom:6px">{title}</div>
   <table style="width:100%;border-collapse:collapse;font-size:11px">
     <thead>
-      <tr style="background:#0A1018;border-bottom:1px solid #1F3046">
-        <th style="padding:6px 10px;text-align:left;color:#5E7A96;font-size:9px"></th>
-        <th style="padding:6px 10px;text-align:left;color:#5E7A96;font-size:9px">N</th>
-        <th style="padding:6px 10px;text-align:left;color:#5E7A96;font-size:9px">WIN%</th>
-        <th style="padding:6px 10px;text-align:left;color:#5E7A96;font-size:9px">AVG P&L%</th>
-        <th style="padding:6px 10px;text-align:left;color:#5E7A96;font-size:9px">TOTAL P&L</th>
+      <tr style="background:#F7F9FC;border-bottom:1px solid #DFE5EE">
+        <th style="padding:6px 10px;text-align:left;color:#8895AA;font-size:9px"></th>
+        <th style="padding:6px 10px;text-align:left;color:#8895AA;font-size:9px">N</th>
+        <th style="padding:6px 10px;text-align:left;color:#8895AA;font-size:9px">WIN%</th>
+        <th style="padding:6px 10px;text-align:left;color:#8895AA;font-size:9px">AVG P&L%</th>
+        <th style="padding:6px 10px;text-align:left;color:#8895AA;font-size:9px">TOTAL P&L</th>
       </tr>
     </thead>
     <tbody>{_rows_html(data)}</tbody>
   </table>
 </div>"""
 
-    overall_color = "#00D4AA" if overall.get("avg_net_pnl_pct", 0) >= 0 else "#FF5252"
+    overall_color = "#0E7A6B" if overall.get("avg_net_pnl_pct", 0) >= 0 else "#C6403D"
     overall_avg   = overall.get("avg_net_pnl_pct", 0)
     overall_wr    = overall.get("win_rate", 0)
     overall_total = overall.get("total_net_pnl", 0)
@@ -832,16 +956,16 @@ def _signal_attribution_section(attribution: dict) -> str:
 
     return f"""
   <div style="margin-top:20px">
-    <div style="font-family:monospace;font-size:9px;letter-spacing:0.2em;color:#5E7A96;
+    <div style="font-family:monospace;font-size:9px;letter-spacing:0.2em;color:#8895AA;
                 text-transform:uppercase;margin-bottom:10px">
       Section 7 - Signal→Outcome Attribution (P4-02)
     </div>
-    <div style="background:rgba(0,212,170,0.05);border:1px solid rgba(0,212,170,0.2);
+    <div style="background:rgba(14,122,107,0.05);border:1px solid rgba(14,122,107,0.2);
                 border-radius:8px;padding:12px 14px;margin-bottom:14px">
-      <div style="font-size:12px;font-weight:700;color:#00D4AA;margin-bottom:4px">
+      <div style="font-size:12px;font-weight:700;color:#0E7A6B;margin-bottom:4px">
         Live Signal Performance — Real Money vs Scanner Picks
       </div>
-      <div style="font-size:11px;color:#9AAFC4;margin-bottom:10px">
+      <div style="font-size:11px;color:#55627A;margin-bottom:10px">
         {n_matched} matched trades out of {n_signals} scanner signals and {n_realized} broker
         trades (±5 day entry window). Win rate {overall_wr:.0f}% |
         Avg net P&L <span style="color:{overall_color}">{overall_avg:+.2f}%</span> |
@@ -863,8 +987,8 @@ def _build_html(t1, t2, t3, all_r, near_bo, defensive,
                 sector_concentration=None, holding_heat=None,
                 signal_attribution=None) -> str:
 
-    mcol = MACRO_COLOR.get(macro_state, "#FFB300")
-    ecol = EVENT_COLOR.get(event_risk,  "#5E7A96")
+    mcol = MACRO_COLOR.get(macro_state, "#96690A")
+    ecol = EVENT_COLOR.get(event_risk,  "#8895AA")
     exit_alerts        = exit_alerts or []
     trim_signals       = trim_signals or []
     add_on             = add_on or []
@@ -882,57 +1006,65 @@ def _build_html(t1, t2, t3, all_r, near_bo, defensive,
     dhan_banner = ""
     if dhan_status.get("checked") and not dhan_status.get("available"):
         dhan_banner = f"""
-  <div style="background:rgba(255,82,82,0.08);border:1px solid rgba(255,82,82,0.3);
-              border-radius:8px;padding:10px 14px;margin-bottom:16px;font-size:12px;color:#FF5252">
+  <div style="background:rgba(198,64,61,0.08);border:1px solid rgba(198,64,61,0.3);
+              border-radius:8px;padding:10px 14px;margin-bottom:16px;font-size:12px;color:#C6403D">
     <strong>Î“ÃœÃ¡ Dhan unavailable this run:</strong> {dhan_status.get("message", "reason unknown")}
-    <span style="color:#9AAFC4"> Î“Ã‡Ã¶ running on tvDatafeed/Yahoo fallback. Refresh at web.dhan.co.</span>
+    <span style="color:#55627A"> Î“Ã‡Ã¶ running on tvDatafeed/Yahoo fallback. Refresh at web.dhan.co.</span>
   </div>"""
 
     # Section 1: trade cards
     tier_cards = ""
     if t1:
         for r in t1[:8]:
-            tier_cards += _tier_card(r, "TIER 1 - TOP PICK", "#00E676")
+            tier_cards += _tier_card(r, "TIER 1 - TOP PICK", "#0E8F63")
     else:
         tier_cards += f"""
-<div style="background:#070B11;border:1px solid #1F3046;border-radius:8px;
-            padding:20px;text-align:center;color:#5E7A96;margin-bottom:12px">
+<div style="background:#F7F9FC;border:1px solid #DFE5EE;border-radius:8px;
+            padding:20px;text-align:center;color:#8895AA;margin-bottom:12px">
   No stocks cleared the Tier 1 gate today. Regime {regime} penalty ({penalty} pts).<br>
-  <span style="color:#FFB300">Stay in cash. Capital preservation is the priority.</span>
+  <span style="color:#96690A">Stay in cash. Capital preservation is the priority.</span>
 </div>"""
 
     if t2:
         for r in t2[:3]:
-            tier_cards += _tier_card(r, "TIER 2 - AGGRESSIVE", "#F0B429")
+            tier_cards += _tier_card(r, "TIER 2 - AGGRESSIVE", "#A8680E")
     if t3:
         for r in t3[:2]:
-            tier_cards += _tier_card(r, "TIER 3 - WATCHLIST", "#4D9EFF")
+            tier_cards += _tier_card(r, "TIER 3 - WATCHLIST", "#2A5FB0")
+
+    # Section 1a: Tier 1/2 at-a-glance heatmap -- sits above the existing
+    # Section 1 cards, doesn't replace them. Tier 3 excluded: those are
+    # setup-forming watchlist names, not gate-cleared/one-condition-missing
+    # picks, so ranking them on the same pass/fail columns wouldn't mean
+    # the same thing.
+    heatmap_html = (_heatmap_table(t1[:8], "TIER 1 - TOP PICK",   "#0E8F63")
+                     + _heatmap_table(t2[:3], "TIER 2 - AGGRESSIVE", "#A8680E"))
 
     # Section 2: watchlist table Î“Ã‡Ã¶ EXCLUDE T1 tickers to avoid duplicates
     t1_tickers = {r.ticker for r in t1}
     table_stocks = [r for r in all_r if r.ticker not in t1_tickers][:20]
     top20_rows = ""
     for i, r in enumerate(table_stocks, 1):
-        bg      = "#0A1018" if i % 2 == 0 else "transparent"
-        tcol    = {"1": "#00E676", "2": "#F0B429", "3": "#4D9EFF"}.get(str(r.tier), "#5E7A96")
+        bg      = "#F7F9FC" if i % 2 == 0 else "transparent"
+        tcol    = {"1": "#0E8F63", "2": "#A8680E", "3": "#2A5FB0"}.get(str(r.tier), "#8895AA")
         bq      = getattr(r, "breakout_quality", "MINOR") or "MINOR"
-        bq_col  = BQ_COLOR.get(bq, "#FFB300")
+        bq_col  = BQ_COLOR.get(bq, "#96690A")
         top20_rows += f"""
 <tr style="background:{bg}">
   <td style="padding:6px 10px;font-family:monospace;font-size:10px;color:{tcol}">T{r.tier}</td>
-  <td style="padding:6px 10px;font-weight:600;color:#E8F0F8">{r.ticker.replace('.NS','')}</td>
-  <td style="padding:6px 10px;color:#9AAFC4;font-size:11px">
+  <td style="padding:6px 10px;font-weight:600;color:#101826">{r.ticker.replace('.NS','')}</td>
+  <td style="padding:6px 10px;color:#55627A;font-size:11px">
     {r.pattern}
     <span style="color:{bq_col};font-size:9px;margin-left:4px">[{bq}]</span>
   </td>
   <td style="padding:6px 10px;font-family:monospace;color:{tcol}">{r.total_score}</td>
-  <td style="padding:6px 10px;font-family:monospace;color:#9AAFC4">{r.rs_percentile:.0f}%</td>
-  <td style="padding:6px 10px;font-family:monospace;color:#FFB300">{r.rvol:.1f}x</td>
-  <td style="padding:6px 10px;font-family:monospace;color:#00D4AA">Rs.{r.entry:.1f}</td>
-  <td style="padding:6px 10px;font-family:monospace;color:#FF5252">Rs.{r.stop_loss:.1f}</td>
-  <td style="padding:6px 10px;font-family:monospace;color:#F0B429">Rs.{r.target1:.1f}</td>
-  <td style="padding:6px 10px;font-family:monospace;color:#00E676">{r.rrr:.1f}x</td>
-  <td style="padding:6px 10px;font-size:10px;color:#5E7A96">{r.universe}</td>
+  <td style="padding:6px 10px;font-family:monospace;color:#55627A">{r.rs_percentile:.0f}%</td>
+  <td style="padding:6px 10px;font-family:monospace;color:#96690A">{r.rvol:.1f}x</td>
+  <td style="padding:6px 10px;font-family:monospace;color:#0E7A6B">Rs.{r.entry:.1f}</td>
+  <td style="padding:6px 10px;font-family:monospace;color:#C6403D">Rs.{r.stop_loss:.1f}</td>
+  <td style="padding:6px 10px;font-family:monospace;color:#A8680E">Rs.{r.target1:.1f}</td>
+  <td style="padding:6px 10px;font-family:monospace;color:#0E8F63">{r.rrr:.1f}x</td>
+  <td style="padding:6px 10px;font-size:10px;color:#8895AA">{r.universe}</td>
 </tr>"""
 
     ad   = bd.get("ad_ratio", "-")
@@ -940,7 +1072,7 @@ def _build_html(t1, t2, t3, all_r, near_bo, defensive,
     nh   = bd.get("new_highs", "-")
     nl   = bd.get("new_lows", "-")
     bbar = int(breadth / 10 * 100)
-    bcol = "#00E676" if breadth >= 7 else "#FFB300" if breadth >= 4 else "#FF5252"
+    bcol = "#0E8F63" if breadth >= 7 else "#96690A" if breadth >= 4 else "#C6403D"
 
     near_section       = _near_breakout_section(near_bo)
     defensive_section  = _defensive_section(defensive, regime)   # NEW
@@ -962,18 +1094,18 @@ def _build_html(t1, t2, t3, all_r, near_bo, defensive,
     return f"""<!DOCTYPE html>
 <html>
 <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"></head>
-<body style="margin:0;padding:20px;background:#070B11;font-family:'Segoe UI',Arial,sans-serif">
+<body style="margin:0;padding:20px;background:#EEF1F6;font-family:'Segoe UI',Arial,sans-serif">
 <div style="max-width:700px;margin:0 auto">
 
-<div style="background:#0A1422;padding:22px 28px 18px;border-radius:12px 12px 0 0;
-            border:1px solid #1F3046;border-bottom:none">
-  <div style="font-family:monospace;font-size:10px;letter-spacing:0.2em;color:#00D4AA;
+<div style="background:#FFFFFF;padding:22px 28px 18px;border-radius:12px 12px 0 0;
+            border:1px solid #DFE5EE;border-bottom:none">
+  <div style="font-family:monospace;font-size:10px;letter-spacing:0.2em;color:#0E7A6B;
               text-transform:uppercase;margin-bottom:6px">
     NSE Momentum Discovery - v6.2 - {date_str}
   </div>
-  <div style="font-size:13px;color:#9AAFC4;margin-bottom:6px">Hi {RECIPIENT_NAME},</div>
-  <div style="font-size:22px;font-weight:800;color:#FFFFFF;margin-bottom:4px">Daily Intelligence Report</div>
-  <div style="font-size:11px;color:#5E7A96;margin-bottom:12px">
+  <div style="font-size:13px;color:#55627A;margin-bottom:6px">Hi {RECIPIENT_NAME},</div>
+  <div style="font-size:22px;font-weight:800;color:#101826;margin-bottom:4px">Daily Intelligence Report</div>
+  <div style="font-size:11px;color:#8895AA;margin-bottom:12px">
     500 stocks - 3 universes - 3 validated patterns (16 pruned, evidence-based) - All free data
   </div>
   <div style="display:flex;gap:8px;flex-wrap:wrap">
@@ -982,21 +1114,21 @@ def _build_html(t1, t2, t3, all_r, near_bo, defensive,
         REGIME {regime} - {rlbl}
       </span>
     </div>
-    <div style="background:rgba(0,212,170,0.08);border:1px solid rgba(0,212,170,0.2);
+    <div style="background:rgba(14,122,107,0.08);border:1px solid rgba(14,122,107,0.2);
                 border-radius:20px;padding:5px 14px">
-      <span style="font-family:monospace;font-size:10px;color:#9AAFC4">Breadth {breadth}/10</span>
+      <span style="font-family:monospace;font-size:10px;color:#55627A">Breadth {breadth}/10</span>
     </div>
-    <div style="background:rgba(0,0,0,0.2);border:1px solid rgba(255,255,255,0.1);
+    <div style="background:rgba(16,24,38,0.2);border:1px solid rgba(16,24,38,0.1);
                 border-radius:20px;padding:5px 14px">
       <span style="font-family:monospace;font-size:10px;color:{mcol}">Macro: {macro_state}</span>
     </div>
-    <div style="background:rgba(0,0,0,0.2);border:1px solid rgba(255,255,255,0.1);
+    <div style="background:rgba(16,24,38,0.2);border:1px solid rgba(16,24,38,0.1);
                 border-radius:20px;padding:5px 14px">
       <span style="font-family:monospace;font-size:10px;color:{ecol}">Event: {event_risk}</span>
     </div>
-    <div style="background:rgba(240,180,41,0.06);border:1px solid rgba(240,180,41,0.2);
+    <div style="background:rgba(168,104,14,0.06);border:1px solid rgba(168,104,14,0.2);
                 border-radius:20px;padding:5px 14px">
-      <span style="font-family:monospace;font-size:10px;color:#9AAFC4">
+      <span style="font-family:monospace;font-size:10px;color:#55627A">
         {len(t1)} Picks (cap {t1_cap}) - {len(t2)} Watchlist - {len(near_bo)} Near-breakout
         {"" if not defensive else f" - {len(defensive)} Defensive"}
       </span>
@@ -1005,72 +1137,74 @@ def _build_html(t1, t2, t3, all_r, near_bo, defensive,
   </div>
 </div>
 
-<div style="background:#0D1520;padding:20px 28px;border:1px solid #1F3046;
+<div style="background:#FFFFFF;padding:20px 28px;border:1px solid #DFE5EE;
             border-top:none;border-radius:0 0 12px 12px">
 
   <div style="background:{rbg};border:1px solid {rborder};border-radius:8px;
               padding:10px 14px;margin-bottom:20px;font-size:12px;color:{rcol}">
     <strong>Regime {regime}:</strong> {rnote}
-    {"" if penalty == 0 else f'<span style="color:#9AAFC4"> - Score penalty: {penalty} pts applied.</span>'}
+    {"" if penalty == 0 else f'<span style="color:#55627A"> - Score penalty: {penalty} pts applied.</span>'}
   </div>
   {dhan_banner}
 
-  <div style="font-family:monospace;font-size:9px;letter-spacing:0.2em;color:#5E7A96;
+  {heatmap_html}
+
+  <div style="font-family:monospace;font-size:9px;letter-spacing:0.2em;color:#8895AA;
               text-transform:uppercase;margin-bottom:10px">
     Section 1 - Evidence-Based Trade Cards
   </div>
   {tier_cards}
 
-  <div style="font-family:monospace;font-size:9px;letter-spacing:0.2em;color:#5E7A96;
+  <div style="font-family:monospace;font-size:9px;letter-spacing:0.2em;color:#8895AA;
               text-transform:uppercase;margin:24px 0 10px">
     Section 2 - Top 20 Watchlist (T2/T3 only - T1 picks shown above)
   </div>
   <div style="overflow-x:auto">
   <table style="width:100%;border-collapse:collapse;font-size:12px">
     <thead>
-      <tr style="background:#0A1018;border-bottom:1px solid #1F3046">
-        <th style="padding:8px 10px;text-align:left;color:#5E7A96;font-size:9px">TIER</th>
-        <th style="padding:8px 10px;text-align:left;color:#5E7A96;font-size:9px">TICKER</th>
-        <th style="padding:8px 10px;text-align:left;color:#5E7A96;font-size:9px">PATTERN</th>
-        <th style="padding:8px 10px;text-align:left;color:#5E7A96;font-size:9px">SCORE</th>
-        <th style="padding:8px 10px;text-align:left;color:#5E7A96;font-size:9px">RS</th>
-        <th style="padding:8px 10px;text-align:left;color:#5E7A96;font-size:9px" title="End-of-day RVOL Î“Ã‡Ã¶ see tier cards above">RVOL (EOD)</th>
-        <th style="padding:8px 10px;text-align:left;color:#5E7A96;font-size:9px">ENTRY</th>
-        <th style="padding:8px 10px;text-align:left;color:#5E7A96;font-size:9px">SL</th>
-        <th style="padding:8px 10px;text-align:left;color:#5E7A96;font-size:9px">T1</th>
-        <th style="padding:8px 10px;text-align:left;color:#5E7A96;font-size:9px">R:R</th>
-        <th style="padding:8px 10px;text-align:left;color:#5E7A96;font-size:9px">UNI</th>
+      <tr style="background:#F7F9FC;border-bottom:1px solid #DFE5EE">
+        <th style="padding:8px 10px;text-align:left;color:#8895AA;font-size:9px">TIER</th>
+        <th style="padding:8px 10px;text-align:left;color:#8895AA;font-size:9px">TICKER</th>
+        <th style="padding:8px 10px;text-align:left;color:#8895AA;font-size:9px">PATTERN</th>
+        <th style="padding:8px 10px;text-align:left;color:#8895AA;font-size:9px">SCORE</th>
+        <th style="padding:8px 10px;text-align:left;color:#8895AA;font-size:9px">RS</th>
+        <th style="padding:8px 10px;text-align:left;color:#8895AA;font-size:9px" title="End-of-day RVOL Î“Ã‡Ã¶ see tier cards above">RVOL (EOD)</th>
+        <th style="padding:8px 10px;text-align:left;color:#8895AA;font-size:9px">ENTRY</th>
+        <th style="padding:8px 10px;text-align:left;color:#8895AA;font-size:9px">SL</th>
+        <th style="padding:8px 10px;text-align:left;color:#8895AA;font-size:9px">T1</th>
+        <th style="padding:8px 10px;text-align:left;color:#8895AA;font-size:9px">R:R</th>
+        <th style="padding:8px 10px;text-align:left;color:#8895AA;font-size:9px">UNI</th>
       </tr>
     </thead>
     <tbody>{top20_rows}</tbody>
   </table>
   </div>
 
-  <div style="font-family:monospace;font-size:9px;letter-spacing:0.2em;color:#5E7A96;
+  <div style="font-family:monospace;font-size:9px;letter-spacing:0.2em;color:#8895AA;
               text-transform:uppercase;margin:24px 0 10px">
     Section 3 - Market Intelligence
   </div>
   <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">
-    <div style="background:#0E1622;border:1px solid #1F3046;border-radius:8px;padding:14px">
-      <div style="font-size:9px;color:#5E7A96;text-transform:uppercase;margin-bottom:8px">Market Breadth</div>
-      <div style="height:4px;background:#1F3046;border-radius:2px;margin-bottom:8px">
+    <div style="background:#FFFFFF;border:1px solid #DFE5EE;border-radius:8px;padding:14px">
+      <div style="font-size:9px;color:#8895AA;text-transform:uppercase;margin-bottom:8px">Market Breadth</div>
+      <div style="height:4px;background:#DFE5EE;border-radius:2px;margin-bottom:8px">
         <div style="height:4px;width:{bbar}%;background:{bcol};border-radius:2px"></div>
       </div>
       <div style="font-family:monospace;font-size:12px;color:{bcol}">{breadth}/10</div>
-      <div style="font-size:11px;color:#9AAFC4;margin-top:6px">
+      <div style="font-size:11px;color:#55627A;margin-top:6px">
         A/D Ratio: {ad}<br>Above 50-EMA: {ab50}%<br>52w Highs/Lows: {nh}/{nl}
       </div>
     </div>
-    <div style="background:#0E1622;border:1px solid #1F3046;border-radius:8px;padding:14px">
-      <div style="font-size:9px;color:#5E7A96;text-transform:uppercase;margin-bottom:8px">Regime Signal</div>
+    <div style="background:#FFFFFF;border:1px solid #DFE5EE;border-radius:8px;padding:14px">
+      <div style="font-size:9px;color:#8895AA;text-transform:uppercase;margin-bottom:8px">Regime Signal</div>
       <div style="font-family:monospace;font-size:18px;font-weight:700;color:{rcol}">{regime}</div>
       <div style="font-size:12px;color:{rcol};margin-top:2px">{rlbl}</div>
-      <div style="font-size:11px;color:#9AAFC4;margin-top:8px">{rnote}</div>
+      <div style="font-size:11px;color:#55627A;margin-top:8px">{rnote}</div>
     </div>
-    <div style="background:#0E1622;border:1px solid #1F3046;border-radius:8px;padding:14px">
-      <div style="font-size:9px;color:#5E7A96;text-transform:uppercase;margin-bottom:8px">Macro / Event</div>
+    <div style="background:#FFFFFF;border:1px solid #DFE5EE;border-radius:8px;padding:14px">
+      <div style="font-size:9px;color:#8895AA;text-transform:uppercase;margin-bottom:8px">Macro / Event</div>
       <div style="font-family:monospace;font-size:14px;font-weight:700;color:{mcol}">{macro_state}</div>
-      <div style="font-size:11px;color:#9AAFC4;margin-top:4px">T1 cap: {t1_cap} stocks</div>
+      <div style="font-size:11px;color:#55627A;margin-top:4px">T1 cap: {t1_cap} stocks</div>
       <div style="margin-top:8px;font-size:11px;color:{ecol}">Event: {event_risk}</div>
     </div>
   </div>
@@ -1081,8 +1215,8 @@ def _build_html(t1, t2, t3, all_r, near_bo, defensive,
 
   {position_section}
 
-  <div style="margin-top:24px;padding-top:16px;border-top:1px solid #1F3046;
-              font-size:10px;color:#2D4055;text-align:center;line-height:1.8">
+  <div style="margin-top:24px;padding-top:16px;border-top:1px solid #DFE5EE;
+              font-size:10px;color:#8895AA;text-align:center;line-height:1.8">
     NSE Momentum Scanner v6.2 - 500 stocks - All free data - Evidence-based<br>
     T1 = Gate cleared. T2 = One condition missing. T3 = Setup forming.<br>
     Near-breakout = Set alert only, do not buy until breakout confirmed.<br>
