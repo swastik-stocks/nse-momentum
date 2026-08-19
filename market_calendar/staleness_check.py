@@ -330,23 +330,45 @@ def is_cas_eligible(ticker: str, cas_symbols: set = None) -> bool:
     return underlying in symbols
 
 
+CLOSE_PRICE_TOLERANCE_MINUTES = 5  # a candle timestamped just before the close still counts as "the close"
+
+
 def verify_closing_price_freshness(ticker: str, fetched_at: Optional[datetime],
                                     as_of: datetime, cas_symbols: set = None,
                                     max_staleness_minutes: float = 10.0) -> DataProvenance:
     """
     CAS-aware wrapper around verify_intraday_freshness() for callers that
     need today's CLOSING price specifically (BTST-style checks), not just
-    "some recent price". For a CAS-eligible name during the 15:15-15:35
-    auction window, continuous-session data is frozen and NOT yet the real
-    close -- no fetch timestamp can make that trustworthy, so this returns
-    ok=False unconditionally in that window regardless of how fresh
-    `fetched_at` looks. Outside that window (before 15:15, or after 15:35
-    once the auction has matched) and for non-CAS names, this delegates
-    straight to verify_intraday_freshness() with unchanged behaviour --
-    existing callers/tests of that function are unaffected.
+    "some recent price".
+
+    Two special cases layered on top of verify_intraday_freshness():
+
+    1. CAS-eligible name during the 15:15-15:35 auction window: continuous-
+       session data is frozen and NOT yet the real close -- no fetch
+       timestamp can make that trustworthy, so this returns ok=False
+       unconditionally regardless of how fresh `fetched_at` looks.
+
+    2. [2026-08-19, fix same day as the first version] Post-close grace:
+       once a name's market has closed for the day (15:30 for non-CAS,
+       15:35 once the CAS auction has matched), its LAST print for that
+       session is, by definition, the close -- there will never be a
+       fresher one. verify_intraday_freshness()'s generic "fetched within
+       the last N minutes" rule would otherwise reject every post-close
+       BTST check as "stale" purely because wall-clock time keeps moving
+       while the price rightfully doesn't -- caught in production on
+       2026-08-19 when this blocked all 3 non-CAS BTST candidates at
+       15:51. A `fetched_at` dated today and timestamped at/after
+       (close - CLOSE_PRICE_TOLERANCE_MINUTES) is accepted as the close
+       regardless of elapsed time since. Before the close, or for a
+       `fetched_at` from an earlier point in the day (e.g. a stuck feed
+       that never advanced), this still delegates to the normal N-minute
+       freshness bound -- only genuinely-at-the-close prints get the
+       grace.
     """
     as_of_naive = as_of.replace(tzinfo=None) if as_of.tzinfo is not None else as_of
-    if is_cas_eligible(ticker, cas_symbols) and CAS_CONTINUOUS_CLOSE <= as_of_naive.time() < CAS_AUCTION_MATCH_END:
+    is_cas = is_cas_eligible(ticker, cas_symbols)
+
+    if is_cas and CAS_CONTINUOUS_CLOSE <= as_of_naive.time() < CAS_AUCTION_MATCH_END:
         return DataProvenance(
             source_name="closing_price", ok=False,
             reason=(f"{ticker} is CAS-eligible (has F&O contracts) and it's "
@@ -355,6 +377,24 @@ def verify_closing_price_freshness(ticker: str, fetched_at: Optional[datetime],
                     f"exists for this name right now"),
             fetched_at=fetched_at,
         )
+
+    close_time = CAS_AUCTION_MATCH_END if is_cas else NON_CAS_CLOSE
+    if fetched_at is not None:
+        fetched_at_naive = fetched_at.replace(tzinfo=None) if fetched_at.tzinfo is not None else fetched_at
+        close_tolerance = (datetime.combine(fetched_at_naive.date(), close_time)
+                            - timedelta(minutes=CLOSE_PRICE_TOLERANCE_MINUTES)).time()
+        if (as_of_naive.time() >= close_time
+                and fetched_at_naive.date() == as_of_naive.date()
+                and fetched_at_naive.time() >= close_tolerance):
+            return DataProvenance(
+                source_name="closing_price", ok=True,
+                reason=(f"{fetched_at_naive.strftime('%H:%M')} print is at/after today's "
+                        f"{'CAS auction' if is_cas else 'continuous-session'} close "
+                        f"({close_time.strftime('%H:%M')}) -- this IS the closing price, "
+                        f"elapsed time since then doesn't make it stale"),
+                fetched_at=fetched_at,
+            )
+
     return verify_intraday_freshness(fetched_at, as_of, max_staleness_minutes=max_staleness_minutes,
                                       source_name="closing_price")
 

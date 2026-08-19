@@ -109,6 +109,43 @@ def test_cas_name_before_continuous_close_uses_normal_freshness_rules():
 
 
 # ─────────────────────────────────────────────────────────────────────────
+# Post-close grace (bug caught in production 2026-08-19, 15:51 checkpoint):
+# a genuinely-at-the-close print must NOT be rejected as "stale" purely
+# because wall-clock time keeps moving after the market shuts for that name.
+# ─────────────────────────────────────────────────────────────────────────
+
+def test_non_cas_name_close_print_stays_ok_well_past_the_10min_bound():
+    from market_calendar.staleness_check import verify_closing_price_freshness
+    cas_symbols = {"RADICO"}  # WELCORP not in this set -- non-CAS
+    as_of = datetime(2026, 8, 19, 15, 51, tzinfo=IST)  # 21min after the 15:30 close
+    fetched_at = datetime(2026, 8, 19, 15, 29)  # last real print just before close
+    prov = verify_closing_price_freshness("WELCORP.NS", fetched_at, as_of, cas_symbols=cas_symbols)
+    assert prov.ok is True, "a genuinely-at-the-close print must not be rejected just because time has passed"
+
+
+def test_cas_name_auction_print_stays_ok_well_past_the_10min_bound():
+    from market_calendar.staleness_check import verify_closing_price_freshness
+    cas_symbols = {"RADICO"}
+    as_of = datetime(2026, 8, 19, 15, 51, tzinfo=IST)  # 15min after the 15:35 auction close
+    fetched_at = datetime(2026, 8, 19, 15, 36)  # print right after auction matches
+    prov = verify_closing_price_freshness("RADICO.NS", fetched_at, as_of, cas_symbols=cas_symbols)
+    assert prov.ok is True
+
+
+def test_stuck_feed_from_mid_session_is_still_caught_post_close():
+    """The post-close grace must only apply to a print genuinely AT the
+    close -- a feed that silently stopped updating mid-session (and never
+    advanced) must still be flagged, not waved through just because it's
+    now past the close."""
+    from market_calendar.staleness_check import verify_closing_price_freshness
+    cas_symbols = {"RADICO"}
+    as_of = datetime(2026, 8, 19, 15, 51, tzinfo=IST)
+    fetched_at = datetime(2026, 8, 19, 11, 0)  # stuck since 11am
+    prov = verify_closing_price_freshness("WELCORP.NS", fetched_at, as_of, cas_symbols=cas_symbols)
+    assert prov.ok is False
+
+
+# ─────────────────────────────────────────────────────────────────────────
 # classify_btst gate 0c
 # ─────────────────────────────────────────────────────────────────────────
 
