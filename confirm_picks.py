@@ -51,7 +51,8 @@ from email.mime.text import MIMEText
 from dotenv import load_dotenv
 
 from market_calendar.staleness_check import (check_staleness, StaleDataError,
-                                              get_code_provenance, verify_intraday_freshness)
+                                              get_code_provenance, verify_intraday_freshness,
+                                              verify_closing_price_freshness)
 from database.schema import get_connection, init_all_tables
 import dhan_rvol
 from agents.intraday_vol_adjusted_agent import IntradayVolAdjustedAgent
@@ -1026,7 +1027,8 @@ def days_to_next_earnings(ticker_raw: str, as_of: date = None) -> int | None:
 def classify_btst(pick: dict, cmp: float | None, day_high: float | None,
                    rvol: float, rvol_src: str,
                    asm_gsm_symbols: set | None = None,
-                   days_to_earnings: int | None = None) -> dict:
+                   days_to_earnings: int | None = None,
+                   price_provenance=None) -> dict:
     """
     15:15 BTST scan classification -- separate from the morning entry
     classify() above. Only ever called on tickers that were already
@@ -1049,6 +1051,15 @@ def classify_btst(pick: dict, cmp: float | None, day_high: float | None,
           failed) also blocks, same reasoning as ASM/GSM. -1 means
           "checked, nothing announced" -- the normal, safe case (see
           days_to_next_earnings() docstring) -- NOT treated as a block.
+      0c. Closing-price provenance -- [2026-08-19, CAS] NSE's Closing
+          Auction Session means F&O-eligible names stop continuous trading
+          at 15:15 and their real close isn't set until the 15:30-15:35
+          auction matches (see market_calendar.staleness_check's CAS
+          constants). `price_provenance` (a DataProvenance from
+          verify_closing_price_freshness(), passed in by run_btst_scan)
+          being not-ok means the CMP this call received is a frozen
+          continuous-session print, not the actual close -- blocks for the
+          same "unverified must not silently pass" reason as 0a/0b.
 
     Then the two original gates (Closing Strength + R:R Favorability, per
     the GLAND example that motivated this):
@@ -1095,6 +1106,14 @@ def classify_btst(pick: dict, cmp: float | None, day_high: float | None,
             "action": f"Earnings-eve risk ({note}) — asymmetric gap risk, do not hold overnight. Square off today.",
             "label": "EARNINGS EVE" if verified else "EARNINGS UNVERIFIED",
             "color": "#ffffff", "bg": "#dc2626",
+        }
+
+    if price_provenance is not None and not price_provenance.ok:
+        return {
+            "status": "BTST_UNVERIFIED", "ltp": cmp, "rvol": rvol, "rvol_src": rvol_src,
+            "pct_off_high": None, "pct_captured": None,
+            "action": f"Closing price not yet trustworthy — {price_provenance.reason}. Re-check after the auction matches.",
+            "label": "AWAITING CLOSE", "color": "#ffffff", "bg": "#f59e0b",
         }
 
     if cmp <= sl:
@@ -1936,13 +1955,18 @@ def run_btst_scan(today_iso: str, today_str: str, run_time: str):
             ticker_raw += ".NS"
 
         log.info(f"  Checking {ticker_key} for BTST...")
-        cmp, _cmp_fetched_at, _cmp_src, _cmp_suspect = get_live_price(ticker_raw)
+        cmp, cmp_fetched_at, _cmp_src, _cmp_suspect = get_live_price(ticker_raw)
         rvol, rvol_src, _rvol_elapsed = get_rvol(ticker_raw, as_of=now_ist)
         day_high, day_low, dh_src  = get_intraday_high_low(ticker_raw, as_of=now_ist)
         days_to_earnings           = days_to_next_earnings(ticker_raw, as_of=now_ist.date())
+        # [2026-08-19, CAS] Closing price isn't trustworthy for an
+        # F&O-eligible name until the 15:30-15:35 auction matches -- see
+        # classify_btst's gate 0c and market_calendar.staleness_check.
+        price_provenance = verify_closing_price_freshness(ticker_raw, cmp_fetched_at, now_ist)
         c = classify_btst(pick, cmp, day_high, rvol, rvol_src,
                            asm_gsm_symbols=asm_gsm_symbols,
-                           days_to_earnings=days_to_earnings)
+                           days_to_earnings=days_to_earnings,
+                           price_provenance=price_provenance)
 
         # [2026-08-13, PAPER-MODE] Informational only — see
         # compute_intraday_diagnostic()'s docstring. Never affects `c`

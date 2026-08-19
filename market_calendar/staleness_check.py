@@ -17,7 +17,8 @@ import previous_trading_day() + check_staleness() into confirm_picks.py.
 import os
 import subprocess
 from dataclasses import dataclass, field
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, time as dtime, timedelta
+from functools import lru_cache
 from pathlib import Path
 from typing import Optional
 
@@ -256,5 +257,105 @@ def get_code_provenance() -> dict:
         "is_cloud_runner": os.environ.get("GITHUB_ACTIONS", "").lower() == "true",
         "runner":         runner,
     }
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Closing Auction Session (CAS) awareness
+# ─────────────────────────────────────────────────────────────────────────────
+# NSE introduced CAS for F&O-eligible stocks (live since the circulars dated
+# 2026-01-19 through 2026-05-29; see nseindia.com/static/products-services/
+# closing-auction-session). For those names, continuous trading stops at
+# 15:15 IST -- NOT 15:30 -- and the real closing price is only set by a
+# 15:30-15:35 call-auction match. Reading a "live price" during 15:15-15:35
+# for a CAS name is reading a frozen continuous-session print, not the
+# actual close. Non-F&O names are unaffected and still trade continuously to
+# 15:30 as before.
+
+CAS_CONTINUOUS_CLOSE  = dtime(15, 15)  # continuous trading stops here for CAS names
+CAS_AUCTION_MATCH_END = dtime(15, 35)  # auction match completes; real close now exists
+NON_CAS_CLOSE         = dtime(15, 30)  # unaffected names: unchanged, existing assumption
+
+_DEFAULT_SCRIP_MASTER = Path(__file__).resolve().parent.parent / "data" / "dhan_scrip_master.csv"
+
+
+@lru_cache(maxsize=4)
+def _load_cas_eligible_symbols_cached(scrip_master_path: str) -> frozenset:
+    symbols = set()
+    try:
+        import csv
+        with open(scrip_master_path, encoding="utf-8", errors="replace") as f:
+            for row in csv.DictReader(f):
+                if row.get("SEM_EXM_EXCH_ID") != "NSE" or row.get("SEM_SEGMENT") != "D":
+                    continue
+                if row.get("SEM_INSTRUMENT_NAME") not in ("FUTSTK", "OPTSTK"):
+                    continue
+                underlying = row.get("SEM_TRADING_SYMBOL", "").split("-")[0].strip()
+                if underlying:
+                    symbols.add(underlying)
+    except Exception:
+        return frozenset()
+    return frozenset(symbols)
+
+
+def load_cas_eligible_symbols(scrip_master_path: Path = None) -> set:
+    """
+    Parses the Dhan scrip master for NSE stock-derivative rows (FUTSTK/
+    OPTSTK -- index derivatives FUTIDX/OPTIDX don't imply CAS eligibility
+    for an individual underlying) and returns the set of underlying trading
+    symbols that carry F&O contracts, i.e. are CAS-eligible.
+
+    Cached per resolved path (the scrip master is itself refreshed at most
+    once a day elsewhere in the pipeline, so re-parsing per call would be
+    pure waste) -- keyed on path specifically so a call with a different or
+    missing path never silently returns a previous call's result for a
+    different file. Returns an empty set (never raises) if the file is
+    missing or unparseable -- callers must treat an empty result as "can't
+    verify CAS eligibility", not "definitely not CAS-eligible", the same
+    unverifiable-is-not-verified convention as the rest of this module.
+    """
+    path = scrip_master_path or _DEFAULT_SCRIP_MASTER
+    return set(_load_cas_eligible_symbols_cached(str(path)))
+
+
+def is_cas_eligible(ticker: str, cas_symbols: set = None) -> bool:
+    """
+    True if `ticker` (with or without the .NS suffix) has F&O contracts and
+    is therefore subject to the Closing Auction Session. Uses the cached
+    scrip-master-derived set from load_cas_eligible_symbols() unless a set
+    is passed explicitly (tests, or a caller iterating many tickers that
+    wants to load the set once itself).
+    """
+    symbols = cas_symbols if cas_symbols is not None else load_cas_eligible_symbols()
+    underlying = ticker.replace(".NS", "").strip()
+    return underlying in symbols
+
+
+def verify_closing_price_freshness(ticker: str, fetched_at: Optional[datetime],
+                                    as_of: datetime, cas_symbols: set = None,
+                                    max_staleness_minutes: float = 10.0) -> DataProvenance:
+    """
+    CAS-aware wrapper around verify_intraday_freshness() for callers that
+    need today's CLOSING price specifically (BTST-style checks), not just
+    "some recent price". For a CAS-eligible name during the 15:15-15:35
+    auction window, continuous-session data is frozen and NOT yet the real
+    close -- no fetch timestamp can make that trustworthy, so this returns
+    ok=False unconditionally in that window regardless of how fresh
+    `fetched_at` looks. Outside that window (before 15:15, or after 15:35
+    once the auction has matched) and for non-CAS names, this delegates
+    straight to verify_intraday_freshness() with unchanged behaviour --
+    existing callers/tests of that function are unaffected.
+    """
+    as_of_naive = as_of.replace(tzinfo=None) if as_of.tzinfo is not None else as_of
+    if is_cas_eligible(ticker, cas_symbols) and CAS_CONTINUOUS_CLOSE <= as_of_naive.time() < CAS_AUCTION_MATCH_END:
+        return DataProvenance(
+            source_name="closing_price", ok=False,
+            reason=(f"{ticker} is CAS-eligible (has F&O contracts) and it's "
+                    f"{as_of_naive.strftime('%H:%M')} -- the 15:15-15:35 closing "
+                    f"auction hasn't matched yet, so no trustworthy closing price "
+                    f"exists for this name right now"),
+            fetched_at=fetched_at,
+        )
+    return verify_intraday_freshness(fetched_at, as_of, max_staleness_minutes=max_staleness_minutes,
+                                      source_name="closing_price")
 
 
