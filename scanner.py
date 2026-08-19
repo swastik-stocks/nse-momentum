@@ -10,6 +10,22 @@ import sys, logging, json, argparse
 from datetime import datetime
 from pathlib import Path
 
+# [2026-08-18] Windows consoles default to cp1252, which can't encode the
+# Unicode box-drawing/checkmark characters used in a few log/print
+# statements elsewhere in this pipeline (market_breadth_agent.py's
+# dashboard, data_fetcher.py's CMP validation message) -- crashed every
+# local Windows run at that point with UnicodeEncodeError. Never surfaced
+# on the GitHub Actions cloud runner (Linux, UTF-8 locale by default), only
+# when running locally to diagnose/regenerate a report. errors="replace"
+# rather than a hard requirement, so an unrelated console quirk can never
+# be why a real data source failure goes uninvestigated.
+if sys.platform == "win32":
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
 from data_fetcher import (fetch_batch_ohlcv, get_market_context, BhavcopyFetcher,
                            validate_cmp_vs_bhavcopy, get_last_trading_day)
 from orchestrator import AgentOrchestrator
@@ -249,10 +265,29 @@ def run_scan(dry_run: bool = False, max_tickers: int = None):
     log.info(f"      Per-ticker-verified fresh coverage: {fresh_loaded}/{len(tickers)} ({coverage_pct}%)")
 
     if coverage_pct < MIN_OHLCV_COVERAGE_PCT:
+        # [2026-08-18] Distinguish the two very different root causes that
+        # both collapse to "0% fresh coverage" otherwise: a TOTAL fetch
+        # failure (loaded=0 -- every data source down/unreachable, e.g. an
+        # expired Dhan token + tvDatafeed CI install failure + Yahoo rate-
+        # limiting all at once) vs tickers that DID load but are dated
+        # before the expected trading day. The fix and the urgency are
+        # different (network/auth outage vs a genuine publish delay), so
+        # the alert email should say which one happened, not leave it to
+        # be re-diagnosed by hand every time.
+        if loaded == 0:
+            cause = ("ALL data sources returned nothing for the entire universe "
+                      "(Dhan/tvDatafeed/Yahoo all failed or are unreachable) -- "
+                      "this looks like a total data-source outage, not a "
+                      "publish-delay issue. Check Dhan token validity and "
+                      "network/API reachability from the runner first.")
+        else:
+            cause = (f"{loaded} ticker(s) loaded but only {fresh_loaded} were dated "
+                      f"{expected_trading_date} — the rest are dated earlier, which "
+                      f"looks like a genuine data-publish delay rather than an outage.")
         reason = (f"OHLCV coverage verified fresh for only {coverage_pct}% of the "
                    f"universe ({fresh_loaded}/{len(tickers)}), below the "
                    f"{MIN_OHLCV_COVERAGE_PCT}% floor -- too incomplete a picture "
-                   f"of the market to trust tonight's picks.")
+                   f"of the market to trust tonight's picks. {cause}")
         log.error(f"  DATA FRESHNESS GATE: {reason}")
         if not dry_run:
             try:
