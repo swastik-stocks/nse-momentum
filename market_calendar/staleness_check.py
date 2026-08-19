@@ -174,6 +174,15 @@ def verify_intraday_freshness(fetched_at: Optional[datetime], as_of: datetime,
             reason="no fetch timestamp available -- cannot prove this value is current",
             fetched_at=None,
         )
+    # Callers pass a mix of tz-aware (datetime.now(IST)) and naive-but-IST
+    # (dhan_rvol's candle timestamps, naive by deliberate convention -- see
+    # dhan_rvol.py's fetch_intraday_candles) datetimes. Both represent the
+    # same IST wall clock, so normalize to naive before subtracting rather
+    # than raising on the aware/naive mismatch.
+    if as_of.tzinfo is not None:
+        as_of = as_of.replace(tzinfo=None)
+    if fetched_at.tzinfo is not None:
+        fetched_at = fetched_at.replace(tzinfo=None)
     age_minutes = (as_of - fetched_at).total_seconds() / 60.0
     if age_minutes > max_staleness_minutes:
         return DataProvenance(
