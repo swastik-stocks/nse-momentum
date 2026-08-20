@@ -6,7 +6,7 @@ Outputs 3-tier report + sends combined HTML email.
 Run: python scanner.py (or double-click run_scanner.bat)
 """
 
-import sys, logging, json, argparse
+import sys, time, logging, json, argparse
 from datetime import datetime
 from pathlib import Path
 
@@ -237,32 +237,66 @@ def run_scan(dry_run: bool = False, max_tickers: int = None):
                  f"static universe into today's scan: {', '.join(held_not_in_universe)}")
 
     #      OHLCV batch fetch
+    # [2026-08-20] Retry-with-backoff for Dhan publish lag. Evidence from the
+    # 2026-08-19 evening run: the cloud runner saw 0/503 (0%) fresh Dhan
+    # coverage at BOTH the 19:30 IST trigger AND a retimed 20:15 IST trigger
+    # (51 min after close), while a local fetch in between the two, at 19:52
+    # IST, got 502/503 (99.8%) from the same Dhan endpoint. Moving the
+    # trigger later did not fix it -- the cloud-vs-local gap isn't explained
+    # by anything in this repo's date math (fromDate/toDate compute
+    # identically in both environments), so it's treated as an
+    # unpredictable-length publish/propagation delay on Dhan's side rather
+    # than a fixed offset to schedule around. Retrying the fetch itself a
+    # few times, with a real gap, is robust to that regardless of mechanism.
+    # Cache is naturally bypassed on retry: _is_cache_fresh() in
+    # data_fetcher.py compares the cached bar's date against today's trading
+    # day, so a stale bar stored by a failed attempt fails that check on the
+    # next attempt and forces a real re-fetch.
     log.info("\n[3/6] Fetching / loading OHLCV (2yr history)...")
-    tickers    = [item[0] for item in universe]
-    stock_data = fetch_batch_ohlcv(tickers, period="2y")
-    loaded     = sum(1 for df in stock_data.values() if not df.empty)
-    log.info(f"      {loaded}/{len(tickers)} tickers loaded")
+    tickers = [item[0] for item in universe]
 
-    # [2026-08-18] Data-freshness gate, part 3: PER-TICKER date check, not
-    # just aggregate presence/absence. "loaded" above only means "we got
-    # SOMETHING for this ticker" -- a ticker whose latest bar is 2 trading
-    # days old still counts as "loaded" there. This check asks the real
-    # question per ticker: is the latest bar actually dated the expected
-    # trading day? Named stale tickers are reported individually (not
-    # folded into one aggregate %) so "1 of your actual picks was built on
-    # stale data" stays visible even when overall coverage looks healthy.
-    # Pulled out as a pure function (find_stale_tickers) so it's directly
-    # unit-testable without mocking the whole fetch pipeline -- see
-    # tests/test_data_freshness.py.
-    stale_tickers   = find_stale_tickers(stock_data, expected_trading_date)
-    fresh_loaded    = loaded - len(stale_tickers)
-    coverage_pct    = round(100.0 * fresh_loaded / len(tickers), 1) if tickers else 0.0
-    if stale_tickers:
-        log.warning(f"      {len(stale_tickers)} ticker(s) loaded but NOT dated "
-                     f"{expected_trading_date} (stale OHLCV): "
-                     f"{', '.join(stale_tickers[:20])}"
-                     f"{' ...' if len(stale_tickers) > 20 else ''}")
-    log.info(f"      Per-ticker-verified fresh coverage: {fresh_loaded}/{len(tickers)} ({coverage_pct}%)")
+    MAX_FETCH_ATTEMPTS = 3
+    RETRY_WAIT_SECONDS = 600  # 10 min
+
+    for attempt in range(1, MAX_FETCH_ATTEMPTS + 1):
+        stock_data = fetch_batch_ohlcv(tickers, period="2y")
+        loaded     = sum(1 for df in stock_data.values() if not df.empty)
+        log.info(f"      {loaded}/{len(tickers)} tickers loaded")
+
+        # [2026-08-18] Data-freshness gate, part 3: PER-TICKER date check, not
+        # just aggregate presence/absence. "loaded" above only means "we got
+        # SOMETHING for this ticker" -- a ticker whose latest bar is 2 trading
+        # days old still counts as "loaded" there. This check asks the real
+        # question per ticker: is the latest bar actually dated the expected
+        # trading day? Named stale tickers are reported individually (not
+        # folded into one aggregate %) so "1 of your actual picks was built on
+        # stale data" stays visible even when overall coverage looks healthy.
+        # Pulled out as a pure function (find_stale_tickers) so it's directly
+        # unit-testable without mocking the whole fetch pipeline -- see
+        # tests/test_data_freshness.py.
+        stale_tickers   = find_stale_tickers(stock_data, expected_trading_date)
+        fresh_loaded    = loaded - len(stale_tickers)
+        coverage_pct    = round(100.0 * fresh_loaded / len(tickers), 1) if tickers else 0.0
+        if stale_tickers:
+            log.warning(f"      {len(stale_tickers)} ticker(s) loaded but NOT dated "
+                         f"{expected_trading_date} (stale OHLCV): "
+                         f"{', '.join(stale_tickers[:20])}"
+                         f"{' ...' if len(stale_tickers) > 20 else ''}")
+        log.info(f"      Per-ticker-verified fresh coverage: {fresh_loaded}/{len(tickers)} "
+                 f"({coverage_pct}%) [attempt {attempt}/{MAX_FETCH_ATTEMPTS}]")
+
+        if coverage_pct >= MIN_OHLCV_COVERAGE_PCT:
+            break
+        if attempt < MAX_FETCH_ATTEMPTS and not dry_run:
+            log.warning(f"      Coverage below the {MIN_OHLCV_COVERAGE_PCT}% floor -- "
+                        f"Dhan may not have finished publishing {expected_trading_date}'s "
+                        f"EOD data yet. Retrying in {RETRY_WAIT_SECONDS // 60} min "
+                        f"(attempt {attempt + 1}/{MAX_FETCH_ATTEMPTS})...")
+            time.sleep(RETRY_WAIT_SECONDS)
+        elif attempt < MAX_FETCH_ATTEMPTS and dry_run:
+            log.info("      [DRY RUN] Would retry here -- skipping the wait, continuing "
+                     "with whatever coverage this attempt got.")
+            break
 
     if coverage_pct < MIN_OHLCV_COVERAGE_PCT:
         # [2026-08-18] Distinguish the two very different root causes that
@@ -286,7 +320,8 @@ def run_scan(dry_run: bool = False, max_tickers: int = None):
                       f"looks like a genuine data-publish delay rather than an outage.")
         reason = (f"OHLCV coverage verified fresh for only {coverage_pct}% of the "
                    f"universe ({fresh_loaded}/{len(tickers)}), below the "
-                   f"{MIN_OHLCV_COVERAGE_PCT}% floor -- too incomplete a picture "
+                   f"{MIN_OHLCV_COVERAGE_PCT}% floor after {MAX_FETCH_ATTEMPTS} attempts "
+                   f"{RETRY_WAIT_SECONDS // 60} min apart -- too incomplete a picture "
                    f"of the market to trust tonight's picks. {cause}")
         log.error(f"  DATA FRESHNESS GATE: {reason}")
         if not dry_run:

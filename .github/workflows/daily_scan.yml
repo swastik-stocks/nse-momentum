@@ -8,6 +8,11 @@ on:
   repository_dispatch:
     types: [evening-scan]
   workflow_dispatch:
+    inputs:
+      republish_picks_b64:
+        description: 'RECOVERY USE ONLY: base64-encoded picks_latest.json content to publish as-is, bypassing the real scan entirely. Used to get a known-good evening-scan artifact back within reach of confirm.yml (see "Find latest usable scan run") when the real evening run failed to produce one and same-day checkpoints would otherwise keep falling back to stale data. Leave blank for a normal scan.'
+        required: false
+        default: ''
   schedule:
     # 8:30 PM IST = 15:00 UTC — LATE FALLBACK ONLY, ~1 hour after the
     # cron-job.org primary trigger. The `gate` job below skips the scan
@@ -51,7 +56,13 @@ jobs:
     needs: gate
     if: needs.gate.outputs.should_run == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # [2026-08-20] 30 min wasn't enough headroom once scanner.py started
+    # retrying the OHLCV fetch (up to 2 retries x 10 min wait) on top of the
+    # downstream breadth-publish steps, which alone take ~25 min. Worst case
+    # (2 failed attempts + a 3rd that succeeds) is roughly 20 min of waiting
+    # + ~15 min of fetch attempts + ~25 min breadth publish -- 75 min gives
+    # real margin instead of getting cut off mid-run again.
+    timeout-minutes: 75
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -80,7 +91,20 @@ jobs:
             printf '%s\n' "$CC_RECIPIENTS" > recipients_cc.txt
           fi
 
+      # RECOVERY PATH: writes the supplied artifact straight to
+      # picks_latest.json and skips the real scan + breadth-publish steps
+      # below entirely, so confirm.yml's same-day checkpoints have
+      # something valid to find within a minute or two instead of falling
+      # back to a multi-day-old artifact. Base64 in/out avoids any shell
+      # quoting issues with the JSON payload.
+      - name: Republish supplied picks (bypass scan)
+        if: github.event.inputs.republish_picks_b64 != ''
+        run: echo "$PICKS_B64" | base64 -d > picks_latest.json
+        env:
+          PICKS_B64: ${{ github.event.inputs.republish_picks_b64 }}
+
       - name: Run NSE Momentum Scanner v5.3
+        if: github.event.inputs.republish_picks_b64 == ''
         env:
           GMAIL_ADDRESS:      ${{ secrets.GMAIL_ADDRESS }}
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
@@ -93,8 +117,11 @@ jobs:
       # P3-05: Fetch MCap from NSE's official daily PR Bhavcopy zip.
       # Runs before sector_breadth.py so MCap weights are in Turso when
       # sector_breadth reads them for MCap-weighted SMA50 breadth.
+      # Skipped on the recovery path -- nothing here reads picks_latest.json
+      # and this run isn't tonight's real breadth data, so there's no point
+      # spending ~20 min on it just to republish an artifact fast.
       - name: Fetch market cap data (P3-05)
-        if: always()
+        if: always() && github.event.inputs.republish_picks_b64 == ''
         env:
           TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
           TURSO_AUTH_TOKEN:   ${{ secrets.TURSO_AUTH_TOKEN }}
@@ -105,7 +132,7 @@ jobs:
       # holdings symbols/company names by querying the shared DB directly —
       # no cross-repo import of this repo's resolver needed.
       - name: Publish NSE symbol master (P1-05)
-        if: always()
+        if: always() && github.event.inputs.republish_picks_b64 == ''
         env:
           TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
           TURSO_AUTH_TOKEN:   ${{ secrets.TURSO_AUTH_TOKEN }}
@@ -117,7 +144,7 @@ jobs:
       # publish_ticker_sector_map() also runs here (P3-08), so industry_breadth
       # (which reads ticker_sector_map from Turso) must come after this step.
       - name: Publish sector breadth (P3-01/02/06/08) with MCap weighting (P3-05)
-        if: always()
+        if: always() && github.event.inputs.republish_picks_b64 == ''
         env:
           TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
           TURSO_AUTH_TOKEN:   ${{ secrets.TURSO_AUTH_TOKEN }}
@@ -126,7 +153,7 @@ jobs:
       # P3-03/04: Industry breadth grid (138 industries via Screener.in).
       # Depends on ticker_sector_map published by sector_breadth.py above.
       - name: Publish industry breadth (P3-03/04)
-        if: always()
+        if: always() && github.event.inputs.republish_picks_b64 == ''
         env:
           TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
           TURSO_AUTH_TOKEN:   ${{ secrets.TURSO_AUTH_TOKEN }}
