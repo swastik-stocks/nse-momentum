@@ -1319,10 +1319,16 @@ def _row(r: dict) -> str:
     rr  = p.get("rr",  p.get("rrr",       0)) or 0
     entry = p.get("entry", 0) or 0
 
-    sl_cell  = f"<span style='color:#dc2626;font-weight:600;'>₹{sl:,.1f}</span>"  if sl  else "—"
-    t1_cell  = f"<span style='color:#16a34a;font-weight:600;'>₹{t1:,.1f}</span>"  if t1  else "—"
-    t2_cell  = f"<span style='color:#15803d;font-size:11px;'>₹{t2:,.1f}</span>"   if t2  else "—"
-    rr_cell  = f"<span style='color:#1e40af;font-weight:600;'>{rr:.1f}x</span>"   if rr  else "—"
+    sl_cell    = f"<span style='color:#dc2626;font-weight:600;'>₹{sl:,.1f}</span>"  if sl  else "—"
+    t1_cell    = f"<span style='color:#16a34a;font-weight:600;'>₹{t1:,.1f}</span>"  if t1  else "—"
+    t2_cell    = f"<span style='color:#15803d;font-size:11px;'>₹{t2:,.1f}</span>"   if t2  else "—"
+    rr_cell    = f"<span style='color:#1e40af;font-weight:600;'>{rr:.1f}x</span>"   if rr  else "—"
+    # [2026-08-20] Was: only reachable as a "vs Entry" % delta or buried in
+    # some Action-text sentences (only for a couple of statuses) -- someone
+    # checking mid-session had no way to see the actual planned entry price
+    # without going back to last night's evening scan email. Shown on every
+    # row now so this email is self-contained.
+    entry_cell = f"<span style='color:#374151;font-weight:600;'>₹{entry:,.1f}</span>" if entry else "—"
 
     return f"""
     <tr style="border-bottom:1px solid #e5e7eb;">
@@ -1337,6 +1343,7 @@ def _row(r: dict) -> str:
             {c['label']}</span>
       </td>
       <td style="padding:10px 8px;text-align:right;font-weight:700;color:#111827;">{ltp}</td>
+      <td style="padding:10px 8px;text-align:right;">{entry_cell}</td>
       <td style="padding:10px 8px;text-align:right;">{_fmt_rvol(c['rvol'], c.get('rvol_src',''), c.get('rvol_elapsed_minutes'))}</td>
       <td style="padding:10px 8px;text-align:right;color:#6b7280;">{gap}</td>
       <td style="padding:10px 8px;text-align:right;font-size:12px;">
@@ -1735,6 +1742,7 @@ def build_html(results: list, scan_date: str, run_time: str, meta: dict = None) 
           <th style="padding:10px 8px;text-align:left;font-size:11px;color:#6b7280;letter-spacing:1px;text-transform:uppercase;">Sector</th>
           <th style="padding:10px 8px;text-align:center;font-size:11px;color:#6b7280;letter-spacing:1px;text-transform:uppercase;">Status</th>
           <th style="padding:10px 8px;text-align:right;font-size:11px;color:#6b7280;letter-spacing:1px;text-transform:uppercase;">CMP</th>
+          <th style="padding:10px 8px;text-align:right;font-size:11px;color:#374151;letter-spacing:1px;text-transform:uppercase;" title="Recommended entry price from last evening's scan -- shown on every row so this email is self-contained and nobody has to dig up a prior day's email mid-session">Entry</th>
           <th style="padding:10px 8px;text-align:right;font-size:11px;color:#6b7280;letter-spacing:1px;text-transform:uppercase;" title="Elapsed-time-matched intraday RVOL — NOT the same metric as the evening Daily Intelligence Report's RVOL (EOD)">RVOL (Live)</th>
           <th style="padding:10px 8px;text-align:right;font-size:11px;color:#6b7280;letter-spacing:1px;text-transform:uppercase;">vs Pivot</th>
           <th style="padding:10px 8px;text-align:right;font-size:11px;color:#dc2626;letter-spacing:1px;text-transform:uppercase;">SL</th>
