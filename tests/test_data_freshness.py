@@ -415,6 +415,41 @@ def test_classify_btst_faded_interim_wording_has_no_false_finality():
     assert "not a final call" in action_lower
 
 
+def test_row_flags_reused_terminal_price_as_not_live():
+    """2026-08-20 MEESHO incident: a terminal status's cached price (from
+    whenever it became terminal) was rendered with the same visual weight
+    as a freshly-verified one -- only a small gray timestamp distinguished
+    them. _row() must render an unmissable badge for a reused row, not
+    quiet fine print."""
+    import confirm_picks
+
+    reused_result = {
+        "pick": {"ticker": "MEESHO.NS", "sector": "Consumer Services", "tier": 2,
+                  "score": 58, "sl": 186.8, "t1": 225.4, "t2": 239.0, "rr": 2.9,
+                  "entry": 196.6},
+        "classification": {
+            "status": "MISSED", "ltp": 202.74, "rvol": 1.97, "rvol_src": "Dhan",
+            "gap_pct": 3.3, "label": "MISSED", "color": "#ffffff", "bg": "#7c3aed",
+            "action": "Price drifted above planned entry -- DO NOT chase",
+            "price_fetched_at": "13:10:00", "price_source": "dhan",
+            "price_suspect": False, "reused_from_earlier_checkpoint": True,
+        },
+    }
+    html = confirm_picks._row(reused_result)
+    assert "NOT LIVE" in html
+    assert "13:10:00" in html
+
+    fresh_result = {
+        "pick": reused_result["pick"],
+        "classification": {
+            **reused_result["classification"],
+            "price_fetched_at": "15:01:00", "reused_from_earlier_checkpoint": False,
+        },
+    }
+    fresh_html = confirm_picks._row(fresh_result)
+    assert "NOT LIVE" not in fresh_html
+
+
 def test_btst_final_check_time_excludes_the_1215_incident():
     """The 12:15 IST incident: run_btst_scan() computes
     `is_final = now_ist.time() >= BTST_FINAL_CHECK_TIME`. Pin the threshold

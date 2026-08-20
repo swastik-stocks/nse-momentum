@@ -1284,7 +1284,20 @@ def _row(r: dict) -> str:
                           else "unverified timestamp"))
         if c.get("price_suspect"):
             ltp_prov += " · <span style='color:#dc2626'>suspect (=prev close)</span>"
-        ltp = f"{ltp}<br><span style='font-size:10px;color:#9ca3af;'>{ltp_prov}</span>"
+        if c.get("reused_from_earlier_checkpoint"):
+            # [2026-08-20] A terminal status's price is frozen from whenever it
+            # became terminal, not from this checkpoint's run time -- the small
+            # gray provenance line below wasn't a strong enough signal of that
+            # on a system where thresholds move minute to minute (see the
+            # MEESHO incident this session). Unmissable instead of fine print.
+            ltp = (
+                f"{ltp}<br><span style='display:inline-block;margin-top:2px;"
+                f"background:#fef3c7;color:#92400e;font-weight:700;font-size:10px;"
+                f"padding:2px 6px;border-radius:3px;white-space:nowrap;'>"
+                f"⏱ AS OF {price_fetched_at or '?'} IST — NOT LIVE, entry decision already locked</span>"
+            )
+        else:
+            ltp = f"{ltp}<br><span style='font-size:10px;color:#9ca3af;'>{ltp_prov}</span>"
     gap         = f"{c['gap_pct']:+.1f}%" if c.get("gap_pct") is not None else "N/A"
     drift_cell  = ""
     if c.get("is_chasing"):
@@ -2236,11 +2249,26 @@ def main():
                 else:
                     log.info(f"  {ticker_key}: cached [BROKEN] re-verified still <= SL "
                              f"— skipping re-email (not new information)")
+                    # [2026-08-20] See "reused_from_earlier_checkpoint" note below --
+                    # this dict's ltp/rvol are from whenever BROKEN was first set,
+                    # not from the recheck_cmp fetch just above.
+                    cached["classification"]["reused_from_earlier_checkpoint"] = True
                     results.append(cached)
                     continue
             else:
                 log.info(f"  {ticker_key}: cached [{cached_status}] "
                          f"from earlier checkpoint — skipping re-check")
+                # [2026-08-20] A terminal status (MISSED/CONFIRMED/etc.) correctly
+                # doesn't get re-classified -- but _row() was rendering this dict's
+                # ltp/rvol with the SAME visual weight as a freshly-verified row,
+                # with only a small gray timestamp distinguishing them. On a system
+                # whose thresholds move minute to minute, that's not a real flag,
+                # it's fine print -- see the MEESHO incident (2026-08-20, showed
+                # ₹202.7 from a 13:10 checkpoint in a 15:01 summary, real price by
+                # then was ₹208.83). This makes _row() render an unmissable
+                # "AS OF HH:MM, NOT LIVE" badge for any reused row instead of
+                # quietly labeling it the same as a live one.
+                cached["classification"]["reused_from_earlier_checkpoint"] = True
                 results.append(cached)
                 continue
 
