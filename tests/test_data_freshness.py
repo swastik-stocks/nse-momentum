@@ -366,3 +366,62 @@ def test_classify_btst_faded_check_runs_when_day_high_available():
         asm_gsm_symbols=set(), days_to_earnings=-1,
     )
     assert result["status"] == "FADED"
+
+
+# ─────────────────────────────────────────────────────────────────────────
+# classify_btst is_final wording (2026-08-20: a BTST-flagged checkpoint run
+# well before the real close -- seen at 12:15 IST -- was asserting
+# day-is-over finality ("full-day RVOL", "conviction faded through the
+# day", "skip BTST") off a live, still-developing number. is_final must not
+# change which gate fires, only how it's worded.
+# ─────────────────────────────────────────────────────────────────────────
+
+def test_classify_btst_vol_light_default_is_final_wording():
+    import confirm_picks
+    pick = {"entry": 100.0, "sl": 95.0, "pivot": 99.0, "t1": 200.0, "ticker": "TEST"}
+    result = confirm_picks.classify_btst(
+        pick, cmp=105.0, day_high=106.0, rvol=0.5, rvol_src="dhan",
+        asm_gsm_symbols=set(), days_to_earnings=-1,
+    )
+    assert result["status"] == "VOL_LIGHT"
+    assert "full-day" in result["action"].lower()
+    assert "skip btst" in result["action"].lower()
+
+
+def test_classify_btst_vol_light_interim_wording_has_no_false_finality():
+    import confirm_picks
+    pick = {"entry": 100.0, "sl": 95.0, "pivot": 99.0, "t1": 200.0, "ticker": "TEST"}
+    result = confirm_picks.classify_btst(
+        pick, cmp=105.0, day_high=106.0, rvol=0.5, rvol_src="dhan",
+        asm_gsm_symbols=set(), days_to_earnings=-1, is_final=False,
+    )
+    assert result["status"] == "VOL_LIGHT", "gate/threshold must be identical regardless of wording"
+    action_lower = result["action"].lower()
+    assert "conviction faded through the day" not in action_lower
+    assert "skip btst" not in action_lower
+    assert "not a final call" in action_lower
+
+
+def test_classify_btst_faded_interim_wording_has_no_false_finality():
+    import confirm_picks
+    pick = {"entry": 100.0, "sl": 95.0, "pivot": 99.0, "t1": 200.0, "ticker": "TEST"}
+    result = confirm_picks.classify_btst(
+        pick, cmp=100.0, day_high=110.0, rvol=2.0, rvol_src="dhan",
+        asm_gsm_symbols=set(), days_to_earnings=-1, is_final=False,
+    )
+    assert result["status"] == "FADED"
+    action_lower = result["action"].lower()
+    assert "skip btst" not in action_lower
+    assert "not a final call" in action_lower
+
+
+def test_btst_final_check_time_excludes_the_1215_incident():
+    """The 12:15 IST incident: run_btst_scan() computes
+    `is_final = now_ist.time() >= BTST_FINAL_CHECK_TIME`. Pin the threshold
+    itself so a future edit can't silently make 12:15 "final" again, and
+    confirm a real close-time run (15:30) still is."""
+    import confirm_picks
+    from datetime import time as dtime
+
+    assert dtime(12, 15) < confirm_picks.BTST_FINAL_CHECK_TIME
+    assert dtime(15, 30) >= confirm_picks.BTST_FINAL_CHECK_TIME

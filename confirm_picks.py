@@ -44,7 +44,7 @@ CHANGES vs v5.3:
 import os, json, smtplib, time
 import requests
 import numpy as np
-from datetime import datetime, date, timedelta
+from datetime import datetime, date, timedelta, time as dtime
 from zoneinfo import ZoneInfo
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -134,6 +134,18 @@ NO_RESEND_STATUSES = {"CONFIRMED", "CONFIRMED_LOW_VOL", "MISSED"}
 BTST_MIN_RVOL             = 1.5    # full-day-elapsed RVOL must still clear the same bar as a fresh morning entry
 BTST_MAX_PCT_OFF_HIGH     = 2.0    # CMP must be within this % of today's high -- further off = momentum stalling into the close
 BTST_MAX_PCT_T1_CAPTURED  = 70.0   # skip if >=70% of the entry->T1 move is already used up -- not enough R:R left to justify overnight risk
+
+# [2026-08-20] A BTST-flagged checkpoint can be triggered well before the
+# real close (seen: 12:15 IST, 3+ hours before the 15:30/15:15-CAS close),
+# but classify_btst()'s FADED/VOL_LIGHT text used to unconditionally claim
+# finality ("full-day RVOL", "conviction faded through the day", "skip
+# BTST") regardless of how much of the session had actually elapsed --
+# telling someone to square off at lunchtime off a live, still-developing
+# number. run_btst_scan() only treats its own run as the final, day-is-over
+# verdict once local wall-clock time is at/after this threshold; an earlier
+# run is reworded as an interim read (same gates/thresholds, different
+# wording only -- see is_final in classify_btst()/build_btst_html()).
+BTST_FINAL_CHECK_TIME = dtime(15, 0)
 # ─────────────────────────────────────────────────────────────────────────────
 
 
@@ -1028,7 +1040,8 @@ def classify_btst(pick: dict, cmp: float | None, day_high: float | None,
                    rvol: float, rvol_src: str,
                    asm_gsm_symbols: set | None = None,
                    days_to_earnings: int | None = None,
-                   price_provenance=None) -> dict:
+                   price_provenance=None,
+                   is_final: bool = True) -> dict:
     """
     15:15 BTST scan classification -- separate from the morning entry
     classify() above. Only ever called on tickers that were already
@@ -1070,6 +1083,17 @@ def classify_btst(pick: dict, cmp: float | None, day_high: float | None,
       2. R:R favorability -- less than BTST_MAX_PCT_T1_CAPTURED% of the
          entry->T1 move already captured. A stock 90% of the way to T1
          has little room left to reward the overnight gap risk.
+
+    `is_final` [2026-08-20]: this function was written assuming it only
+    ever runs at/after the real close (~15:15-15:38 IST), so the FADED and
+    VOL_LIGHT action text used to assert finality unconditionally ("full-day
+    RVOL", "conviction faded through the day", "skip BTST") even when
+    called from an earlier, informational mid-session BTST-flagged
+    checkpoint (e.g. 12:15) -- a live, still-developing number was being
+    presented as a final, day-is-over verdict. is_final=False (the
+    checkpoint's local wall-clock time is before BTST_FINAL_CHECK_TIME)
+    keeps every gate and threshold identical but rewords those two
+    branches as an interim read, not a final call.
     """
     entry = pick["entry"]
     sl    = pick["sl"]
@@ -1171,20 +1195,27 @@ def classify_btst(pick: dict, cmp: float | None, day_high: float | None,
         }
 
     if faded:
+        action = (f"{pct_off_high:.1f}% off today's high ₹{day_high:,.1f} — "
+                  f"momentum stalling into the close, skip BTST") if is_final else (
+                  f"{pct_off_high:.1f}% off today's high ₹{day_high:,.1f} as of this check — "
+                  f"session isn't over yet, not a final call. Re-check near close.")
         return {
             "status": "FADED", "ltp": cmp, "rvol": rvol, "rvol_src": rvol_src,
             "pct_off_high": pct_off_high, "pct_captured": pct_captured,
-            "action": (f"{pct_off_high:.1f}% off today's high ₹{day_high:,.1f} — "
-                       f"momentum stalling into the close, skip BTST"),
+            "action": action,
             "label": f"FADED ({pct_off_high:.1f}% off high)", "color": "#ffffff", "bg": "#dc2626",
         }
 
     if vol_light:
         rvol_disp = f"{rvol:.1f}x" if rvol >= 0 else "N/A"
+        action = (f"Full-day RVOL only {rvol_disp} — conviction faded through the day, "
+                  f"skip BTST") if is_final else (
+                  f"RVOL only {rvol_disp} as of this check — session isn't over yet, "
+                  f"not a full-day read and not a final call. Re-check near close.")
         return {
             "status": "VOL_LIGHT", "ltp": cmp, "rvol": rvol, "rvol_src": rvol_src,
             "pct_off_high": pct_off_high, "pct_captured": pct_captured,
-            "action": f"Full-day RVOL only {rvol_disp} — conviction faded through the day, skip BTST",
+            "action": action,
             "label": f"LIGHT VOL ({rvol_disp})", "color": "#ffffff", "bg": "#dc2626",
         }
 
@@ -1204,7 +1235,10 @@ def classify_btst(pick: dict, cmp: float | None, day_high: float | None,
         "action": (f"Meets closing-strength criteria (edge not yet validated — see footer) — "
                    f"CMP ₹{cmp:,.1f}, {off_high_disp} off high, RVOL {rvol:.1f}x, "
                    f"{remaining_pct:.1f}% still to T1 ₹{t1:,.1f}. SL stays ₹{sl:,.1f}. "
-                   f"Use your own judgment before holding overnight."),
+                   + ("Use your own judgment before holding overnight."
+                      if is_final else
+                      "Interim read, session isn't over — re-check near close before "
+                      "deciding whether to hold overnight.")),
         "label": "BTST CANDIDATE", "color": "#ffffff", "bg": "#16a34a",
     }
 
@@ -1352,7 +1386,7 @@ def _btst_row(r: dict) -> str:
             {c['label']}</span>
       </td>
       <td style="padding:10px 8px;text-align:right;font-weight:700;color:#111827;">{ltp}</td>
-      <td style="padding:10px 8px;text-align:right;">{_fmt_rvol(c['rvol'], c.get('rvol_src',''))}</td>
+      <td style="padding:10px 8px;text-align:right;">{_fmt_rvol(c['rvol'], c.get('rvol_src',''), c.get('rvol_elapsed_minutes'))}</td>
       <td style="padding:10px 8px;text-align:right;font-size:12px;color:#6b7280;">{off_high}</td>
       <td style="padding:10px 8px;text-align:right;font-size:12px;color:#6b7280;">{captured}</td>
       <td style="padding:10px 8px;text-align:right;font-size:12px;">{diag_disp}</td>
@@ -1368,7 +1402,7 @@ def _btst_row(r: dict) -> str:
     </tr>"""
 
 
-def build_btst_html(results: list, scan_date: str, run_time: str) -> str:
+def build_btst_html(results: list, scan_date: str, run_time: str, is_final: bool = True) -> str:
     order = {"ASM_GSM_BLOCKED": 0, "EARNINGS_BLOCKED": 1, "BTST_CANDIDATE": 2,
              "NEAR_T1": 3, "FADED": 4, "VOL_LIGHT": 5,
              "NOT_HELD": 6, "STOPPED_OUT": 7, "DATA_ERROR": 8}
@@ -1414,7 +1448,7 @@ def build_btst_html(results: list, scan_date: str, run_time: str) -> str:
             filter predicts a profitable overnight hold (see footer). Use your own judgment.
           </div>
         </div>"""
-    elif results:
+    elif results and is_final:
         action_box = f"""
         <div style="background:#fef2f2;border-left:4px solid #dc2626;
             margin:16px 28px 0;padding:14px 16px;border-radius:0 4px 4px 0;">
@@ -1424,6 +1458,23 @@ def build_btst_html(results: list, scan_date: str, run_time: str) -> str:
           <div style="color:#7f1d1d;font-size:13px;margin-top:4px;">
             None of today's confirmed setups still clear the closing-strength
             and R:R bar for holding overnight.
+          </div>
+        </div>"""
+    elif results:
+        # [2026-08-20] Same "none clear the bar" result, but this run is
+        # BEFORE BTST_FINAL_CHECK_TIME -- "square off" is a same-day, final
+        # instruction that doesn't belong on an interim read taken hours
+        # before the actual close.
+        action_box = f"""
+        <div style="background:#fffbeb;border-left:4px solid #ca8a04;
+            margin:16px 28px 0;padding:14px 16px;border-radius:0 4px 4px 0;">
+          <div style="font-weight:700;color:#92400e;font-size:15px;">
+            No candidates as of {run_time} IST — session isn't over, not a final call
+          </div>
+          <div style="color:#78350f;font-size:13px;margin-top:4px;">
+            None of today's confirmed setups clear the closing-strength/R:R bar
+            on this interim read. That can change by the close -- this is not
+            an instruction to square off now, just where things stand right now.
           </div>
         </div>"""
 
@@ -1443,7 +1494,8 @@ def build_btst_html(results: list, scan_date: str, run_time: str) -> str:
     <div style="color:#f1f5f9;font-size:22px;font-weight:700;margin-top:4px;">
         BTST Scan — Closing Strength Check (informational)</div>
     <div style="color:#64748b;font-size:13px;margin-top:2px;">
-        {scan_date} &nbsp;·&nbsp; Run at {run_time} IST</div>
+        {scan_date} &nbsp;·&nbsp; Run at {run_time} IST
+        {'' if is_final else '&nbsp;·&nbsp; <span style="color:#fbbf24;">INTERIM — mid-session, not the final close-time read</span>'}</div>
   </div>
 
   <div style="background:#f8fafc;border-bottom:1px solid #e2e8f0;
@@ -1461,7 +1513,7 @@ def build_btst_html(results: list, scan_date: str, run_time: str) -> str:
           <th style="padding:10px 8px;text-align:left;font-size:11px;color:#6b7280;letter-spacing:1px;text-transform:uppercase;">Sector</th>
           <th style="padding:10px 8px;text-align:center;font-size:11px;color:#6b7280;letter-spacing:1px;text-transform:uppercase;">Status</th>
           <th style="padding:10px 8px;text-align:right;font-size:11px;color:#6b7280;letter-spacing:1px;text-transform:uppercase;">CMP</th>
-          <th style="padding:10px 8px;text-align:right;font-size:11px;color:#6b7280;letter-spacing:1px;text-transform:uppercase;" title="Elapsed-time-matched RVOL from market open to now — a full-day figure at 15:15, not the 45min morning window">RVOL (Full-Day)</th>
+          <th style="padding:10px 8px;text-align:right;font-size:11px;color:#6b7280;letter-spacing:1px;text-transform:uppercase;" title="Elapsed-time-matched RVOL from market open to now — a full-day figure at 15:15, not the 45min morning window">{'RVOL (Full-Day)' if is_final else 'RVOL (So Far)'}</th>
           <th style="padding:10px 8px;text-align:right;font-size:11px;color:#6b7280;letter-spacing:1px;text-transform:uppercase;" title="How far CMP has faded from today's intraday high">Off High</th>
           <th style="padding:10px 8px;text-align:right;font-size:11px;color:#6b7280;letter-spacing:1px;text-transform:uppercase;" title="% of the entry-to-T1 move already captured">To T1 Used</th>
           <th style="padding:10px 8px;text-align:right;font-size:11px;color:#9ca3af;letter-spacing:1px;text-transform:uppercase;" title="EXPERIMENTAL, paper-mode only — see footer. Is today's move (so far) unusually large for this stock AND clean/trending, or is it choppy? Does not affect status or SL/T1.">Intraday Read (exp.)</th>
@@ -1948,6 +2000,12 @@ def run_btst_scan(today_iso: str, today_str: str, run_time: str):
     asm_gsm_symbols = get_asm_gsm_symbols()
 
     now_ist = datetime.now(IST)
+    # [2026-08-20] This scan can be triggered well before the real close
+    # (e.g. a 12:15 IST BTST-flagged checkpoint) -- see classify_btst's
+    # is_final docstring. Only treat it as the final, day-is-over verdict
+    # once BTST_FINAL_CHECK_TIME has actually passed; an earlier run is an
+    # interim, still-developing read and must be worded as one.
+    is_final = now_ist.time() >= BTST_FINAL_CHECK_TIME
     results = []
     for ticker_key, pick, entry_status in candidates:
         ticker_raw = pick.get("ticker_raw") or ticker_key
@@ -1956,7 +2014,7 @@ def run_btst_scan(today_iso: str, today_str: str, run_time: str):
 
         log.info(f"  Checking {ticker_key} for BTST...")
         cmp, cmp_fetched_at, _cmp_src, _cmp_suspect = get_live_price(ticker_raw)
-        rvol, rvol_src, _rvol_elapsed = get_rvol(ticker_raw, as_of=now_ist)
+        rvol, rvol_src, rvol_elapsed = get_rvol(ticker_raw, as_of=now_ist)
         day_high, day_low, dh_src  = get_intraday_high_low(ticker_raw, as_of=now_ist)
         days_to_earnings           = days_to_next_earnings(ticker_raw, as_of=now_ist.date())
         # [2026-08-19, CAS] Closing price isn't trustworthy for an
@@ -1966,7 +2024,13 @@ def run_btst_scan(today_iso: str, today_str: str, run_time: str):
         c = classify_btst(pick, cmp, day_high, rvol, rvol_src,
                            asm_gsm_symbols=asm_gsm_symbols,
                            days_to_earnings=days_to_earnings,
-                           price_provenance=price_provenance)
+                           price_provenance=price_provenance,
+                           is_final=is_final)
+        # [2026-08-20] Was discarded here (as `_rvol_elapsed`) while the
+        # morning confirmation path attaches the same value to `c` -- the
+        # BTST email always rendered "elapsed time unknown" regardless of
+        # whether get_rvol() actually had it. See _btst_row/_fmt_rvol.
+        c["rvol_elapsed_minutes"] = rvol_elapsed
 
         # [2026-08-13, PAPER-MODE] Informational only — see
         # compute_intraday_diagnostic()'s docstring. Never affects `c`
@@ -1987,7 +2051,7 @@ def run_btst_scan(today_iso: str, today_str: str, run_time: str):
     subject = (f"[NSE Momentum {run_time} BTST SCAN] "
                f"{candidate_n} BTST CANDIDATE{'S' if candidate_n != 1 else ''} | {today_str}")
 
-    html = build_btst_html(results, today_str, run_time)
+    html = build_btst_html(results, today_str, run_time, is_final=is_final)
     send_email(subject, html)
     _persist_btst_outcomes(today_iso, run_time, results)
     log.info("  Done.")
