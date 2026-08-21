@@ -395,21 +395,27 @@ def _tier_card(r, tier_label: str, tier_color: str) -> str:
     reward_pct = r.gain_pct_t1
     rr_actual  = r.rrr   # consistent with table display
 
+    # [2026-08-21] Same pattern as the t1[:8]/t2[:3] fix: orchestrator.py's
+    # _why_working/_what_missing/_triggers/_risk_factors already cap these
+    # to 4/3/3/3 respectively -- emailer.py was re-truncating to an even
+    # smaller 3/2/2/2 on top of that, independently dropping a real bullet
+    # (e.g. a 4th genuine "what's working" reason, or a 3rd risk factor)
+    # that had already survived the real upstream cap. Rendered in full now.
     working_html = "".join(
         f'<li style="margin:3px 0;color:#55627A">OK {w}</li>'
-        for w in (r.what_is_working or [])[:3]
+        for w in (r.what_is_working or [])
     )
     missing_html = "".join(
         f'<li style="margin:3px 0;color:#96690A">! {m}</li>'
-        for m in (r.what_is_missing or [])[:2]
+        for m in (r.what_is_missing or [])
     )
     trigger_html = "".join(
         f'<li style="margin:3px 0;color:#2A5FB0">- {t}</li>'
-        for t in (r.trigger_conditions or [])[:2]
+        for t in (r.trigger_conditions or [])
     )
     risk_html = "".join(
         f'<li style="margin:3px 0;color:#B84D0A">! {rk}</li>'
-        for rk in (r.risk_factors or [])[:2]
+        for rk in (r.risk_factors or [])
     )
 
     return f"""
