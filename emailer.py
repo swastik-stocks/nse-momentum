@@ -1056,9 +1056,23 @@ def _build_html(t1, t2, t3, all_r, near_bo, defensive,
   </div>"""
 
     # Section 1: trade cards
+    # [2026-08-21] Was: t1[:8]/t2[:3]/t3[:2] -- a hardcoded render-time cap
+    # far smaller than and independent of the real upstream caps
+    # (orchestrator.py's t1_cap, up to 15, and T2_CAP=8), silently dropping
+    # picks that fully cleared the T1 gate, sector-concentration check, and
+    # sanity gate. Confirmed live 2026-08-20: 11 real T1 picks (t1_cap=15,
+    # sanity gate excluded 0/14), only 8 rendered here -- AUBANK, APLAPOLLO,
+    # JINDALSAW were completely absent from the email despite being fully
+    # qualified, yet still sat in picks_latest.json and got auto-confirmed
+    # by the next morning's checkpoint (JINDALSAW: CONFIRMED -- ENTER) with
+    # the user never having seen it in the evening report at all. T1/T2 are
+    # now shown in full -- both are already bounded by real upstream caps,
+    # so this can't make the email unbounded. T3 keeps its own cap: it's
+    # explicitly "setup forming", not gate-cleared, and has no upstream cap
+    # of its own, so an unbounded watchlist really could blow up email size.
     tier_cards = ""
     if t1:
-        for r in t1[:8]:
+        for r in t1:
             tier_cards += _tier_card(r, "TIER 1 - TOP PICK", "#0E8F63")
     else:
         tier_cards += f"""
@@ -1069,7 +1083,7 @@ def _build_html(t1, t2, t3, all_r, near_bo, defensive,
 </div>"""
 
     if t2:
-        for r in t2[:3]:
+        for r in t2:
             tier_cards += _tier_card(r, "TIER 2 - AGGRESSIVE", "#A8680E")
     if t3:
         for r in t3[:2]:
@@ -1080,8 +1094,8 @@ def _build_html(t1, t2, t3, all_r, near_bo, defensive,
     # setup-forming watchlist names, not gate-cleared/one-condition-missing
     # picks, so ranking them on the same pass/fail columns wouldn't mean
     # the same thing.
-    heatmap_html = (_heatmap_table(t1[:8], "TIER 1 - TOP PICK",   "#0E8F63")
-                     + _heatmap_table(t2[:3], "TIER 2 - AGGRESSIVE", "#A8680E"))
+    heatmap_html = (_heatmap_table(t1, "TIER 1 - TOP PICK",   "#0E8F63")
+                     + _heatmap_table(t2, "TIER 2 - AGGRESSIVE", "#A8680E"))
 
     # Section 2: watchlist table Î“Ã‡Ã¶ EXCLUDE T1 tickers to avoid duplicates
     t1_tickers = {r.ticker for r in t1}
