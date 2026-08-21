@@ -56,6 +56,7 @@ from market_calendar.staleness_check import (check_staleness, StaleDataError,
 from database.schema import get_connection, init_all_tables
 import dhan_rvol
 from agents.intraday_vol_adjusted_agent import IntradayVolAdjustedAgent
+from telegram_alert import send_telegram_alert
 
 try:
     from loguru import logger as log
@@ -2063,6 +2064,16 @@ def run_btst_scan(today_iso: str, today_str: str, run_time: str):
         off_high_disp = f"{c['pct_off_high']:.1f}%" if c['pct_off_high'] is not None else "N/A"
         log.info(f"    → {c['status']:15s}  CMP={cmp_disp:>10}  RVOL={rvol_disp:>8}  off_high={off_high_disp}")
 
+        if c["status"] == "BTST_CANDIDATE" and is_final:
+            # [2026-08-21] Only on a FINAL read -- an interim (pre-15:00) BTST
+            # check is explicitly not a real verdict yet (see is_final), so it
+            # must not push a "candidate" alert that reads as a decisive call.
+            send_telegram_alert(
+                f"BTST CANDIDATE: {ticker_key}\n"
+                f"CMP {cmp_disp} | {off_high_disp} off high | RVOL {rvol_disp} | "
+                f"edge not validated -- your judgment, not a signal"
+            )
+
         results.append({"pick": pick, "classification": c, "intraday_diag": intraday_diag,
                          "entry_status": entry_status})
         time.sleep(0.3)
@@ -2306,6 +2317,17 @@ def main():
         if c["status"] in TERMINAL_STATUSES:
             prior_state[ticker_key] = entry
             newly_terminal.append(entry)
+            if c["status"] in ("CONFIRMED", "CONFIRMED_LOW_VOL"):
+                # [2026-08-21] Instant push alongside the email -- see
+                # telegram_alert.py. Only fires here (freshly classified this
+                # checkpoint), never on the cached/reused branches above, so
+                # a terminal status never re-alerts on a later checkpoint.
+                vol_note = " (LOW VOL)" if c["status"] == "CONFIRMED_LOW_VOL" else ""
+                send_telegram_alert(
+                    f"CONFIRMED{vol_note}: {ticker_key}\n"
+                    f"CMP ₹{cmp:,.1f} | Entry ₹{pick.get('entry', 0):,.1f} | "
+                    f"SL ₹{pick.get('sl', 0):,.1f} | RVOL {rvol:.1f}x"
+                )
 
         time.sleep(0.3)
 
