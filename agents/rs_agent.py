@@ -318,6 +318,7 @@ class RSAgent:
                  ml_momentum_preds: Dict[str, int] = None,
                  slope_r2_ranks: Dict[str, float] = None,
                  volume_dryup_ranks: Dict[str, float] = None,
+                 avwap_ranks: Dict[str, float] = None,
                  ticker: str = "", bars_per_day: float = 1.0):
         self.df     = df
         self.nifty  = nifty_df
@@ -353,6 +354,18 @@ class RSAgent:
         # bonus bucket, HIGH percentile = already-elevated volume = penalty.
         self.volume_dryup_pcts = volume_dryup_ranks or {}
         self._volume_dryup_pct = None
+        # [LIVE, v6] factor-library item — Anchored VWAP (prorealcode.com,
+        # Auto Midas AVWAP concept), 72-bar support-anchor distance. See
+        # compute_universe_avwap_percentiles() in agents/anchored_vwap_agent.py
+        # and validation/anchored_vwap_validate.py for the evidence chain:
+        # strongest result of the 2026-08-21/22 research campaign, cleared
+        # in-sample (p<0.0001), discovery/holdout (p=0.0072), 4/4-window
+        # walk-forward significance, Holm-Bonferroni across the campaign's
+        # 6-test family, and a redundancy check against vol_adj/slope_r2/
+        # lottery (rho 0.38/0.40/0.16 -- partial overlap at most, not a
+        # mirror of any existing modifier here).
+        self.avwap_pcts = avwap_ranks or {}
+        self._avwap_pct = None
         # [NEW] bars_per_day=1 (default) is exactly the original daily
         # behavior — the live scanner never passes this, unaffected.
         # The hourly replay passes bars_per_day=7 (see hourly_scaling.py).
@@ -420,6 +433,10 @@ class RSAgent:
         # [LIVE, v6] factor-library backlog item — PKScreener volume dry-up.
         if self.ticker and self.ticker in self.volume_dryup_pcts:
             self._volume_dryup_pct = self.volume_dryup_pcts[self.ticker]
+
+        # [LIVE, v6] factor-library item — Anchored VWAP support-distance.
+        if self.ticker and self.ticker in self.avwap_pcts:
+            self._avwap_pct = self.avwap_pcts[self.ticker]
 
     def score(self) -> int:
         p = self._pct
@@ -518,6 +535,28 @@ class RSAgent:
             elif self._volume_dryup_pct >= 67:
                 base -= 1
 
+        # v6 — factor-library item (Anchored VWAP, 72-bar support anchor,
+        # prorealcode.com Auto Midas AVWAP concept): a stock trading well
+        # above its own recent support-anchored VWAP outperformed one
+        # sitting near it — top tercile Avg R 0.74 vs pool 0.40, PF 1.98,
+        # in-sample p<0.0001 (0/10,000 permutation draws beat it); holdout
+        # N=283, CI=[0.32,0.867] entirely positive, p=0.0072; walk-forward
+        # significant in 4/4 tested windows (no other item in this
+        # campaign cleared more than 2/4). Bottom tercile confirms the
+        # inverse cleanly (Avg R 0.03, p=1.0/0.9948 holdout) — see
+        # validation/anchored_vwap_validate.py. Redundancy-checked against
+        # vol_adj_pct/slope_r2_pct/lottery_pct above (Spearman rho
+        # 0.38/0.40/0.16 — partial overlap at most, not a restatement of
+        # any of them) via validation/avwap_redundancy_check.py before
+        # promotion. Same +2/-1 magnitude convention as every other
+        # tercile modifier here — only direction/ranking was validated,
+        # not this specific magnitude.
+        if self._avwap_pct is not None:
+            if self._avwap_pct >= 67:
+                base += 2
+            elif self._avwap_pct <= 33:
+                base -= 1
+
         return max(0, min(base, 20))  # cap held at 20 — see note above on why not raised
 
     def get_percentile(self) -> float:
@@ -558,6 +597,13 @@ class RSAgent:
         volume_dryup_ranks wasn't supplied, a 0-100 percentile otherwise.
         Remember the inverted convention: LOW = dry = bonus bucket."""
         return self._volume_dryup_pct
+
+    def get_avwap_percentile(self):
+        """[LIVE, v6] factor-library item — None if avwap_ranks wasn't
+        supplied, a 0-100 percentile otherwise. HIGH = well above the
+        72-bar support-anchored VWAP = bonus bucket (same convention as
+        vol_adj/lottery/slope_r2, not the inverted volume_dryup one)."""
+        return self._avwap_pct
 
     def passes_gate(self) -> bool:
         return self._pct >= RS_GATE

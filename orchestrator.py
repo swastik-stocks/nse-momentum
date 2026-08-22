@@ -54,6 +54,7 @@ from agents.lottery_index_agent        import compute_universe_lottery_percentil
 from agents.ml_momentum_agent          import compute_universe_ml_momentum_predictions, load_latest_model as load_latest_ml_momentum_model
 from agents.slope_r2_agent             import compute_universe_slope_r2_percentiles
 from agents.volume_dryup_agent         import compute_universe_volume_ratio_percentiles
+from agents.anchored_vwap_agent        import compute_universe_avwap_percentiles
 from agents.volume_agent               import VolumeAgent
 from agents.market_agent               import MarketAgent, REGIME_CONFIG as MARKET_REGIME_CONFIG
 from sector_score_live                 import LiveSectorBreadth
@@ -491,6 +492,18 @@ class AgentOrchestrator:
         # agents/rs_agent.py::RSAgent.score() for how this is blended in.
         self.volume_dryup_rs_ranks = compute_universe_volume_ratio_percentiles(data_dict)
 
+        # v6 — factor-library item (Anchored VWAP, 72-bar support anchor,
+        # prorealcode.com Auto Midas AVWAP concept), validated 2026-08-22
+        # against 2,985 gate-cleared signals from the same replay: top
+        # tercile p<0.0001, Avg R 0.74 vs pool 0.40; discovery/holdout
+        # p=0.0072; walk-forward significant in 4/4 windows; survives
+        # Holm-Bonferroni across the campaign's 6-test family; redundancy-
+        # checked against vol_adj/slope_r2/lottery (rho 0.38/0.40/0.16 —
+        # partial overlap at most). See agents/rs_agent.py::RSAgent.score()
+        # for how this is blended in, and FACTOR_LIBRARY_IMPLEMENTATION_PLAN.md
+        # for the full evidence chain.
+        self.avwap_rs_ranks = compute_universe_avwap_percentiles(data_dict)
+
 
         # ── STEP 6: MacroAgent (BUG-2 + BUG-4 FIX) ───────────────────────────
         # BUG-2: VIX thresholds recalibrated — VIX 13.33 now correctly = BENIGN (+3 pts)
@@ -689,6 +702,7 @@ class AgentOrchestrator:
             ml_momentum_preds=self.ml_momentum_preds,  # v6 — factor-library backlog item (Beaudan & He 2019)
             slope_r2_ranks=self.slope_r2_rs_ranks,  # v6 — factor-library backlog item (Clenow)
             volume_dryup_ranks=self.volume_dryup_rs_ranks,  # v6 — factor-library backlog item (PKScreener)
+            avwap_ranks=self.avwap_rs_ranks,  # v6 — factor-library item (Anchored VWAP)
             ticker=ticker
         )
 
