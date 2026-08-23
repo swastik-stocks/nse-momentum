@@ -84,6 +84,7 @@ from trade_logger                      import get_dynamic_weight
 from nse_universe                      import UNIVERSE_CONFIG, UNIVERSE_SEED
 from sector_concentration_alert        import compute_sector_concentration  # P4-04
 from signal_attribution                import compute_signal_attribution    # P4-02
+from telegram_alert                    import send_telegram_alert           # P2-05/P2-06 real-time push
 
 
 def _compute_signal_attribution() -> dict:
@@ -984,6 +985,21 @@ class AgentOrchestrator:
                 log.warning(f"    {h['ticker']:<15} price {h['technical_stop']['current_price']:.2f} < "
                             f"stop {ec['effective_stop']:.2f} ({ec['source']}) | "
                             f"avg cost {ec['avg_price']:.2f}")
+                # [2026-08-23] Real-time push -- one per ticker, same as
+                # confirm_picks.py's CONFIRMED/BTST_CANDIDATE alerts. EXIT is
+                # actionable (a real held position below its stop), so each
+                # breach gets its own unmissable message rather than being
+                # folded into one combined summary. This runs once per
+                # evening scan (not a multi-checkpoint intraday loop like
+                # confirm_picks.py), so it deliberately re-alerts every scan
+                # a holding remains breached, not just the first time --
+                # you should keep hearing about it until you act.
+                send_telegram_alert(
+                    f"EXIT ALERT: {h['ticker']}\n"
+                    f"Price {h['technical_stop']['current_price']:.2f} < "
+                    f"stop {ec['effective_stop']:.2f} ({ec['source']}) | "
+                    f"avg cost {ec['avg_price']:.2f}"
+                )
 
         # P2-06: TRIM signal -- RS percentile computed INDEPENDENTLY of
         # pattern detection via RSAgent directly (needs only price history +
@@ -1025,8 +1041,16 @@ class AgentOrchestrator:
         if trim_signals:
             log.info(f"  [P2-06] {len(trim_signals)} TRIM signal(s) — RS deteriorating (< 40th pct), "
                      f"not yet stopped out:")
-            for t in sorted(trim_signals, key=lambda x: x["rs_percentile"]):
+            sorted_trims = sorted(trim_signals, key=lambda x: x["rs_percentile"])
+            for t in sorted_trims:
                 log.info(f"    {t['ticker']:<15} RS {t['rs_percentile']:.0f}th percentile")
+            # [2026-08-23] One consolidated push, not one per ticker -- TRIM
+            # is a lower-urgency "still holding, but weakening" watchlist
+            # note (unlike EXIT, nothing here has actually breached a stop),
+            # so a single digest-style message is friendlier than N pings.
+            trim_lines = "\n".join(f"  {t['ticker']}: RS {t['rs_percentile']:.0f}th pct"
+                                    for t in sorted_trims)
+            send_telegram_alert(f"TRIM WATCH ({len(sorted_trims)} holding(s), RS < 40th pct):\n{trim_lines}")
 
         # P4-04: sector concentration check — independent of held_status above
         # (doesn't need per-stock gate results, just Turso's holdings +

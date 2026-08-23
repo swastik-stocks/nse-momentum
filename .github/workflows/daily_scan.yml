@@ -112,6 +112,11 @@ jobs:
           TURSO_AUTH_TOKEN:   ${{ secrets.TURSO_AUTH_TOKEN }}
           DHAN_CLIENT_ID:     ${{ secrets.DHAN_CLIENT_ID }}
           DHAN_ACCESS_TOKEN:  ${{ secrets.DHAN_ACCESS_TOKEN }}
+          # [2026-08-23] Real-time EXIT/TRIM pushes -- see orchestrator.py's
+          # P2-05/P2-06. Optional: send_telegram_alert() no-ops (returns
+          # False, never raises) if these are unset.
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID:   ${{ secrets.TELEGRAM_CHAT_ID }}
         run: python scanner.py
 
       # P3-05: Fetch MCap from NSE's official daily PR Bhavcopy zip.
