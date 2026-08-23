@@ -101,6 +101,28 @@ def _compute_signal_attribution() -> dict:
         log.warning(f"  [P4-02] signal_attribution failed (non-fatal): {e}")
         return {}
 
+
+def _build_exit_alert_message(h: dict) -> str:
+    """Pure message-builder for P2-05's Telegram push, pulled out of the
+    scan loop so it's directly unit-testable against real Section 6 data."""
+    ec = h["exit_check"]
+    return (
+        f"EXIT ALERT: {h['ticker']}\n"
+        f"Price {h['technical_stop']['current_price']:.2f} < "
+        f"stop {ec['effective_stop']:.2f} ({ec['source']}) | "
+        f"avg cost {ec['avg_price']:.2f}"
+    )
+
+
+def _build_trim_alert_message(sorted_trims: list) -> str:
+    """Pure message-builder for P2-06's Telegram push -- one consolidated
+    digest, see the send_telegram_alert call site for why (lower urgency
+    than EXIT)."""
+    trim_lines = "\n".join(f"  {t['ticker']}: RS {t['rs_percentile']:.0f}th pct"
+                            for t in sorted_trims)
+    return f"TRIM WATCH ({len(sorted_trims)} holding(s), RS < 40th pct):\n{trim_lines}"
+
+
 # Hard cap on T2 picks sent to picks_latest.json and confirmation email
 T2_CAP = 8
 
@@ -994,12 +1016,7 @@ class AgentOrchestrator:
                 # confirm_picks.py), so it deliberately re-alerts every scan
                 # a holding remains breached, not just the first time --
                 # you should keep hearing about it until you act.
-                send_telegram_alert(
-                    f"EXIT ALERT: {h['ticker']}\n"
-                    f"Price {h['technical_stop']['current_price']:.2f} < "
-                    f"stop {ec['effective_stop']:.2f} ({ec['source']}) | "
-                    f"avg cost {ec['avg_price']:.2f}"
-                )
+                send_telegram_alert(_build_exit_alert_message(h))
 
         # P2-06: TRIM signal -- RS percentile computed INDEPENDENTLY of
         # pattern detection via RSAgent directly (needs only price history +
@@ -1048,9 +1065,7 @@ class AgentOrchestrator:
             # is a lower-urgency "still holding, but weakening" watchlist
             # note (unlike EXIT, nothing here has actually breached a stop),
             # so a single digest-style message is friendlier than N pings.
-            trim_lines = "\n".join(f"  {t['ticker']}: RS {t['rs_percentile']:.0f}th pct"
-                                    for t in sorted_trims)
-            send_telegram_alert(f"TRIM WATCH ({len(sorted_trims)} holding(s), RS < 40th pct):\n{trim_lines}")
+            send_telegram_alert(_build_trim_alert_message(sorted_trims))
 
         # P4-04: sector concentration check — independent of held_status above
         # (doesn't need per-stock gate results, just Turso's holdings +
