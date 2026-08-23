@@ -63,5 +63,15 @@ def send_telegram_alert(message: str, parse_mode: str | None = None) -> bool:
         r.raise_for_status()
         return True
     except Exception as e:
-        log.warning(f"Telegram alert failed (non-fatal): {e}")
+        # [2026-08-23] SECURITY: requests' HTTPError (and the URL it's
+        # raised against) embeds the full request URL in its string form --
+        # Telegram's Bot API puts the token directly in the URL path
+        # (.../bot<TOKEN>/sendMessage), so an unsanitized f"{e}" here would
+        # leak the live bot token into every log file (and any tool/console
+        # output) on every failed send, not just this one. Redact it
+        # unconditionally before it touches a log line.
+        err_str = str(e)
+        if TELEGRAM_BOT_TOKEN:
+            err_str = err_str.replace(TELEGRAM_BOT_TOKEN, "***REDACTED***")
+        log.warning(f"Telegram alert failed (non-fatal): {err_str}")
         return False

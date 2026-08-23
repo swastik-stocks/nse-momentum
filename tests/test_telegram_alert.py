@@ -30,6 +30,36 @@ def test_send_telegram_alert_never_raises_on_network_failure(monkeypatch):
     assert result is False
 
 
+def test_send_telegram_alert_never_logs_the_bot_token_on_failure(monkeypatch, caplog):
+    """
+    [2026-08-23] Regression for a real incident: requests' HTTPError embeds
+    the full request URL in its string form, and Telegram's Bot API puts
+    the token directly in that URL (.../bot<TOKEN>/sendMessage) -- an
+    unsanitized log of the raw exception leaked a live token into tool
+    output during manual testing. The token must never appear in the
+    logged failure message, however the send fails.
+    """
+    import logging
+    import telegram_alert
+    real_token = "8855145986:AAFosGzQaee6dXFHlfbBf60Fx1MV_5ZcRxs"
+    monkeypatch.setattr(telegram_alert, "TELEGRAM_BOT_TOKEN", real_token)
+    monkeypatch.setattr(telegram_alert, "TELEGRAM_CHAT_ID", "12345")
+
+    def boom(*a, **kw):
+        raise ConnectionError(
+            f"400 Client Error: Bad Request for url: "
+            f"https://api.telegram.org/bot{real_token}/sendMessage"
+        )
+
+    with caplog.at_level(logging.WARNING):
+        with patch.object(telegram_alert.requests, "post", side_effect=boom):
+            result = telegram_alert.send_telegram_alert("test")
+
+    assert result is False
+    assert real_token not in caplog.text
+    assert "REDACTED" in caplog.text
+
+
 def test_send_telegram_alert_posts_correct_payload(monkeypatch):
     import telegram_alert
     monkeypatch.setattr(telegram_alert, "TELEGRAM_BOT_TOKEN", "fake-token")
