@@ -1830,11 +1830,16 @@ def _send_volume_cross_alert(ticker_key: str, pick: dict, cmp: float | None,
     entry = pick.get("entry", 0)
     pivot = pick.get("pivot", entry)
 
+    # [2026-08-23] Bold + HTML parse_mode, per explicit user feedback: a
+    # volume cross is the earliest, most time-sensitive signal of the three
+    # Telegram alert types (VOLUME/CONFIRMED/EXIT/TRIM) and needs to stand
+    # out at a glance on the phone, not blend in with plain-text pushes.
     send_telegram_alert(
-        f"VOLUME ALERT: {ticker_key}\n"
+        f"<b>VOLUME ALERT: {ticker_key}</b>\n"
         f"RVOL {rvol:.1f}x ({rvol_src}) | CMP {cmp_disp} | "
         f"Pivot ₹{pivot:,.1f} | Entry ₹{entry:,.1f}\n"
-        f"Not yet confirmed -- volume only, price action still developing"
+        f"Not yet confirmed -- volume only, price action still developing",
+        parse_mode="HTML",
     )
 
     html = f"""<html><body style="font-family:Arial,sans-serif;padding:20px;">

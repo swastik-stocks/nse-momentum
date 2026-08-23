@@ -46,6 +46,23 @@ def test_send_telegram_alert_posts_correct_payload(monkeypatch):
     assert "fake-token" in args[0]
     assert kwargs["data"]["chat_id"] == "12345"
     assert kwargs["data"]["text"] == "CONFIRMED: RADICO"
+    assert "parse_mode" not in kwargs["data"]  # not passed -- must stay plain text
+
+
+def test_send_telegram_alert_passes_parse_mode_when_given(monkeypatch):
+    import telegram_alert
+    monkeypatch.setattr(telegram_alert, "TELEGRAM_BOT_TOKEN", "fake-token")
+    monkeypatch.setattr(telegram_alert, "TELEGRAM_CHAT_ID", "12345")
+
+    mock_response = MagicMock()
+    mock_response.raise_for_status = MagicMock()
+
+    with patch.object(telegram_alert.requests, "post", return_value=mock_response) as mock_post:
+        result = telegram_alert.send_telegram_alert("<b>VOLUME ALERT</b>", parse_mode="HTML")
+
+    assert result is True
+    args, kwargs = mock_post.call_args
+    assert kwargs["data"]["parse_mode"] == "HTML"
 
 
 def test_classify_btst_candidate_alert_only_fires_when_final(monkeypatch):

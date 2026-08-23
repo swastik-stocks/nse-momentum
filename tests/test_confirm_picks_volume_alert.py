@@ -66,6 +66,10 @@ def test_send_volume_cross_alert_pushes_telegram_and_email():
     assert "TCS" in tg_msg
     assert "1.7x" in tg_msg
     assert "Dhan" in tg_msg
+    # [2026-08-23] Bold + HTML per user feedback -- volume alerts are the
+    # most time-sensitive of the three alert types and must stand out.
+    assert "<b>VOLUME ALERT: TCS</b>" in tg_msg
+    assert mock_tg.call_args.kwargs.get("parse_mode") == "HTML"
 
     mock_email.assert_called_once()
     subject, html = mock_email.call_args[0]
