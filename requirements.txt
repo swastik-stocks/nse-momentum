@@ -17,4 +17,6 @@ libsql-client
 
 python-dotenv
 
+pynacl
+
 pytest
