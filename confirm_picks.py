@@ -1798,6 +1798,60 @@ def send_email(subject: str, html_body: str):
     log.info(f"  Email sent to {recipients}" + (f" (cc: {cc})" if cc else ""))
 
 
+def _crosses_volume_alert_threshold(rvol: float, ticker_key: str, status: str,
+                                     already_alerted: dict) -> bool:
+    """
+    Pure decision function for _send_volume_cross_alert's trigger, pulled out
+    of the checkpoint loop so it's directly unit-testable. True iff: RVOL has
+    reached RVOL_CONFIRM_MIN, this ticker hasn't already fired a volume
+    alert today, and this checkpoint isn't ALSO about to send the richer
+    CONFIRMED/CONFIRMED_LOW_VOL alert for the same ticker (that path already
+    covers RVOL >= RVOL_CONFIRM_MIN, so firing both would double-ping).
+    """
+    return (rvol >= RVOL_CONFIRM_MIN
+            and ticker_key not in already_alerted
+            and status not in ("CONFIRMED", "CONFIRMED_LOW_VOL"))
+
+
+def _send_volume_cross_alert(ticker_key: str, pick: dict, cmp: float | None,
+                              rvol: float, rvol_src: str) -> None:
+    """
+    [2026-08-23] Fires the instant a previous day's recommendation crosses
+    RVOL_CONFIRM_MIN (1.5x) RVOL -- independent of whether price has cleared
+    the pivot yet. A pure "something unusual is happening" heads-up, earlier
+    and separate from the richer CONFIRMED alert (which requires price above
+    pivot too -- see classify()). Both channels, same reasoning as the
+    CONFIRMED alert: Telegram for the instant push, plus a standalone email
+    since a volume cross by itself is NOT a terminal status (see
+    TERMINAL_STATUSES) and so wouldn't otherwise trigger an email until/
+    unless this pick later goes terminal on its own.
+    """
+    cmp_disp = f"₹{cmp:,.1f}" if cmp else "N/A"
+    entry = pick.get("entry", 0)
+    pivot = pick.get("pivot", entry)
+
+    send_telegram_alert(
+        f"VOLUME ALERT: {ticker_key}\n"
+        f"RVOL {rvol:.1f}x ({rvol_src}) | CMP {cmp_disp} | "
+        f"Pivot ₹{pivot:,.1f} | Entry ₹{entry:,.1f}\n"
+        f"Not yet confirmed -- volume only, price action still developing"
+    )
+
+    html = f"""<html><body style="font-family:Arial,sans-serif;padding:20px;">
+    <h2 style="color:#b45309;">Volume Alert: {ticker_key}</h2>
+    <p>RVOL just crossed <b>{RVOL_CONFIRM_MIN}x</b> — currently <b>{rvol:.1f}x</b> ({rvol_src}).</p>
+    <table style="border-collapse:collapse;">
+      <tr><td style="padding:4px 12px;color:#64748b;">CMP</td><td style="padding:4px 12px;"><b>{cmp_disp}</b></td></tr>
+      <tr><td style="padding:4px 12px;color:#64748b;">Pivot</td><td style="padding:4px 12px;">₹{pivot:,.1f}</td></tr>
+      <tr><td style="padding:4px 12px;color:#64748b;">Entry</td><td style="padding:4px 12px;">₹{entry:,.1f}</td></tr>
+    </table>
+    <p style="color:#94a3b8;font-size:12px;margin-top:16px;">
+      Volume only — price has not necessarily cleared the pivot yet. Not a CONFIRMED signal.
+    </p>
+    </body></html>"""
+    send_email(f"[NSE Momentum] Volume Alert: {ticker_key} crossed {RVOL_CONFIRM_MIN}x RVOL", html)
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # [FIX-2] Multi-checkpoint state persistence
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1808,6 +1862,16 @@ STATE_DIR = "logs"
 def _state_path(today_iso: str) -> str:
     os.makedirs(STATE_DIR, exist_ok=True)
     return os.path.join(STATE_DIR, f"confirm_state_{today_iso.replace('-', '')}.json")
+
+
+def _volume_alert_state_path(today_iso: str) -> str:
+    """[2026-08-23] Separate small state file, {ticker: HH:MM fired}, tracking
+    which picks already got a volume-cross alert today -- deliberately not
+    folded into confirm_state_<date>.json, since crossing RVOL_CONFIRM_MIN is
+    NOT a terminal classification (see classify()/TERMINAL_STATUSES) and
+    shouldn't be conflated with that state machine."""
+    os.makedirs(STATE_DIR, exist_ok=True)
+    return os.path.join(STATE_DIR, f"volume_alert_state_{today_iso.replace('-', '')}.json")
 
 
 def _load_state(path: str) -> dict:
@@ -2235,6 +2299,11 @@ def main():
     log.info(f"  Prior state: {len(prior_state)} ticker(s) already terminal "
               f"({'first checkpoint today' if is_first_run else 'resuming'})")
 
+    # [2026-08-23] Volume-cross alert state -- separate from prior_state
+    # above, see _volume_alert_state_path docstring.
+    volume_alert_path  = _volume_alert_state_path(today_iso)
+    volume_alert_state = _load_state(volume_alert_path)
+
     results       = []
     newly_terminal = []
 
@@ -2306,6 +2375,15 @@ def main():
         c["price_suspect"]    = cmp_suspect
         c["rvol_elapsed_minutes"] = rvol_elapsed
 
+        # [2026-08-23] Volume-cross alert -- independent of price/pivot
+        # classification, fires once per ticker per day the first time RVOL
+        # crosses RVOL_CONFIRM_MIN. Skipped when this same checkpoint already
+        # sends the richer CONFIRMED/CONFIRMED_LOW_VOL alert below, to avoid
+        # double-pinging the same event from two different code paths.
+        if _crosses_volume_alert_threshold(rvol, ticker_key, c["status"], volume_alert_state):
+            volume_alert_state[ticker_key] = run_time
+            _send_volume_cross_alert(ticker_key, pick, cmp, rvol, rvol_src)
+
         log.info(
             f"    → {c['status']:25s}  "
             f"CMP={f'₹{cmp:,.1f}' if cmp else 'N/A':>10} ({cmp_src})  "
@@ -2332,6 +2410,7 @@ def main():
         time.sleep(0.3)
 
     _save_state(state_path, prior_state)
+    _save_state(volume_alert_path, volume_alert_state)
     _persist_confirmation_outcomes(today_iso, checkpoint_label, newly_terminal)
 
     # ── Decide whether/what to send ──────────────────────────────────────────
