@@ -115,6 +115,15 @@ SCHEMA_STATEMENTS = [
         published_at        TEXT
     )
     """,
+    """
+    CREATE TABLE IF NOT EXISTS sector_pick_history (
+        id              INTEGER PRIMARY KEY AUTOINCREMENT,
+        scan_date       TEXT NOT NULL,
+        sector          TEXT NOT NULL,
+        published_at    TEXT,
+        UNIQUE(scan_date, sector)
+    )
+    """,
 ]
 
 
@@ -170,7 +179,7 @@ def init_schema():
             client.execute(stmt)
         migrate_position_actions_columns(client)
         print("Schema created (or already existed) — scanner_signals, position_actions, "
-              "sector_breadth, industry_breadth.")
+              "sector_breadth, industry_breadth, sector_pick_history.")
     finally:
         client.close()
 
@@ -312,6 +321,128 @@ def publish_scan_metadata(dhan_status: dict, regime: str, breadth_score: int,
         return False
     finally:
         client.close()
+
+
+def publish_sector_history(sectors, scan_date: str = None, dry_run: bool = False) -> int:
+    """
+    [2026-09-07] Backs sector_novelty.py's "NEW SECTOR" email badge.
+
+    Publishes today's distinct pick sectors (T1+T2+T3+Near-Breakout —
+    whatever the caller passes) to sector_pick_history. This has to be
+    Turso, not a local file: the evening scan runs on GitHub Actions
+    (ubuntu-latest, fresh checkout every run — see daily_scan.yml), so
+    anything written to the local filesystem is gone before the next run.
+    Turso is the only thing that actually persists across days here, same
+    reason scanner_signals/scan_metadata live here instead of a local file.
+
+    Upserts on (scan_date, sector) — safe to re-run same-day without
+    duplicating rows. Skipped on dry_run (never write test data into the
+    shared prod table — P1-06), and never raises past the caller.
+    """
+    import datetime as _dt
+
+    if not sectors:
+        return 0
+    if dry_run:
+        print("  [turso_sync] publish_sector_history skipped — dry run")
+        return 0
+
+    scan_date = scan_date or _dt.date.today().isoformat()
+    now = _dt.datetime.now().isoformat()
+    try:
+        client = get_client()
+    except SystemExit as e:
+        print(f"  [turso_sync] publish_sector_history skipped — {e}")
+        return 0
+
+    published = 0
+    try:
+        client.execute("""
+            CREATE TABLE IF NOT EXISTS sector_pick_history (
+                id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                scan_date       TEXT NOT NULL,
+                sector          TEXT NOT NULL,
+                published_at    TEXT,
+                UNIQUE(scan_date, sector)
+            )
+        """)
+        for sector in sectors:
+            try:
+                client.execute(
+                    """
+                    INSERT INTO sector_pick_history (scan_date, sector, published_at)
+                    VALUES (?,?,?)
+                    ON CONFLICT(scan_date, sector) DO UPDATE SET published_at=excluded.published_at
+                    """,
+                    [scan_date, sector, now],
+                )
+                published += 1
+            except Exception as e:
+                print(f"  [turso_sync] Failed to publish sector '{sector}': {e}")
+    finally:
+        client.close()
+    return published
+
+
+def get_recent_sectors(before_date: str, lookback_days: int):
+    """
+    Returns (prior_sectors: set[str], has_any_history: bool) for
+    sector_novelty.py's "has this sector been picked recently" check.
+
+    prior_sectors — distinct sectors published on any scan_date in
+    [before_date - lookback_days, before_date) — strictly BEFORE
+    before_date, so a same-day re-run never counts as its own history.
+
+    has_any_history — whether sector_pick_history has ANY row at all
+    before before_date, regardless of the lookback window. Lets the
+    caller tell "this sector genuinely hasn't been picked in N days"
+    (should flag NEW) apart from "this table has no data yet at all"
+    (a fresh deploy — flagging every sector NEW on day one isn't a
+    useful signal, so the caller treats that as "don't flag anything").
+
+    Returns (set(), False) if Turso is unreachable, so the caller can
+    fall back to a local cache rather than crash. Never raises.
+    """
+    try:
+        client = get_client()
+    except SystemExit as e:
+        print(f"  [turso_sync] get_recent_sectors skipped — {e}")
+        return set(), False
+
+    try:
+        import datetime as _dt
+        cutoff = (_dt.date.fromisoformat(before_date) -
+                  _dt.timedelta(days=lookback_days)).isoformat()
+
+        client.execute("""
+            CREATE TABLE IF NOT EXISTS sector_pick_history (
+                id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                scan_date       TEXT NOT NULL,
+                sector          TEXT NOT NULL,
+                published_at    TEXT,
+                UNIQUE(scan_date, sector)
+            )
+        """)
+
+        rs_any = client.execute(
+            "SELECT 1 FROM sector_pick_history WHERE scan_date < ? LIMIT 1",
+            [before_date],
+        )
+        has_any_history = len(rs_any.rows) > 0
+
+        rs = client.execute(
+            "SELECT DISTINCT sector FROM sector_pick_history "
+            "WHERE scan_date >= ? AND scan_date < ?",
+            [cutoff, before_date],
+        )
+        prior_sectors = {row[0] for row in rs.rows}
+        return prior_sectors, has_any_history
+    except Exception as e:
+        print(f"  [turso_sync] get_recent_sectors query failed: {e}")
+        return set(), False
+    finally:
+        client.close()
+
 
 def get_holdings() -> dict:
     """

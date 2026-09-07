@@ -66,6 +66,14 @@ DEFENSIVE_COLOR  = "#5D6E85"
 DEFENSIVE_BG     = "rgba(93,110,133,0.08)"
 DEFENSIVE_BORDER = "rgba(93,110,133,0.25)"
 
+# [2026-09-07] "New sector" badge -- distinct purple/violet so it reads as
+# its own dimension (theme rotation), never confused with the green/gold/
+# blue tier accents or the MAJOR/MINOR/RECOVERY breakout-quality badge.
+# Flag itself is computed by sector_novelty.mark_new_sectors() in
+# orchestrator.py; this file only renders whatever .sector_is_new /
+# ["is_new_sector"] it's handed.
+NEW_SECTOR_COLOR = "#7C4FC4"
+
 # Section 6 (Position Alerts) colors Î“Ã‡Ã¶ deliberately reuse existing meanings
 # from elsewhere in this file rather than invent a new palette: EXIT reuses
 # the same red as the SL (stop-loss) figure in every tier card; TRIM reuses
@@ -260,6 +268,29 @@ def send_email_report(tiers: dict):
         raise
 
 
+def _new_sector_badge(is_new: bool, compact: bool = False) -> str:
+    """
+    Shared "NEW SECTOR" badge -- one rendering for trade cards (full label,
+    room to spare) and one compact chip for table rows (Top-20, Near-
+    Breakout, At-A-Glance) where space next to the ticker is tight.
+    Returns "" when is_new is falsy so every call site can inline it
+    without its own if/else.
+    """
+    if not is_new:
+        return ""
+    if compact:
+        return (f'<span style="font-size:8px;color:{NEW_SECTOR_COLOR};'
+                f'border:1px solid {NEW_SECTOR_COLOR};border-radius:3px;'
+                f'padding:0px 4px;margin-left:5px;font-weight:700" '
+                f'title="First appearance of this sector in picks in the last '
+                f'15 days">NEW</span>')
+    return (f'<span style="font-size:9px;color:{NEW_SECTOR_COLOR};'
+            f'border:1px solid {NEW_SECTOR_COLOR};border-radius:3px;'
+            f'padding:1px 5px;margin-left:6px;font-weight:700" '
+            f'title="First appearance of this sector in picks in the last '
+            f'15 days -- possible sector rotation starting">NEW SECTOR</span>')
+
+
 def _heat_cell(label: str, kind: str) -> str:
     """kind: 'pass' | 'mid' | 'fail' -- see threshold constants above."""
     bg, fg = {
@@ -310,7 +341,7 @@ def _heatmap_table(stocks: list, tier_label: str, accent_color: str) -> str:
 
         rows_html += f"""
 <tr style="border-bottom:1px solid #DFE5EE">
-  <td style="padding:8px 10px;font-weight:700;color:#101826;font-family:monospace">{r.ticker.replace('.NS','')}</td>
+  <td style="padding:8px 10px;font-weight:700;color:#101826;font-family:monospace">{r.ticker.replace('.NS','')}{_new_sector_badge(getattr(r, "sector_is_new", False), compact=True)}</td>
   <td style="padding:8px 10px;text-align:right;font-family:monospace;color:#55627A">Rs.{r.entry:,.1f}</td>
   <td style="padding:8px 10px;text-align:right;font-family:monospace">{_heat_cell(f"{rs:.0f}th", rs_kind)}</td>
   <td style="padding:8px 10px;text-align:right;font-family:monospace">{_heat_cell(f"{rvol:.1f}x", rvol_kind)}</td>
@@ -374,6 +405,8 @@ def _tier_card(r, tier_label: str, tier_color: str) -> str:
             'LOW HISTORICAL EDGE</span>'
         )
 
+    sector_new_html = _new_sector_badge(getattr(r, "sector_is_new", False))
+
     # Confirmation state
     conf       = getattr(r, "confirmation_state", "SETUP_READY")
     conf_col   = "#0E8F63" if conf == "BREAKOUT_CONFIRMED" else "#96690A"
@@ -428,7 +461,7 @@ def _tier_card(r, tier_label: str, tier_color: str) -> str:
       <div style="font-size:17px;font-weight:700;color:#101826;margin:3px 0">
         {r.ticker.replace('.NS','')} {bq_html}{low_edge_html}
       </div>
-      <div style="font-size:11px;color:#8895AA">{r.name} - {r.sector} - {r.universe}</div>
+      <div style="font-size:11px;color:#8895AA">{r.name} - {r.sector}{sector_new_html} - {r.universe}</div>
       <div style="margin-top:4px">
         <span style="font-size:9px;color:{conf_col};border:1px solid {conf_col};
                      border-radius:3px;padding:1px 5px">{conf_label}</span>
@@ -482,7 +515,7 @@ def _near_breakout_section(near_bo: list) -> str:
         rows += f"""
 <tr style="border-bottom:1px solid #DFE5EE">
   <td style="padding:7px 10px;font-weight:600;color:#101826;font-family:monospace">
-    {nb['ticker'].replace('.NS','')}
+    {nb['ticker'].replace('.NS','')}{_new_sector_badge(nb.get('is_new_sector', False), compact=True)}
   </td>
   <td style="padding:7px 10px;color:#55627A;font-size:11px">{nb['name']}</td>
   <td style="padding:7px 10px;color:#55627A;font-size:11px">{nb['pattern']}</td>
@@ -1115,7 +1148,7 @@ def _build_html(t1, t2, t3, all_r, near_bo, defensive,
         top20_rows += f"""
 <tr style="background:{bg}">
   <td style="padding:6px 10px;font-family:monospace;font-size:10px;color:{tcol}">T{r.tier}</td>
-  <td style="padding:6px 10px;font-weight:600;color:#101826">{r.ticker.replace('.NS','')}</td>
+  <td style="padding:6px 10px;font-weight:600;color:#101826">{r.ticker.replace('.NS','')}{_new_sector_badge(getattr(r, "sector_is_new", False), compact=True)}</td>
   <td style="padding:6px 10px;color:#55627A;font-size:11px">
     {r.pattern}
     <span style="color:{bq_col};font-size:9px;margin-left:4px">[{bq}]</span>
@@ -1143,6 +1176,24 @@ def _build_html(t1, t2, t3, all_r, near_bo, defensive,
                            + _sector_concentration_section(sector_concentration)         # NEW P4-04
                            + _portfolio_heat_alert(holding_heat)                         # NEW P4-04 heat
                            + _signal_attribution_section(signal_attribution))            # NEW P4-02
+
+    # [2026-09-07] New-sector summary pill -- top-of-email visibility for
+    # the same signal the per-row NEW badges carry, so a rotating theme
+    # (e.g. Steel/Metal showing up first in Tier 3/Near-Breakout) can't be
+    # missed just by skimming the header before reading every card.
+    new_sectors_today = sorted(
+        {r.sector for r in (t1 + t2 + t3) if getattr(r, "sector_is_new", False)}
+        | {nb["sector"] for nb in near_bo if nb.get("is_new_sector") and nb.get("sector")}
+    )
+    new_sector_badge = ""
+    if new_sectors_today:
+        new_sector_badge = f"""
+    <div style="background:rgba(124,79,196,0.08);border:1px solid rgba(124,79,196,0.3);
+                border-radius:20px;padding:5px 14px" title="{', '.join(new_sectors_today)}">
+      <span style="font-family:monospace;font-size:10px;color:{NEW_SECTOR_COLOR}">
+        NEW {len(new_sectors_today)} sector{"s" if len(new_sectors_today) != 1 else ""}: {', '.join(new_sectors_today)}
+      </span>
+    </div>"""
 
     exit_badge = ""
     if exit_alerts:
@@ -1196,6 +1247,7 @@ def _build_html(t1, t2, t3, all_r, near_bo, defensive,
         {"" if not defensive else f" - {len(defensive)} Defensive"}
       </span>
     </div>
+    {new_sector_badge}
     {exit_badge}
   </div>
 </div>

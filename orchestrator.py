@@ -265,6 +265,7 @@ class StockResult:
     breadth_source:       str   = ""       # NSE_LIVE_API / BHAVCOPY_FULL / DEFAULT
     weekly_trend_bonus:   float = 0.0
     weekly_trend_weeks:   int   = 0
+    sector_is_new:        bool  = False    # set by sector_novelty.mark_new_sectors()
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1426,6 +1427,21 @@ class AgentOrchestrator:
         # scripts that don't populate data_provenance at all, e.g.
         # single_stock.py -- the real evening pipeline always has it).
         effective_scan_date = meta["bhavcopy_trading_date"] or _date.today().isoformat()
+
+        # Flag sectors making their first appearance in picks in the last
+        # sector_novelty.LOOKBACK_DAYS -- cosmetic-only email signal, so a
+        # failure here must never take down the scan/email (same
+        # failure-isolation pattern as auto_log_t1_picks/turso_sync above).
+        try:
+            from sector_novelty import mark_new_sectors
+            new_sectors = mark_new_sectors(
+                t1_accepted + t2 + t3, near_breakout,
+                scan_date=effective_scan_date, dry_run=dry_run,
+            )
+            if new_sectors:
+                log.info(f"  New sector(s) flagged: {', '.join(sorted(new_sectors))}")
+        except Exception as e:
+            log.warning(f"  sector_novelty.mark_new_sectors failed (non-fatal): {e}")
 
         picks_json = []
         for r in t1_accepted + t2:
