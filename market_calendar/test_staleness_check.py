@@ -7,11 +7,12 @@ edge cases that would otherwise bite you next (Monday after a Friday
 scan, and the day after an NSE holiday).
 """
 
-from datetime import date
+from datetime import date, datetime
 from staleness_check import (
     check_staleness,
     previous_trading_day,
     is_trading_day,
+    verify_generation_consistency,
     StaleDataError,
 )
 
@@ -58,10 +59,41 @@ def test_previous_trading_day_basic():
     print("PASS: previous_trading_day basic cases correct")
 
 
+def test_generation_consistency_holiday_rerun():
+    """2026-09-15 incident: cron-job.org's evening-scan trigger fires Mon-Fri
+    with no NSE-holiday awareness, so it fired on Mon 14 Sep (Ganesh
+    Chaturthi). scanner.py correctly re-verified/re-used Fri 11 Sep's real
+    Bhavcopy and produced a fresh artifact generated Monday evening --
+    generated_at's date (14 Sep) legitimately differs from
+    bhavcopy_trading_date (11 Sep). Must NOT be flagged as stale/replayed."""
+    prov = verify_generation_consistency("2026-09-11", datetime(2026, 9, 14, 20, 55))
+    assert prov.ok, f"legitimate holiday carry-forward wrongly rejected: {prov.reason}"
+    print("PASS: holiday re-run carry-forward correctly accepted")
+
+
+def test_generation_consistency_normal_day():
+    """Normal case: scan runs the same evening as the trading day it covers."""
+    prov = verify_generation_consistency("2026-07-21", datetime(2026, 7, 21, 19, 45))
+    assert prov.ok, f"same-day generation wrongly rejected: {prov.reason}"
+    print("PASS: normal same-day generation correctly accepted")
+
+
+def test_generation_consistency_catches_real_mismatch():
+    """A bhavcopy_trading_date that ISN'T the correct last-trading-day answer
+    for generated_at's own date is still a genuine problem and must still
+    be caught -- the fix must not turn this into a blanket pass-through."""
+    prov = verify_generation_consistency("2026-08-01", datetime(2026, 9, 14, 20, 55))
+    assert not prov.ok, "genuinely stale/replayed artifact was NOT caught"
+    print(f"PASS: genuine mismatch correctly caught -> {prov.reason}")
+
+
 if __name__ == "__main__":
     test_the_actual_bug_that_happened()
     test_monday_after_friday_scan()
     test_day_after_holiday()
     test_genuinely_stale_data_still_caught()
     test_previous_trading_day_basic()
+    test_generation_consistency_holiday_rerun()
+    test_generation_consistency_normal_day()
+    test_generation_consistency_catches_real_mismatch()
     print("\nAll tests passed.")

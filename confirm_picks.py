@@ -52,7 +52,8 @@ from dotenv import load_dotenv
 
 from market_calendar.staleness_check import (check_staleness, StaleDataError,
                                               get_code_provenance, verify_intraday_freshness,
-                                              verify_closing_price_freshness)
+                                              verify_closing_price_freshness,
+                                              verify_generation_consistency)
 from database.schema import get_connection, init_all_tables
 import dhan_rvol
 from agents.intraday_vol_adjusted_agent import IntradayVolAdjustedAgent
@@ -1570,8 +1571,19 @@ def build_btst_html(results: list, scan_date: str, run_time: str, is_final: bool
 </body></html>"""
 
 
-def build_stale_html(scan_date_str: str, today_iso: str, run_time: str) -> str:
-    """Email sent when picks_latest.json is genuinely stale."""
+def build_stale_html(scan_date_str: str, today_iso: str, run_time: str, reason: str = None) -> str:
+    """
+    Email sent when picks_latest.json fails a freshness/provenance gate.
+    [2026-09-15] `reason` now carries the SPECIFIC gate that failed (date
+    mismatch, unverified Bhavcopy, missing/inconsistent generated_at, dirty
+    cloud runner, ...) instead of a single hardcoded "older than the last
+    trading day" claim -- that fixed wording was itself misleading on
+    2026-09-15's incident (the file wasn't actually older than the last
+    trading day; a different gate had tripped) and cost real time to
+    diagnose. Falls back to the old generic wording if no reason is passed.
+    """
+    detail = reason or (f"picks_latest.json is dated {scan_date_str} which is older than "
+                         f"the last trading day before {today_iso}.")
     return f"""<!DOCTYPE html>
 <html lang="en">
 <head><meta charset="UTF-8"></head>
@@ -1590,13 +1602,13 @@ def build_stale_html(scan_date_str: str, today_iso: str, run_time: str) -> str:
   <div style="background:#fef2f2;border-left:4px solid #dc2626;
       margin:24px;padding:16px;border-radius:0 4px 4px 0;">
     <div style="font-weight:700;color:#991b1b;font-size:15px;">
-      Evening scan did not run
+      Confirmation blocked — data could not be verified
     </div>
     <div style="color:#7f1d1d;font-size:13px;margin-top:8px;">
-      picks_latest.json is dated <strong>{scan_date_str}</strong> which is older than
-      the last trading day before <strong>{today_iso}</strong>.<br><br>
-      No confirmation performed. Do not trade today until the evening scan runs
-      and produces a fresh picks file.
+      picks_latest.json is dated <strong>{scan_date_str}</strong>.<br><br>
+      {detail}<br><br>
+      No confirmation performed. Do not trade today until this is resolved
+      and a verified picks file is available.
     </div>
   </div>
   <div style="background:#f8fafc;border-top:1px solid #e2e8f0;padding:14px 28px;
@@ -2229,13 +2241,13 @@ def main():
     # artifact with a coincidentally-correct scan_date string would sail
     # through undetected. Now also requires meta["bhavcopy_date_verified"]
     # to be True and meta["generated_at"] to be a real, parseable
-    # timestamp whose date matches scan_date -- a corrupted/replayed
+    # timestamp consistent with scan_date -- a corrupted/replayed
     # artifact would now need to fake three independent fields, not one.
     scan_date_str = meta.get("bhavcopy_trading_date") or (picks[0].get("scan_date") if picks else "")
 
     def _fail_stale(reason: str):
         log.error(f"STALE PICKS FILE — {reason}")
-        stale_html = build_stale_html(scan_date_str or "unknown", today_iso, run_time)
+        stale_html = build_stale_html(scan_date_str or "unknown", today_iso, run_time, reason=reason)
         send_email(
             f"[NSE Momentum Checkpoint] STALE DATA — evening scan missing | {today_str}",
             stale_html
@@ -2264,9 +2276,17 @@ def main():
         except ValueError:
             _fail_stale(f"meta.generated_at {gen_at!r} is not a parseable timestamp.")
             return
-        if gen_at_dt.date().isoformat() != scan_date_str:
-            _fail_stale(f"meta.generated_at date ({gen_at_dt.date()}) does not match "
-                        f"meta.bhavcopy_trading_date ({scan_date_str}).")
+        # [2026-09-15 fix] NOT a literal same-day check -- an evening scan
+        # that legitimately re-runs on a non-trading day (e.g. cron-job.org's
+        # trigger fires Mon-Fri with no NSE-holiday awareness -- see
+        # daily_scan.yml) correctly re-verifies and re-uses the last REAL
+        # trading day's Bhavcopy, so generated_at can legitimately land on a
+        # later calendar date than bhavcopy_trading_date. See
+        # verify_generation_consistency()'s docstring for the incident this
+        # replaced (5 straight false STALE DATA alerts, 09:16-12:15 IST).
+        gen_prov = verify_generation_consistency(scan_date_str, gen_at_dt)
+        if not gen_prov.ok:
+            _fail_stale(gen_prov.reason)
             return
 
         code_prov = meta.get("code_provenance", {}) or {}

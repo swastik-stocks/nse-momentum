@@ -89,6 +89,49 @@ class StaleDataError(Exception):
     pass
 
 
+def verify_generation_consistency(scan_date_str: str, generated_at: datetime,
+                                   holidays: set = NSE_HOLIDAYS_2026) -> "DataProvenance":
+    """
+    Anti-replay check for picks_latest.json's self-reported provenance:
+    bhavcopy_trading_date must be the correct last-trading-day answer AS OF
+    generated_at's own date -- NOT literally the same calendar date.
+
+    [2026-09-15 incident] cron-job.org's evening-scan trigger fires Mon-Fri
+    with no NSE-holiday awareness at all (see daily_scan.yml) -- it fired on
+    Mon 14 Sep (Ganesh Chaturthi, a holiday) same as any weekday. scanner.py
+    correctly detected the holiday and re-verified/re-used Fri 11 Sep's real
+    Bhavcopy via get_last_trading_day() (same holiday-aware logic as this
+    module) rather than failing outright -- a legitimate carry-forward, not
+    stale data. That run's generated_at (14 Sep) therefore doesn't equal its
+    own bhavcopy_trading_date (11 Sep) by design. The old exact-equality
+    check treated every one of these legitimate re-runs as a replayed/
+    corrupted artifact and blocked confirm_picks.py for hours (5 straight
+    checkpoints, 09:16-12:15 IST, all re-downloading the same safe artifact
+    and re-failing the same way). Comparing against "the last trading day as
+    of generated_at's date" instead accepts this case while still catching
+    an actually-stale or replayed file (wrong bhavcopy_trading_date for
+    *any* legitimate generation date).
+    """
+    generated_date = generated_at.date()
+    expected = (generated_date if is_trading_day(generated_date, holidays)
+                else previous_trading_day(generated_date, holidays))
+    if expected.isoformat() != scan_date_str:
+        return DataProvenance(
+            source_name="generation_consistency", ok=False,
+            reason=(f"meta.generated_at ({generated_date}) implies bhavcopy_trading_date "
+                    f"should be {expected} (the last trading day as of generation), "
+                    f"but got {scan_date_str} instead -- a genuine mismatch, not a "
+                    f"holiday carry-forward"),
+            requested_date=expected, actual_date=None, fetched_at=generated_at,
+        )
+    return DataProvenance(
+        source_name="generation_consistency", ok=True,
+        reason=f"bhavcopy_trading_date {scan_date_str} matches the last trading day "
+               f"as of generated_at ({generated_date})",
+        requested_date=expected, actual_date=expected, fetched_at=generated_at,
+    )
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # [2026-08-18] Shared fail-closed data-provenance contract.
 #
