@@ -23,7 +23,7 @@ NSE Momentum v6.2 - Email Reporter
 import os, smtplib, logging
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
 try:
@@ -1070,7 +1070,23 @@ def _build_html(t1, t2, t3, all_r, near_bo, defensive,
     cov       = data_prov.get("ohlcv_universe_coverage", {}) or {}
     code_prov = data_prov.get("code_provenance", {}) or {}
     gen_at    = data_prov.get("generated_at", "")
-    gen_at_disp = gen_at[11:16] if gen_at and len(gen_at) >= 16 else "?"
+    gen_at_disp = "?"
+    if gen_at:
+        try:
+            _gen_dt = datetime.fromisoformat(gen_at)
+            if _gen_dt.tzinfo is not None:
+                # generated_at carries a real UTC offset (e.g. +00:00 on a CI
+                # runner) -- convert to IST for display instead of slicing the
+                # raw wall-clock characters, which silently mislabels
+                # whatever timezone the runner happened to be in as "IST".
+                _IST = timezone(timedelta(hours=5, minutes=30))
+                gen_at_disp = _gen_dt.astimezone(_IST).strftime("%H:%M")
+            elif len(gen_at) >= 16:
+                # No offset info (naive timestamp) -- nothing to convert from,
+                # fall back to the legacy slice rather than guessing.
+                gen_at_disp = gen_at[11:16]
+        except ValueError:
+            gen_at_disp = "?"
     commit    = (code_prov.get("git_commit") or "?")[:8]
     warn_bits = []
     if code_prov.get("git_dirty"):
@@ -1163,8 +1179,9 @@ def _build_html(t1, t2, t3, all_r, near_bo, defensive,
   <td style="padding:6px 10px;font-size:10px;color:#8895AA">{r.universe}</td>
 </tr>"""
 
-    ad   = bd.get("ad_ratio", "-")
-    ab50 = bd.get("above_50_pct", "-")
+    ad       = bd.get("ad_ratio", "-")
+    _ab50_raw = bd.get("above_50_ema_pct")
+    ab50     = f"{_ab50_raw:.1f}" if isinstance(_ab50_raw, (int, float)) else "-"
     nh   = bd.get("new_highs", "-")
     nl   = bd.get("new_lows", "-")
     bbar = int(breadth / 10 * 100)
