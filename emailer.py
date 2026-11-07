@@ -796,17 +796,27 @@ def _compute_portfolio_heat(held_status: list) -> dict:
     return result
 
 
-def _portfolio_heat_alert(holding_heat: dict, heat_warning_pct: float = 5.0) -> str:
+def _portfolio_heat_alert(holding_heat: dict, heat_warning_pct: float = 5.0,
+                          exclude_tickers=()) -> str:
     """
     P4-04: email subsection for positions within heat_warning_pct% of their
     stop. Returns "" when nothing is within the warning threshold — same
     "silently disappear" rule as every other conditional subsection in
     this file.
+
+    [2026-11-07] exclude_tickers = tickers already shown in EXIT ALERTS.
+    Both tables use the same effective_stop, so without this every
+    below-stop holding appeared twice (e.g. 5 Nov: 17 "near stop" rows,
+    10 of them duplicates at negative distance). Excluded by EXIT-ALERT
+    membership rather than distance sign, so a below-stop holding that is
+    somehow NOT an exit alert still surfaces here instead of vanishing.
     """
     if not holding_heat:
         return ""
+    excluded = set(exclude_tickers)
     close_to_stop = sorted(
-        [(t, d) for t, d in holding_heat.items() if d["distance_pct"] <= heat_warning_pct],
+        [(t, d) for t, d in holding_heat.items()
+         if d["distance_pct"] <= heat_warning_pct and t not in excluded],
         key=lambda x: x[1]["distance_pct"]
     )
     if not close_to_stop:
@@ -1191,7 +1201,8 @@ def _build_html(t1, t2, t3, all_r, near_bo, defensive,
     defensive_section  = _defensive_section(defensive, regime)   # NEW
     position_section   = (_position_alerts_section(exit_alerts, trim_signals, add_on)   # NEW P2-07
                            + _sector_concentration_section(sector_concentration)         # NEW P4-04
-                           + _portfolio_heat_alert(holding_heat)                         # NEW P4-04 heat
+                           + _portfolio_heat_alert(holding_heat,                         # NEW P4-04 heat
+                                                   exclude_tickers={h["ticker"] for h in exit_alerts})
                            + _signal_attribution_section(signal_attribution))            # NEW P4-02
 
     # [2026-09-07] New-sector summary pill -- top-of-email visibility for
