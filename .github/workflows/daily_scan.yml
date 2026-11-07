@@ -19,6 +19,14 @@ on:
     # if scan_metadata already has a row for today, so this only does
     # anything when the primary trigger genuinely failed to fire.
     - cron: '0 15 * * 1-5'
+    # [2026-11-07] ONE-OFF: Sunday 8 Nov 2026 Muhurat session (14:20-15:30
+    # IST). cron-job.org and the line above only fire Mon-Fri. 20:15 IST
+    # primary + 22:00 IST retry (in case NSE publishes the bhavcopy late);
+    # the gate job's scan_metadata check stops the second one re-running a
+    # successful scan. REMOVE both lines after 8 Nov 2026 -- dom/month
+    # crons repeat yearly, and next year's Nov 8 is a normal Monday.
+    - cron: '45 14 8 11 *'
+    - cron: '30 16 8 11 *'
 jobs:
   gate:
     runs-on: ubuntu-latest

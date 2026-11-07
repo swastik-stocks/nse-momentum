@@ -232,13 +232,13 @@ def _sum_elapsed_volume(candles: list, window_start_dt: datetime,
 
 
 def _get_trading_days_back(n: int) -> list:
-    """Return the last n trading days (Mon-Fri, naive -- doesn't account
-    for NSE holidays, which is fine for a 20-day average since a couple
-    of missing days barely moves the average)."""
+    """Return the last n trading days, per the shared NSE calendar
+    (holidays skipped, special sessions such as Sunday Muhurat included)."""
+    from market_calendar.staleness_check import is_trading_day
     days = []
     d = date.today() - timedelta(days=1)  # start from yesterday
     while len(days) < n:
-        if d.weekday() < 5:  # Mon-Fri
+        if is_trading_day(d):
             days.append(d)
         d -= timedelta(days=1)
     return days

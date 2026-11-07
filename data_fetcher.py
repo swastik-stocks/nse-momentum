@@ -910,13 +910,15 @@ class BhavcopyFetcher:
         failure looks identical to "no delivery data today" unless the
         provenance is inspected too.
         """
-        from market_calendar.staleness_check import verify_bhavcopy_date
+        from market_calendar.staleness_check import verify_bhavcopy_date, is_trading_day
         expected = expected_trading_date or get_last_trading_day()
         expected_str = expected.strftime("%Y-%m-%d")
 
         for offset in range(0, 5):
             dt = datetime.today() - timedelta(days=offset)
-            if dt.weekday() >= 5:
+            # Calendar-aware, not weekday(): a Sunday Muhurat session has a
+            # real bhavcopy that a plain weekend skip would never fetch.
+            if not is_trading_day(dt.date()):
                 continue
             date_str   = dt.strftime("%d%m%Y")
             iso_date   = dt.strftime("%Y-%m-%d")

@@ -65,10 +65,13 @@ USER_AGENT = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
 
 
 def _get_last_trading_day(from_date: date = None) -> date:
+    # Delegates to the shared calendar so holidays and special sessions
+    # (e.g. Sunday Muhurat) match the rest of the pipeline.
+    from market_calendar.staleness_check import is_trading_day
     d = from_date or date.today()
     for i in range(7):
         candidate = d - timedelta(days=i)
-        if candidate.weekday() < 5:
+        if is_trading_day(candidate):
             return candidate
     return d
 
@@ -142,7 +145,8 @@ def fetch_nse_mcap() -> Dict[str, float]:
     """
     for offset in range(5):
         candidate = _get_last_trading_day() - timedelta(days=offset)
-        if candidate.weekday() >= 5:
+        from market_calendar.staleness_check import is_trading_day
+        if not is_trading_day(candidate):
             continue
 
         df = _fetch_mcap_csv(candidate)

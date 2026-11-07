@@ -45,8 +45,31 @@ NSE_HOLIDAYS_2026 = {
 }
 
 
-def is_trading_day(d: date, holidays: set = NSE_HOLIDAYS_2026) -> bool:
-    """NSE is closed on weekends and the holidays listed above."""
+# Special sessions on otherwise-closed days (weekends/holidays) that produce
+# a real NSE bhavcopy and daily bar. Add each year's Muhurat (and any
+# NSE-announced special Saturday/Sunday session) here alongside the
+# holiday list. Value = human label, surfaced in the evening email.
+#
+# WHY a list and not a weekday tweak: before this, 5 separate places
+# hard-coded "weekend = closed", so the 2026 Sunday Muhurat session would
+# have been silently skipped (no bhavcopy fetched, scan labelled with
+# Friday's date, no trigger). One source of truth fixes all of them.
+NSE_SPECIAL_SESSIONS_2026 = {
+    date(2026, 11, 8): "Muhurat trading (Diwali) - short session 14:20-15:30 IST",
+}
+
+
+def special_session_label(d: date, special: dict = NSE_SPECIAL_SESSIONS_2026) -> Optional[str]:
+    """Label for a special (short/off-calendar) session, or None for a normal day."""
+    return special.get(d)
+
+
+def is_trading_day(d: date, holidays: set = NSE_HOLIDAYS_2026,
+                   special: dict = NSE_SPECIAL_SESSIONS_2026) -> bool:
+    """NSE is closed on weekends and the holidays listed above, except for
+    the special sessions listed above (e.g. a Sunday Muhurat session)."""
+    if d in special:
+        return True
     if d.weekday() >= 5:  # 5=Saturday, 6=Sunday
         return False
     if d in holidays:

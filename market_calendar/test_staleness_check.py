@@ -97,3 +97,25 @@ if __name__ == "__main__":
     test_generation_consistency_normal_day()
     test_generation_consistency_catches_real_mismatch()
     print("\nAll tests passed.")
+
+
+# ── Special sessions (2026-11-07: Sunday Muhurat) ───────────────────────────
+def test_sunday_muhurat_is_trading_day():
+    from market_calendar.staleness_check import is_trading_day, special_session_label
+    assert is_trading_day(date(2026, 11, 8))            # Sunday Muhurat
+    assert not is_trading_day(date(2026, 11, 7))        # ordinary Saturday
+    assert not is_trading_day(date(2026, 11, 15))       # ordinary Sunday
+    assert "Muhurat" in special_session_label(date(2026, 11, 8))
+    assert special_session_label(date(2026, 11, 9)) is None
+
+
+def test_monday_after_muhurat_expects_sunday_picks():
+    from market_calendar.staleness_check import previous_trading_day
+    assert previous_trading_day(date(2026, 11, 9)) == date(2026, 11, 8)
+
+
+def test_last_trading_day_on_muhurat_evening():
+    from data_fetcher import get_last_trading_day
+    from fetch_mcap import _get_last_trading_day
+    assert get_last_trading_day(date(2026, 11, 8)) == date(2026, 11, 8)
+    assert _get_last_trading_day(date(2026, 11, 8)) == date(2026, 11, 8)

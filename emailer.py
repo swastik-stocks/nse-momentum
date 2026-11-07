@@ -23,7 +23,7 @@ NSE Momentum v6.2 - Email Reporter
 import os, smtplib, logging
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
-from datetime import datetime, timezone, timedelta
+from datetime import date, datetime, timezone, timedelta
 from pathlib import Path
 
 try:
@@ -1113,6 +1113,26 @@ def _build_html(t1, t2, t3, all_r, near_bo, defensive,
     OHLCV coverage {cov.get('fetched_fresh', '?')}/{cov.get('requested', '?')} ({cov.get('pct', '?')}%) ·
     commit {commit}
   </div>""" if data_prov else ""
+    # [2026-11-07] Short/off-calendar sessions (e.g. Sunday Muhurat). The
+    # scan logic is deliberately unchanged -- no Muhurat-specific gate has
+    # been validated -- so the email states the caveat instead of the code
+    # silently adjusting thresholds.
+    from market_calendar.staleness_check import special_session_label
+    _sess_label = None
+    try:
+        _bd = data_prov.get("bhavcopy_trading_date")
+        _sess_label = special_session_label(date.fromisoformat(_bd)) if _bd else None
+    except (ValueError, TypeError):
+        pass
+    if _sess_label:
+        prov_banner += f"""
+  <div style="background:rgba(150,105,10,0.08);border:1px solid rgba(150,105,10,0.3);
+              border-radius:8px;padding:8px 14px;margin-bottom:16px;font-size:12px;color:#96690A">
+    <strong>Special session:</strong> {_sess_label}. Volume, RVOL and delivery figures
+    come from a ~70-minute session and are NOT comparable to a normal day; thin
+    liquidity makes breakouts less reliable. Treat every pick as unconfirmed until
+    the next full session's close.
+  </div>"""
     if warn_bits:
         prov_banner += f"""
   <div style="background:rgba(198,64,61,0.08);border:1px solid rgba(198,64,61,0.3);
