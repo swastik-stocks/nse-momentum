@@ -36,3 +36,6 @@ nifty500_*.csv
 hourly_run*.log
 data/bhavcopy_cache/
 section_*.txt
+
+# Scratch output that once contained a live Dhan token -- never commit (2026-11-07)
+triage_output.txt

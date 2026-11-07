@@ -70,9 +70,9 @@ BUG FIXES (v5.4):
          near_breakout.py accepts this and uses it for price instead of df[-1].
 """
 
-import logging, sqlite3, requests, os, time
+import json, logging, sqlite3, requests, os, time
 from pathlib import Path
-from datetime import datetime, timedelta, date
+from datetime import datetime, timedelta, date, timezone
 from typing import Dict, List, Optional
 
 import pandas as pd
@@ -313,6 +313,57 @@ def _dhan_symbol_map() -> Dict[str, str]:
     return _dhan_symbol_map_cache
 
 
+def _diagnose_dhan_failure(status_code: int, body_text: str, token: str) -> dict:
+    """
+    Map a failed Dhan response to a specific cause + the action that fixes it.
+
+    WHY: every non-200 used to be reported as "refresh the token", but Dhan
+    returns 401 for two unrelated problems. In Oct-Nov 2026 this sent the
+    user round the daily token-renewal loop for weeks while the real cause
+    was a lapsed Data APIs subscription (DH-902), which no token can fix.
+    Pure function (no I/O) so it is unit-testable without hitting Dhan.
+
+    Returns {"reason": short code, "message": what happened, "action": fix}.
+    """
+    error_code = ""
+    try:
+        error_code = str(json.loads(body_text).get("errorCode", ""))
+    except (ValueError, AttributeError):
+        pass   # non-JSON body (proxy error page etc.) -> generic branch below
+
+    if error_code == "DH-902":
+        return {
+            "reason": "plan_inactive",
+            "message": "Dhan Data APIs plan is not active (account is on the Free Plan) "
+                       "- renewing the token will NOT fix this.",
+            "action": "Re-subscribe at web.dhan.co > Profile > DhanHQ Trading APIs > Data APIs.",
+        }
+
+    if error_code == "DH-901":
+        # Lazy import: dhan_token_check is stdlib-only, but keeping it local
+        # means data_fetcher still imports even if that module is moved.
+        from dhan_token_check import dhan_token_status
+        st = dhan_token_status(token)
+        if st["expiry"] is None:
+            detail = "token could not be decoded (malformed or truncated secret?)"
+        else:
+            ist = st["expiry"].astimezone(timezone(timedelta(hours=5, minutes=30)))
+            state = "EXPIRED" if st["expired"] else "not yet expired - token was revoked/replaced"
+            detail = f"token expiry {ist:%d %b %H:%M} IST, {state}"
+        return {
+            "reason": "token_invalid",
+            "message": f"Dhan access token rejected (DH-901; {detail}).",
+            "action": "Run `python propagate_dhan_token.py --paste` with a fresh token "
+                      "from web.dhan.co (or `--renew` while the old one is still valid).",
+        }
+
+    return {
+        "reason": "other",
+        "message": f"Dhan check failed: HTTP {status_code} - {body_text[:200]}",
+        "action": "Check status.dhan.co / the raw error above; this is not a known token or plan error.",
+    }
+
+
 def _check_dhan_auth() -> bool:
     """
     ONE cheap test call at the start of a batch run to verify the token is
@@ -353,14 +404,15 @@ def _check_dhan_auth() -> bool:
             log.info("  Dhan: token valid, using as preferred data source this run")
             return True
         else:
+            diag = _diagnose_dhan_failure(resp.status_code, resp.text, token)
             _dhan_status = {
                 "checked": True, "available": False,
-                "message": f"Dhan auth check failed: HTTP {resp.status_code} "
-                           f"— {resp.text[:200]}. Falling back to tvDatafeed/Yahoo "
-                           f"for this entire run. Refresh the token at web.dhan.co.",
+                "message": f"{diag['message']} Falling back to tvDatafeed/Yahoo for this entire run.",
+                "reason": diag["reason"],
+                "action": diag["action"],
                 "tickers_from_dhan": 0,
             }
-            log.warning(f"  ⚠ {_dhan_status['message']}")
+            log.warning(f"  ⚠ {_dhan_status['message']} FIX: {diag['action']}")
             return False
     except Exception as e:
         _dhan_status = {
@@ -371,6 +423,20 @@ def _check_dhan_auth() -> bool:
         }
         log.warning(f"  ⚠ {_dhan_status['message']}")
         return False
+
+
+def _dhan_daily_index(timestamps) -> pd.DatetimeIndex:
+    """
+    Dhan daily-bar epoch -> tz-naive session-date index (midnight), the same
+    shape tvDatafeed/Yahoo produce.
+
+    WHY: Dhan stamps each daily bar at 00:00 IST of its session, i.e. 18:30
+    UTC the PREVIOUS day. Parsing it as plain UTC labelled every bar one
+    day early, so _store_ohlcv (keyed on str(dt.date())) wrote the 5 Nov
+    bar into the 4 Nov row and _is_cache_fresh saw stale data.
+    """
+    return (pd.to_datetime(timestamps, unit="s", utc=True)
+              .tz_convert("Asia/Kolkata").tz_localize(None).normalize())
 
 
 def fetch_dhan(ticker: str, n_bars: int = 520) -> pd.DataFrame:
@@ -395,6 +461,10 @@ def fetch_dhan(ticker: str, n_bars: int = 520) -> pd.DataFrame:
     # Daily bars, ~n_bars trading days back; padded to calendar days since
     # weekends/holidays aren't trading days.
     from_date = to_date - timedelta(days=int(n_bars * 1.55) + 10)
+    # [2026-11-07] Dhan's toDate is EXCLUSIVE (verified live: toDate=11-06
+    # returned bars only through 11-05). Without the +1 day, the evening
+    # scan never saw the session it was scanning.
+    to_date_exclusive = to_date + timedelta(days=1)
 
     try:
         resp = requests.post(
@@ -406,7 +476,7 @@ def fetch_dhan(ticker: str, n_bars: int = 520) -> pd.DataFrame:
                 "instrument": "EQUITY",
                 "expiryCode": 0,
                 "fromDate": from_date.isoformat(),
-                "toDate": to_date.isoformat(),
+                "toDate": to_date_exclusive.isoformat(),
             },
             timeout=20,
         )
@@ -430,7 +500,7 @@ def fetch_dhan(ticker: str, n_bars: int = 520) -> pd.DataFrame:
             "Close":  data["close"],
             "Volume": data["volume"],
         })
-        df.index = pd.to_datetime(data["timestamp"], unit="s")
+        df.index = _dhan_daily_index(data["timestamp"])
         df = df.sort_index()
         return df if len(df) >= 20 else pd.DataFrame()
     except Exception as e:

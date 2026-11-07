@@ -6,12 +6,12 @@ NSE Momentum v6.2 - Email Reporter
   Section 3: Market intelligence (regime, breadth, macro, event)
   Section 4: Near-breakout watchlist (set alerts, do not buy yet)
   Section 5: Defensive / Relative-Strength watchlist (capital preservation
-             triage Î“Ã‡Ã¶ only populated when the scan actually produced one;
+             triage — only populated when the scan actually produced one;
              see agents/defensive_agent.py for the trigger logic). Styled
-             deliberately differently from Sections 1/2/4 Î“Ã‡Ã¶ muted/neutral
-             palette, no "buy" language anywhere Î“Ã‡Ã¶ because these are NOT
+             deliberately differently from Sections 1/2/4 — muted/neutral
+             palette, no "buy" language anywhere — because these are NOT
              new entry signals, just relatively-less-damaged names.
-  Section 6: Position Alerts Î“Ã‡Ã¶ EXIT / TRIM / ADD-ON on stocks you already
+  Section 6: Position Alerts — EXIT / TRIM / ADD-ON on stocks you already
              HOLD (Phase 2, P2-01/02/05/06/07). Distinct from Sections 1-5,
              which are all about the 504-stock scan universe; this section
              is about your actual Portfolio Dashboard holdings, read via
@@ -38,7 +38,7 @@ GMAIL_ADDRESS = os.getenv("GMAIL_ADDRESS")
 GMAIL_APP_PW  = os.getenv("GMAIL_APP_PASSWORD")
 BASE_DIR      = Path(__file__).parent
 
-# Change this if you ever want the greeting to say something else Î“Ã‡Ã¶
+# Change this if you ever want the greeting to say something else —
 # kept as one constant rather than hardcoded inline so it's a single edit.
 RECIPIENT_NAME = "Swastik"
 
@@ -59,7 +59,7 @@ MACRO_COLOR = {"SUPPORTIVE": "#0E8F63", "MIXED": "#96690A", "HOSTILE": "#C6403D"
 EVENT_COLOR = {"NORMAL": "#8895AA",     "WATCH": "#96690A",  "HIGH_RISK": "#C6403D"}
 BQ_COLOR    = {"MAJOR": "#0E8F63",      "MINOR": "#96690A",  "RECOVERY": "#2A5FB0"}
 
-# Deliberately muted/neutral Î“Ã‡Ã¶ NOT the green/orange/red buy-signal palette
+# Deliberately muted/neutral — NOT the green/orange/red buy-signal palette
 # used elsewhere in this file. A defensive pick should never visually read
 # like a Tier 1/2/3 trade card at a glance.
 DEFENSIVE_COLOR  = "#5D6E85"
@@ -74,11 +74,11 @@ DEFENSIVE_BORDER = "rgba(93,110,133,0.25)"
 # ["is_new_sector"] it's handed.
 NEW_SECTOR_COLOR = "#7C4FC4"
 
-# Section 6 (Position Alerts) colors Î“Ã‡Ã¶ deliberately reuse existing meanings
+# Section 6 (Position Alerts) colors — deliberately reuse existing meanings
 # from elsewhere in this file rather than invent a new palette: EXIT reuses
 # the same red as the SL (stop-loss) figure in every tier card; TRIM reuses
 # Regime D's "correction, pulling back" orange, not Tier 2's gold (which
-# means "aggressive opportunity" Î“Ã‡Ã¶ the opposite of what TRIM signals); ADD-ON
+# means "aggressive opportunity" — the opposite of what TRIM signals); ADD-ON
 # reuses Tier 1's green since it genuinely is a fresh breakout signal, just
 # on a stock you already own instead of a new one.
 EXIT_COLOR   = "#C6403D"
@@ -91,9 +91,9 @@ ADDON_COLOR  = "#0E8F63"
 ADDON_BG     = "rgba(14,143,99,0.08)"
 ADDON_BORDER = "rgba(14,143,99,0.3)"
 
-# Section 6 (P4-04) Î“Ã‡Ã¶ Sector Concentration colors. â‰¡Æ’Ã¶â”¤-equivalent (concentrated
-# + weak breadth) reuses EXIT's red Î“Ã‡Ã¶ same severity as a stop-loss breach,
-# since both mean "this needs a decision now." â‰¡Æ’Æ’Ã­-equivalent (concentrated,
+# Section 6 (P4-04) — Sector Concentration colors. 🔴-equivalent (concentrated
+# + weak breadth) reuses EXIT's red — same severity as a stop-loss breach,
+# since both mean "this needs a decision now." 🟡-equivalent (concentrated,
 # breadth not yet weak) reuses Regime C's amber, same "watch, don't act yet"
 # meaning it has everywhere else in this file, not TRIM's orange (TRIM means
 # a specific stock is deteriorating; this means a sector-level bet exists,
@@ -115,8 +115,8 @@ CONC_BORDER      = "rgba(150,105,10,0.3)"
 CONCENTRATION_THRESHOLD_PCT = 25.0
 WEAK_SECTOR_SMA50_PCT = 50.0
 
-# Section 1a Î“Ã‡Ã¶ Tier 1/2 at-a-glance heatmap. Colors reuse pass/fail cutoffs
-# that already exist elsewhere in the codebase Î“Ã‡Ã¶ deliberately NOT new
+# Section 1a — Tier 1/2 at-a-glance heatmap. Colors reuse pass/fail cutoffs
+# that already exist elsewhere in the codebase — deliberately NOT new
 # thresholds invented for this table, so "green" here always means the same
 # thing it means in the rest of the pipeline:
 #   RS_OUTPERFORM_MIN   -- agents/rs_agent.py's own scoring breakpoint
@@ -206,7 +206,7 @@ def send_email_report(tiers: dict):
     add_on       = tiers.get("add_on_candidates", [])
     # P4-04: sector concentration check, from sector_concentration_alert.py
     # (orchestrator.py calls compute_sector_concentration() and passes the
-    # result through here Î“Ã‡Ã¶ same "compute elsewhere, this file just
+    # result through here — same "compute elsewhere, this file just
     # renders" pattern as everything else in tiers).
     sector_concentration = tiers.get("sector_concentration", [])
     held_status  = tiers.get("held_status", [])
@@ -246,9 +246,9 @@ def send_email_report(tiers: dict):
                        signal_attribution, data_prov)
 
     msg = MIMEMultipart("alternative")
-    exit_subject_flag = f" - Î“ÃœÃ¡{len(exit_alerts)} EXIT ALERT" + ("S" if len(exit_alerts) != 1 else "") if exit_alerts else ""
+    exit_subject_flag = f" - ⚠{len(exit_alerts)} EXIT ALERT" + ("S" if len(exit_alerts) != 1 else "") if exit_alerts else ""
     weak_concentration = [r for r in sector_concentration if r.get("flag") == "concentrated_weak"]
-    conc_subject_flag = (f" - Î“ÃœÃ»{len(weak_concentration)} SECTOR CONCENTRATION"
+    conc_subject_flag = (f" - ⚖{len(weak_concentration)} SECTOR CONCENTRATION"
                          if weak_concentration else "")
     msg["Subject"] = (f"NSE Momentum v6.2 - {date_str} - "
                       f"Regime {regime} ({rlbl}) - {len(t1)} picks{exit_subject_flag}{conc_subject_flag}")
@@ -389,9 +389,9 @@ def _tier_card(r, tier_label: str, tier_color: str) -> str:
                f'border:1px solid {bq_col};border-radius:3px;'
                f'padding:1px 5px;margin-left:6px">{bq}</span>')
 
-    # NEW Î“Ã‡Ã¶ low historical edge badge. Distinct from breakout_quality above:
+    # NEW — low historical edge badge. Distinct from breakout_quality above:
     # that measures breakout SIZE (major vs minor move), this measures the
-    # PATTERN's own backtested expectancy (e.g. High Base +0.09% Î“Ã‡Ã¶ barely
+    # PATTERN's own backtested expectancy (e.g. High Base +0.09% — barely
     # above zero across 20,916 signals). A pick can be a MAJOR breakout on
     # a pattern with near-zero historical edge; both facts matter separately.
     low_edge_html = ""
@@ -400,7 +400,7 @@ def _tier_card(r, tier_label: str, tier_color: str) -> str:
             '<span style="font-size:9px;color:#BA4A1E;'
             'border:1px solid #BA4A1E;border-radius:3px;'
             'padding:1px 5px;margin-left:6px" '
-            'title="This pattern\'s prior expectancy estimate is disputed Î“Ã‡Ã¶ '
+            'title="This pattern\'s prior expectancy estimate is disputed — '
             'score cleared on other factors, not pattern strength">'
             'LOW HISTORICAL EDGE</span>'
         )
@@ -558,10 +558,10 @@ def _near_breakout_section(near_bo: list) -> str:
 
 def _defensive_section(defensive: list, regime: str) -> str:
     """
-    NEW Î“Ã‡Ã¶ Section 5. Only renders anything when defensive_watchlist is
+    NEW — Section 5. Only renders anything when defensive_watchlist is
     non-empty (i.e. agents/defensive_agent.py actually triggered and found
     qualifying candidates that scan). Deliberately styled with the muted
-    DEFENSIVE_COLOR palette, not the green/gold/blue used for T1/T2/T3 Î“Ã‡Ã¶
+    DEFENSIVE_COLOR palette, not the green/gold/blue used for T1/T2/T3 —
     a reader should never mistake this table for a buy-signal list.
     """
     if not defensive:
@@ -595,12 +595,12 @@ def _defensive_section(defensive: list, regime: str) -> str:
   </div>
   <div style="background:{DEFENSIVE_BG};border:1px solid {DEFENSIVE_BORDER};border-radius:8px;
               padding:10px 14px;margin-bottom:12px;font-size:11px;color:#55627A">
-    Regime {regime} triggered a capital-preservation scan Î“Ã‡Ã¶ no new Tier 1/2 entries
+    Regime {regime} triggered a capital-preservation scan — no new Tier 1/2 entries
     are being generated today. These names are relatively less damaged than NIFTY
-    (higher relative strength, shallower drawdown over the same window) Î“Ã‡Ã¶ useful
+    (higher relative strength, shallower drawdown over the same window) — useful
     as a "what's holding up" reference or a hold/rotate-into view for existing
     positions. <strong style="color:{DEFENSIVE_COLOR}">This is not a new-entry buy
-    signal</strong> Î“Ã‡Ã¶ treat it with the same caution as the rest of a Regime
+    signal</strong> — treat it with the same caution as the rest of a Regime
     {regime} scan.
   </div>
   <div style="overflow-x:auto">
@@ -624,13 +624,13 @@ def _defensive_section(defensive: list, regime: str) -> str:
 
 def _position_alerts_section(exit_alerts: list, trim_signals: list, add_on: list) -> str:
     """
-    Section 6 (P2-07) Î“Ã‡Ã¶ EXIT / TRIM / ADD-ON on stocks you already HOLD, per
+    Section 6 (P2-07) — EXIT / TRIM / ADD-ON on stocks you already HOLD, per
     Portfolio Dashboard (read via the Turso bridge, P1-04). Distinct data
     source from every other section in this file, which is all about the
     504-stock scan universe.
 
     Three independent subsections, each following the same "render nothing
-    if empty" rule as _near_breakout_section/_defensive_section above Î“Ã‡Ã¶ an
+    if empty" rule as _near_breakout_section/_defensive_section above — an
     empty scan day should not show empty tables. exit_alerts items are
     held_status dicts (ticker/exit_check/technical_stop); trim_signals items
     are {ticker, rs_percentile}; add_on items are held_status dicts
@@ -665,12 +665,12 @@ def _position_alerts_section(exit_alerts: list, trim_signals: list, add_on: list
   <div style="background:{EXIT_BG};border:1px solid {EXIT_BORDER};border-radius:8px;
               padding:12px 14px;margin-bottom:14px">
     <div style="font-size:12px;font-weight:700;color:{EXIT_COLOR};margin-bottom:6px">
-      Î“ÃœÃ¡ {len(exit_alerts)} EXIT ALERT{"S" if len(exit_alerts) != 1 else ""} Î“Ã‡Ã¶ price below effective stop
+      ⚠ {len(exit_alerts)} EXIT ALERT{"S" if len(exit_alerts) != 1 else ""} — price below effective stop
     </div>
     <div style="font-size:11px;color:#55627A;margin-bottom:10px">
-      Effective stop = max(hard stop from your real avg cost, today's technical stop) Î“Ã‡Ã¶
+      Effective stop = max(hard stop from your real avg cost, today's technical stop) —
       ratchet-only, same rule day5_stop_ratchet.py applies to scanner-originated trades.
-      <strong style="color:{EXIT_COLOR}">Not an automatic sell order</strong> Î“Ã‡Ã¶ a data
+      <strong style="color:{EXIT_COLOR}">Not an automatic sell order</strong> — a data
       point for your own decision, same caution as everywhere else in this email.
     </div>
     <table style="width:100%;border-collapse:collapse;font-size:12px">
@@ -702,10 +702,10 @@ def _position_alerts_section(exit_alerts: list, trim_signals: list, add_on: list
   <div style="background:{TRIM_BG};border:1px solid {TRIM_BORDER};border-radius:8px;
               padding:12px 14px;margin-bottom:14px">
     <div style="font-size:12px;font-weight:700;color:{TRIM_COLOR};margin-bottom:6px">
-      {len(trim_signals)} TRIM signal{"s" if len(trim_signals) != 1 else ""} Î“Ã‡Ã¶ RS deteriorating, not yet stopped out
+      {len(trim_signals)} TRIM signal{"s" if len(trim_signals) != 1 else ""} — RS deteriorating, not yet stopped out
     </div>
     <div style="font-size:11px;color:#55627A;margin-bottom:10px">
-      Relative strength below the 40th percentile Î“Ã‡Ã¶ below where "outperforming" starts
+      Relative strength below the 40th percentile — below where "outperforming" starts
       (70th pct elsewhere in this email). Not an EXIT alert; a graduated warning worth
       watching, not yet a stop breach.
     </div>
@@ -741,12 +741,12 @@ def _position_alerts_section(exit_alerts: list, trim_signals: list, add_on: list
   <div style="background:{ADDON_BG};border:1px solid {ADDON_BORDER};border-radius:8px;
               padding:12px 14px;margin-bottom:14px">
     <div style="font-size:12px;font-weight:700;color:{ADDON_COLOR};margin-bottom:6px">
-      {len(add_on)} ADD-ON candidate{"s" if len(add_on) != 1 else ""} Î“Ã‡Ã¶ held stock(s) with a fresh breakout
+      {len(add_on)} ADD-ON candidate{"s" if len(add_on) != 1 else ""} — held stock(s) with a fresh breakout
     </div>
     <div style="font-size:11px;color:#55627A;margin-bottom:10px">
-      Already in Tier 1/2 above under its own ticker Î“Ã‡Ã¶ flagged here separately because
+      Already in Tier 1/2 above under its own ticker — flagged here separately because
       you already own it. Sizing/blended-cost-stop rules for adding to an existing
-      position are not yet built (P2-03/P2-04) Î“Ã‡Ã¶ treat this as information, not a sizing
+      position are not yet built (P2-03/P2-04) — treat this as information, not a sizing
       recommendation.
     </div>
     <table style="width:100%;border-collapse:collapse;font-size:12px">
@@ -799,7 +799,7 @@ def _compute_portfolio_heat(held_status: list) -> dict:
 def _portfolio_heat_alert(holding_heat: dict, heat_warning_pct: float = 5.0) -> str:
     """
     P4-04: email subsection for positions within heat_warning_pct% of their
-    stop. Returns "" when nothing is within the warning threshold â€” same
+    stop. Returns "" when nothing is within the warning threshold — same
     "silently disappear" rule as every other conditional subsection in
     this file.
     """
@@ -820,19 +820,19 @@ def _portfolio_heat_alert(holding_heat: dict, heat_warning_pct: float = 5.0) -> 
     {ticker.replace('.NS','')}
   </td>
   <td style="padding:7px 10px;font-family:monospace;color:#B84D0A">{d['distance_pct']:.1f}% to stop</td>
-  <td style="padding:7px 10px;font-family:monospace;color:#55627A">Stop â‚¹{d['stop']:.2f} ({d['method']})</td>
-  <td style="padding:7px 10px;font-family:monospace;color:#55627A">CMP â‚¹{d['current_price']:.2f}</td>
+  <td style="padding:7px 10px;font-family:monospace;color:#55627A">Stop ₹{d['stop']:.2f} ({d['method']})</td>
+  <td style="padding:7px 10px;font-family:monospace;color:#55627A">CMP ₹{d['current_price']:.2f}</td>
 </tr>"""
 
     return f"""
   <div style="background:rgba(184,77,10,0.08);border:1px solid rgba(184,77,10,0.3);
               border-radius:8px;padding:12px 14px;margin-bottom:14px">
     <div style="font-size:12px;font-weight:700;color:#B84D0A;margin-bottom:6px">
-      âš  {len(close_to_stop)} position(s) within {heat_warning_pct:.0f}% of their stop
+      ⚠ {len(close_to_stop)} position(s) within {heat_warning_pct:.0f}% of their stop
     </div>
     <div style="font-size:11px;color:#55627A;margin-bottom:10px">
       These holdings are trading close to their technical stop-loss level.
-      Not an automatic sell â€” a visibility flag for your own review.
+      Not an automatic sell — a visibility flag for your own review.
     </div>
     <table style="width:100%;border-collapse:collapse;font-size:12px">
       <thead>
@@ -850,7 +850,7 @@ def _portfolio_heat_alert(holding_heat: dict, heat_warning_pct: float = 5.0) -> 
 
 def _sector_concentration_section(sector_concentration: list) -> str:
     """
-    Section 6, fourth subsection (P4-04) Î“Ã‡Ã¶ "are you unknowingly making one
+    Section 6, fourth subsection (P4-04) — "are you unknowingly making one
     big sector bet?" Email-alert version of Portfolio Dashboard's Sector
     Concentration view (P3-08, app.py). sector_concentration items come
     from sector_concentration_alert.compute_sector_concentration():
@@ -876,7 +876,7 @@ def _sector_concentration_section(sector_concentration: list) -> str:
     for r in sorted(flagged, key=lambda x: -x["pct_of_portfolio"]):
         is_weak = r["flag"] == "concentrated_weak"
         row_color = CONC_WEAK_COLOR if is_weak else CONC_COLOR
-        sma50_str = f"{r['sector_sma50']:.1f}%" if r["sector_sma50"] is not None else "Î“Ã‡Ã¶"
+        sma50_str = f"{r['sector_sma50']:.1f}%" if r["sector_sma50"] is not None else "—"
         rows += f"""
 <tr style="border-bottom:1px solid #DFE5EE">
   <td style="padding:7px 10px;font-weight:600;color:#101826">{r['sector']}</td>
@@ -898,12 +898,12 @@ def _sector_concentration_section(sector_concentration: list) -> str:
   <div style="background:{header_bg};border:1px solid {header_border};border-radius:8px;
               padding:12px 14px;margin-bottom:14px">
     <div style="font-size:12px;font-weight:700;color:{header_color};margin-bottom:6px">
-      Î“ÃœÃ» {" + ".join(label_bits)} Î“Ã‡Ã¶ Î“Ã«Ã‘{CONCENTRATION_THRESHOLD_PCT:.0f}% of portfolio in one sector
+      ⚖ {" + ".join(label_bits)} — ≥{CONCENTRATION_THRESHOLD_PCT:.0f}% of portfolio in one sector
     </div>
     <div style="font-size:11px;color:#55627A;margin-bottom:10px">
-      â‰¡Æ’Ã¶â”¤ rows are also below {WEAK_SECTOR_SMA50_PCT:.0f}% of that sector's stocks above SMA50 Î“Ã‡Ã¶
-      concentrated AND the sector itself is currently weak. â‰¡Æ’Æ’Ã­ rows are concentrated but the
-      sector's breadth hasn't turned weak yet. Not an instruction to sell or rebalance Î“Ã‡Ã¶
+      🔴 rows are also below {WEAK_SECTOR_SMA50_PCT:.0f}% of that sector's stocks above SMA50 —
+      concentrated AND the sector itself is currently weak. 🟡 rows are concentrated but the
+      sector's breadth hasn't turned weak yet. Not an instruction to sell or rebalance —
       just visibility into a bet you may not have noticed, same caution as everywhere else
       in this email.
     </div>
@@ -1043,7 +1043,7 @@ def _build_html(t1, t2, t3, all_r, near_bo, defensive,
     holding_heat       = holding_heat or {}
     signal_attribution = signal_attribution or {}
 
-    # [NEW] Dhan status banner Î“Ã‡Ã¶ only rendered when Dhan was unavailable
+    # [NEW] Dhan status banner — only rendered when Dhan was unavailable
     # this run (expired/missing token, network error). See
     # data_fetcher.get_dhan_status() and its module docstring for why this
     # is deliberately an ACTIVE daily reminder rather than a silent
@@ -1055,8 +1055,8 @@ def _build_html(t1, t2, t3, all_r, near_bo, defensive,
         dhan_banner = f"""
   <div style="background:rgba(198,64,61,0.08);border:1px solid rgba(198,64,61,0.3);
               border-radius:8px;padding:10px 14px;margin-bottom:16px;font-size:12px;color:#C6403D">
-    <strong>Î“ÃœÃ¡ Dhan unavailable this run:</strong> {dhan_status.get("message", "reason unknown")}
-    <span style="color:#55627A"> Î“Ã‡Ã¶ running on tvDatafeed/Yahoo fallback. Refresh at web.dhan.co.</span>
+    <strong>⚠ Dhan unavailable this run:</strong> {dhan_status.get("message", "reason unknown")}
+    <br><span style="color:#55627A"><strong>Fix:</strong> {dhan_status.get("action", "Check the Dhan token / plan at web.dhan.co.")}</span>
   </div>"""
 
     # [2026-08-18] Data-provenance banner -- makes every key number's data
@@ -1099,15 +1099,15 @@ def _build_html(t1, t2, t3, all_r, near_bo, defensive,
     prov_banner = f"""
   <div style="background:#F7F9FC;border:1px solid #DFE5EE;border-radius:8px;
               padding:8px 14px;margin-bottom:16px;font-size:11px;color:#55627A;font-family:monospace">
-    Data as of: Bhavcopy {data_prov.get('bhavcopy_trading_date', '?')} Â· Scan run {gen_at_disp} IST Â·
-    OHLCV coverage {cov.get('fetched_fresh', '?')}/{cov.get('requested', '?')} ({cov.get('pct', '?')}%) Â·
+    Data as of: Bhavcopy {data_prov.get('bhavcopy_trading_date', '?')} · Scan run {gen_at_disp} IST ·
+    OHLCV coverage {cov.get('fetched_fresh', '?')}/{cov.get('requested', '?')} ({cov.get('pct', '?')}%) ·
     commit {commit}
   </div>""" if data_prov else ""
     if warn_bits:
         prov_banner += f"""
   <div style="background:rgba(198,64,61,0.08);border:1px solid rgba(198,64,61,0.3);
               border-radius:8px;padding:8px 14px;margin-bottom:16px;font-size:11px;color:#C6403D">
-    <strong>Data quality warning:</strong> {' Â· '.join(warn_bits)}
+    <strong>Data quality warning:</strong> {' · '.join(warn_bits)}
   </div>"""
 
     # Section 1: trade cards
@@ -1152,7 +1152,7 @@ def _build_html(t1, t2, t3, all_r, near_bo, defensive,
     heatmap_html = (_heatmap_table(t1, "TIER 1 - TOP PICK",   "#0E8F63")
                      + _heatmap_table(t2, "TIER 2 - AGGRESSIVE", "#A8680E"))
 
-    # Section 2: watchlist table Î“Ã‡Ã¶ EXCLUDE T1 tickers to avoid duplicates
+    # Section 2: watchlist table — EXCLUDE T1 tickers to avoid duplicates
     t1_tickers = {r.ticker for r in t1}
     table_stocks = [r for r in all_r if r.ticker not in t1_tickers][:20]
     top20_rows = ""
@@ -1218,7 +1218,7 @@ def _build_html(t1, t2, t3, all_r, near_bo, defensive,
     <div style="background:{EXIT_BG};border:1px solid {EXIT_BORDER};
                 border-radius:20px;padding:5px 14px">
       <span style="font-family:monospace;font-size:10px;color:{EXIT_COLOR}">
-        Î“ÃœÃ¡ {len(exit_alerts)} EXIT ALERT{"S" if len(exit_alerts) != 1 else ""}
+        ⚠ {len(exit_alerts)} EXIT ALERT{"S" if len(exit_alerts) != 1 else ""}
       </span>
     </div>"""
 
@@ -1301,7 +1301,7 @@ def _build_html(t1, t2, t3, all_r, near_bo, defensive,
         <th style="padding:8px 10px;text-align:left;color:#8895AA;font-size:9px">PATTERN</th>
         <th style="padding:8px 10px;text-align:left;color:#8895AA;font-size:9px">SCORE</th>
         <th style="padding:8px 10px;text-align:left;color:#8895AA;font-size:9px">RS</th>
-        <th style="padding:8px 10px;text-align:left;color:#8895AA;font-size:9px" title="End-of-day RVOL Î“Ã‡Ã¶ see tier cards above">RVOL (EOD)</th>
+        <th style="padding:8px 10px;text-align:left;color:#8895AA;font-size:9px" title="End-of-day RVOL — see tier cards above">RVOL (EOD)</th>
         <th style="padding:8px 10px;text-align:left;color:#8895AA;font-size:9px">ENTRY</th>
         <th style="padding:8px 10px;text-align:left;color:#8895AA;font-size:9px">SL</th>
         <th style="padding:8px 10px;text-align:left;color:#8895AA;font-size:9px">T1</th>
