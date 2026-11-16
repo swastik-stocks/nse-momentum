@@ -28,7 +28,7 @@ CHANGES vs v5.3 (this edit):
         defensive_watchlist.json, never merged into picks_latest.json.
 """
 
-import sys, json
+import os, sys, json
 import pandas as pd
 import numpy as np
 from pathlib import Path
@@ -77,6 +77,7 @@ from agents.event_risk_agent           import EventRiskAgent
 from agents.confirmation_agent         import ConfirmationAgent
 from agents.near_breakout              import find_near_breakout_stocks
 from agents.regime_classifier          import RegimeClassifier
+from agents.structural_breadth         import compute_structural_breadth
 from agents.defensive_agent            import run_defensive_scan
 from agents.weekly_trend_agent         import WeeklyTrendAgent
 import data_fetcher
@@ -85,6 +86,33 @@ from nse_universe                      import UNIVERSE_CONFIG, UNIVERSE_SEED
 from sector_concentration_alert        import compute_sector_concentration  # P4-04
 from signal_attribution                import compute_signal_attribution    # P4-02
 from telegram_alert                    import send_telegram_alert           # P2-05/P2-06 real-time push
+
+# ── Regime breadth input (2026-11-17) ────────────────────────────────────────
+# Which breadth number RegimeClassifier and MacroAgent receive:
+#   "legacy"     - compute_breadth_score()'s value. On the bhavcopy path (every
+#                  GitHub run) that is a lookup of the daily A/D the same
+#                  engines already score, i.e. A/D counted twice.
+#   "neutral"    - legacy value only when it carries independent 52w H/L data,
+#                  else None (scored neutral) -- A/D counted once.
+#   "structural" - agents/structural_breadth.py (10-session advance rate,
+#                  % above 50-EMA, 52w H/L), falling back to "neutral".
+# Changing this changes which picks reach Tier 1: only switch to a mode that
+# validation/regime_breadth_validate.py has shown to be better.
+REGIME_BREADTH_MODE = os.environ.get("REGIME_BREADTH_MODE", "legacy").strip().lower()
+
+
+def _select_regime_breadth(mode: str, breadth_result: dict, structural: dict | None):
+    """Breadth value (0-10) or None (= neutral) for the regime engines."""
+    legacy = breadth_result.get("breadth_score")
+    has_hl = (breadth_result.get("new_highs", 0) + breadth_result.get("new_lows", 0)) > 0 \
+        and breadth_result.get("source") != "BHAVCOPY_FULL"
+    if mode == "structural" and structural is not None:
+        return structural["score"]
+    if mode in ("neutral", "structural"):
+        return legacy if has_hl else None
+    if mode != "legacy":
+        log.warning(f"Unknown REGIME_BREADTH_MODE={mode!r} -- using legacy.")
+    return legacy
 
 
 def _compute_signal_attribution() -> dict:
@@ -377,6 +405,22 @@ class AgentOrchestrator:
         data_dict["adv_dec_ratio"]    = breadth_result.get("ad_ratio", 1.0)
         data_dict["above_50_ema_pct"] = above_50_ema_pct
 
+        # ── STEP 1b: Breadth input for the REGIME engines (2026-11-17) ───────
+        # See agents/structural_breadth.py for the root cause. Always computed
+        # (shadow-logged) so the live value can be compared night by night;
+        # only USED when REGIME_BREADTH_MODE says so.
+        self.structural_breadth = compute_structural_breadth(data_dict.get("stock_data", {}))
+        self.regime_breadth_mode = REGIME_BREADTH_MODE
+        self.regime_breadth = _select_regime_breadth(
+            REGIME_BREADTH_MODE, breadth_result, self.structural_breadth)
+        breadth_result["structural"] = self.structural_breadth
+        breadth_result["regime_breadth"] = self.regime_breadth
+        breadth_result["regime_breadth_mode"] = REGIME_BREADTH_MODE
+        log.info(f"  Regime breadth input [{REGIME_BREADTH_MODE}]: "
+                 f"{'neutral (n/a)' if self.regime_breadth is None else f'{self.regime_breadth:.2f}/10'} "
+                 f"| legacy A/D-derived {breadth_result['breadth_score']:.2f}/10 "
+                 f"| structural {self.structural_breadth['score'] if self.structural_breadth else 'n/a'}")
+
         # Print breadth dashboard to log
         print_breadth_dashboard(breadth_result)
 
@@ -408,7 +452,7 @@ class AgentOrchestrator:
             banknifty_data    = data_dict.get("banknifty_data", pd.DataFrame()),
             vix               = vix,
             ad_ratio          = breadth_result.get("ad_ratio", 1.0),
-            breadth_score     = breadth_result["breadth_score"],
+            breadth_score     = self.regime_breadth,
             above_50_ema_pct  = above_50_ema_pct if above_50_ema_pct else 50.0,
             breadth_confidence= self.breadth_conf,
             macro_state       = "MIXED",   # placeholder — set properly after MacroAgent
@@ -539,7 +583,7 @@ class AgentOrchestrator:
 
         self.macro_agent = MacroAgent(
             vix               = vix,
-            breadth_score     = breadth_result["breadth_score"],
+            breadth_score     = self.regime_breadth,
             fii_flow_crore    = fii_flow,           # None = neutral, NOT hostile
             adv_dec_ratio     = breadth_result.get("ad_ratio", 1.0),
             breadth_confidence= self.breadth_conf,

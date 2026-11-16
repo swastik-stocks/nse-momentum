@@ -65,7 +65,8 @@ class RegimeClassifier:
         banknifty_data   : pd.DataFrame with 'Close' column, min 50 rows
         vix              : float — India VIX current value
         ad_ratio         : float — NSE-wide A/D ratio (from MarketBreadthAgent)
-        breadth_score    : float 0–10 (from MarketBreadthAgent)
+        breadth_score    : float 0–10, or None when no breadth reading
+                           independent of ad_ratio exists (scored neutral)
         above_50_ema_pct : float — % of our universe above 50 EMA
         breadth_confidence: str  — "HIGH" or "LOW" (from MarketBreadthAgent)
         macro_state      : str   — SUPPORTIVE/MIXED/CAUTION/HOSTILE
@@ -146,8 +147,13 @@ class RegimeClassifier:
         detail["ad_ratio"] = {"value": self.ad_ratio, "pts": ad_pts}
 
         # ── 5. Breadth score injection (−2 to +2) ────────────────────────────
+        # None = no INDEPENDENT breadth reading (2026-11-17). Scored neutral
+        # rather than letting the caller substitute an A/D-derived number,
+        # which double-counted the daily A/D already scored in step 4.
         b_adj = 0
-        if self.breadth >= 8:
+        if self.breadth is None:
+            b_adj = 0
+        elif self.breadth >= 8:
             b_adj = +2
         elif self.breadth >= 6:
             b_adj = +1
@@ -285,7 +291,7 @@ class RegimeClassifier:
             )
 
         # R4: Strong breadth but regime is D/E
-        if self.breadth > 7 and self._regime in ("D", "E"):
+        if self.breadth is not None and self.breadth > 7 and self._regime in ("D", "E"):
             flags.append(
                 f"R4: breadth_score={self.breadth:.1f} (>7, bullish) "
                 f"but regime={self._regime}. Breadth and regime contradict."

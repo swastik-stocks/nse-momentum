@@ -163,7 +163,11 @@ class MacroAgent:
         }
 
         # ── 2. Breadth ────────────────────────────────────────────────────────
-        if self.breadth >= 7.0:
+        # None = no breadth reading independent of the A/D scored in step 4
+        # (2026-11-17): neutral, instead of counting the same A/D twice.
+        if self.breadth is None:
+            b_pts = 0
+        elif self.breadth >= 7.0:
             b_pts = +2
         elif self.breadth >= 5.0:
             b_pts = +1
@@ -220,7 +224,7 @@ class MacroAgent:
         # AND advance rate is extreme (actual crash-level, not a mild down day).
         # Threshold: breadth < 2.0 (deep bear) + advance rate < 25%
         vix_benign      = self.vix < 14
-        breadth_extreme = self.breadth < 2.0
+        breadth_extreme = self.breadth is not None and self.breadth < 2.0
         adv_extreme     = self.adv_dec < 0.25   # < 20% of stocks advanced
         if vix_benign and breadth_extreme and adv_extreme:
             self._warnings.append(
@@ -249,7 +253,7 @@ class MacroAgent:
 
         log.info(
             f"MacroAgent: VIX={self.vix:.1f}(pts={vix_pts}) "
-            f"Breadth={self.breadth:.1f}(pts={b_pts}) "
+            f"Breadth={'n/a' if self.breadth is None else f'{self.breadth:.1f}'}(pts={b_pts}) "
             f"FII={self.fii_flow:,.0f}Cr(pts={fii_pts}) "
             f"A/D={self.adv_dec:.3f}(pts={ad_pts}) "
             f"→ Total={pts} → State={self._state}"
