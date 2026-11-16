@@ -34,6 +34,7 @@ Usage (run locally, from either E: or F: -- paths below are absolute so it
 doesn't matter which checkout invokes it):
     python propagate_dhan_token.py --renew
     python propagate_dhan_token.py --paste
+    python propagate_dhan_token.py --sync      # re-push the current prod token if a destination failed
     python propagate_dhan_token.py --renew --dry-run   # shows what would happen, no writes/calls
 """
 import argparse
@@ -128,6 +129,28 @@ def mode_renew(dry_run: bool = False) -> int:
     return 0
 
 
+def mode_sync(dry_run: bool = False) -> int:
+    """Re-propagate the token already in PROD_ENV, without calling Dhan.
+
+    Why: --renew writes the prod .env *before* the GitHub push, so a
+    transient network failure on the push leaves the token updated locally
+    but stale in CI. Re-running --renew to fix that needlessly mints another
+    token and fails outright if api.dhan.co is unreachable. --sync is
+    idempotent and safe to retry until every destination succeeds."""
+    load_dotenv(PROD_ENV, override=True)
+    token = os.environ.get("DHAN_ACCESS_TOKEN", "")
+    if not token:
+        log.error(f"DHAN_ACCESS_TOKEN not found in {PROD_ENV}.")
+        return 1
+    status = dhan_token_status(token)
+    if status["expired"]:
+        log.error("Prod token is EXPIRED -- nothing worth syncing. Use --paste with a fresh token.")
+        return 1
+    log.info(f"Syncing prod token (valid until {status['expiry']}, {status['hours_remaining']:.1f}h left).")
+    propagate(token, dry_run)
+    return 0
+
+
 def mode_paste(dry_run: bool = False) -> int:
     print()
     print("Step 1: Go to https://web.dhan.co")
@@ -153,7 +176,11 @@ if __name__ == "__main__":
                        help="Weekday case: current prod token still active, renew via API (no login needed)")
     mode.add_argument("--paste", action="store_true",
                        help="Post-lapse case: prompt once for a manually-generated token, propagate it everywhere")
+    mode.add_argument("--sync", action="store_true",
+                       help="Retry case: push the token already in the prod .env to dev + GitHub (no Dhan call)")
     parser.add_argument("--dry-run", action="store_true", help="Show what would happen without writing/calling anything")
     args = parser.parse_args()
 
-    sys.exit(mode_renew(args.dry_run) if args.renew else mode_paste(args.dry_run))
+    if args.renew:
+        sys.exit(mode_renew(args.dry_run))
+    sys.exit(mode_sync(args.dry_run) if args.sync else mode_paste(args.dry_run))
