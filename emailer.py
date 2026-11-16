@@ -1212,8 +1212,17 @@ def _build_html(t1, t2, t3, all_r, near_bo, defensive,
     ad       = bd.get("ad_ratio", "-")
     _ab50_raw = bd.get("above_50_ema_pct")
     ab50     = f"{_ab50_raw:.1f}" if isinstance(_ab50_raw, (int, float)) else "-"
-    nh   = bd.get("new_highs", "-")
-    nl   = bd.get("new_lows", "-")
+    # 52w H/L: the bhavcopy breadth path never fills these (always 0/0), so
+    # prefer the structural reading's real counts; show n/a rather than a
+    # fake 0/0 when neither source has them.
+    _sb  = bd.get("structural") or {}
+    if _sb:
+        hl_text = f"{_sb.get('new_highs', '-')}/{_sb.get('new_lows', '-')}"
+    elif bd.get("source") == "BHAVCOPY_FULL":
+        hl_text = "n/a"
+    else:
+        hl_text = f"{bd.get('new_highs', '-')}/{bd.get('new_lows', '-')}"
+    adv10 = f"<br>10-day advance rate: {_sb['adv_rate']:.0%}" if _sb.get("adv_rate") is not None else ""
     bbar = int(breadth / 10 * 100)
     bcol = "#0E8F63" if breadth >= 7 else "#96690A" if breadth >= 4 else "#C6403D"
 
@@ -1356,7 +1365,7 @@ def _build_html(t1, t2, t3, all_r, near_bo, defensive,
       </div>
       <div style="font-family:monospace;font-size:12px;color:{bcol}">{breadth}/10</div>
       <div style="font-size:11px;color:#55627A;margin-top:6px">
-        A/D Ratio: {ad}<br>Above 50-EMA: {ab50}%<br>52w Highs/Lows: {nh}/{nl}
+        A/D Ratio (today): {ad}<br>Above 50-EMA: {ab50}%<br>52w Highs/Lows: {hl_text}{adv10}
       </div>
     </div>
     <div style="background:#FFFFFF;border:1px solid #DFE5EE;border-radius:8px;padding:14px">

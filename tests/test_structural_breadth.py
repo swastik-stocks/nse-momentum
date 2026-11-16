@@ -92,6 +92,17 @@ def test_regime_classifier_double_count_costs_a_point():
             - RegimeClassifier(breadth_score=3.0, **kw).classify()["raw_pts"]) == 1
 
 
+def test_regime_breadth_mode_selection():
+    import orchestrator as o
+    bhav = {"breadth_score": 3.0, "new_highs": 0, "new_lows": 0, "source": "BHAVCOPY_FULL"}
+    assert o._select_regime_breadth("legacy", bhav, {"score": 5.6}) == 3.0
+    assert o._select_regime_breadth("structural", bhav, {"score": 5.6}) == 5.6
+    # Fallback must be legacy, not neutral -- neutral tested worse in the replay.
+    assert o._select_regime_breadth("structural", bhav, None) == 3.0
+    assert o._select_regime_breadth("neutral", bhav, None) is None
+    assert o._select_regime_breadth("bogus", bhav, {"score": 5.6}) == 3.0
+
+
 def test_macro_agent_none_breadth_is_neutral():
     m = MacroAgent(vix=17.0, breadth_score=None, fii_flow_crore=0.0, adv_dec_ratio=1.0)
     assert m.get_detail()["breadth"]["pts"] == 0

@@ -95,10 +95,17 @@ from telegram_alert                    import send_telegram_alert           # P2
 #   "neutral"    - legacy value only when it carries independent 52w H/L data,
 #                  else None (scored neutral) -- A/D counted once.
 #   "structural" - agents/structural_breadth.py (10-session advance rate,
-#                  % above 50-EMA, 52w H/L), falling back to "neutral".
-# Changing this changes which picks reach Tier 1: only switch to a mode that
-# validation/regime_breadth_validate.py has shown to be better.
-REGIME_BREADTH_MODE = os.environ.get("REGIME_BREADTH_MODE", "legacy").strip().lower()
+#                  % above 50-EMA, 52w H/L), falling back to "legacy".
+# LIVE DEFAULT = "structural" (user decision 2026-11-17). Evidence from
+# validation/regime_breadth_validate.py, 2016-01..2026-02, live patterns:
+#   legacy     blocked-day edge +0.19R (p=0.058), blocks 18% of winning R
+#   structural blocked-day edge +0.24R (p=0.074), blocks 10% of winning R,
+#              fewer false D/E calls on healthy days (12% vs 21%)
+#   neutral    +0.04R (p=0.379) -- rejected, kept only for diagnostics
+# Better than legacy on every measure, but NOT significant on both halves
+# (2016-20 edge was negative for both). Revert without a deploy by setting
+# REGIME_BREADTH_MODE=legacy in the workflow env.
+REGIME_BREADTH_MODE = os.environ.get("REGIME_BREADTH_MODE", "structural").strip().lower()
 
 
 def _select_regime_breadth(mode: str, breadth_result: dict, structural: dict | None):
@@ -106,9 +113,10 @@ def _select_regime_breadth(mode: str, breadth_result: dict, structural: dict | N
     legacy = breadth_result.get("breadth_score")
     has_hl = (breadth_result.get("new_highs", 0) + breadth_result.get("new_lows", 0)) > 0 \
         and breadth_result.get("source") != "BHAVCOPY_FULL"
-    if mode == "structural" and structural is not None:
-        return structural["score"]
-    if mode in ("neutral", "structural"):
+    if mode == "structural":
+        # Fallback is legacy, not neutral: neutral tested WORSE than legacy.
+        return structural["score"] if structural is not None else legacy
+    if mode == "neutral":
         return legacy if has_hl else None
     if mode != "legacy":
         log.warning(f"Unknown REGIME_BREADTH_MODE={mode!r} -- using legacy.")
@@ -416,6 +424,11 @@ class AgentOrchestrator:
         breadth_result["structural"] = self.structural_breadth
         breadth_result["regime_breadth"] = self.regime_breadth
         breadth_result["regime_breadth_mode"] = REGIME_BREADTH_MODE
+        if self.regime_breadth is not None and REGIME_BREADTH_MODE != "legacy":
+            # Headline "Breadth x/10", risk text, MarketAgent and scan_metadata
+            # must show the number the regime actually used, not the A/D lookup.
+            self.breadth_score = int(round(self.regime_breadth))
+            data_dict["breadth_score"] = self.breadth_score
         log.info(f"  Regime breadth input [{REGIME_BREADTH_MODE}]: "
                  f"{'neutral (n/a)' if self.regime_breadth is None else f'{self.regime_breadth:.2f}/10'} "
                  f"| legacy A/D-derived {breadth_result['breadth_score']:.2f}/10 "
