@@ -1,0 +1,65 @@
+name: NSE Momentum - Dhan Token Auto-Renewal
+# [2026-11-17] Keeps the 24h Dhan access token alive with no laptop involved.
+# Logic and failure handling live in dhan_token_autorenew.py; this file only
+# wires triggers, secrets and the rescue artifact.
+#
+# TRIGGERS
+#   Primary: cron-job.org POSTs workflow_dispatch at 07:00 and 17:00 IST,
+#            EVERY day (weekends too -- a Mon-Fri-only schedule would let the
+#            24h token lapse every Saturday). Setup: docs/DHAN_TOKEN_AUTORENEW.md.
+#   Backup:  GitHub's own scheduler at 08:00 / 18:00 IST. GitHub cron can
+#            start hours late under load (16 Nov: a 20:30 IST cron started
+#            05:06 IST), so it is only the backup. When the primary already
+#            renewed, the backup sees >20h left and exits without calling Dhan.
+#   Times sit between the pipelines' Dhan usage (05:00-ish late backup scan,
+#   09:16-12:15 checkpoints, 15:15 BTST, 19:30 evening scan); the script also
+#   waits out any running daily_scan/confirm run before renewing.
+on:
+  workflow_dispatch:
+    inputs:
+      force:
+        description: 'Renew even if the token still has >20h left'
+        required: false
+        default: 'false'
+        type: choice
+        options: ['false', 'true']
+  schedule:
+    - cron: '30 2 * * *'    # 08:00 IST backup
+    - cron: '30 12 * * *'   # 18:00 IST backup
+permissions:
+  actions: read      # dhan_token_autorenew.py checks for running scan/checkpoint runs
+  contents: read
+concurrency:
+  # Two renewals racing would each kill the other's token.
+  group: dhan-token-renewal
+  cancel-in-progress: false
+jobs:
+  renew:
+    runs-on: ubuntu-latest
+    timeout-minutes: 50      # covers the up-to-40-min wait for a running scan
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install dependencies
+        run: pip install python-dotenv requests pynacl libsql_client
+      - name: Renew Dhan access token
+        env:
+          DHAN_CLIENT_ID:       ${{ secrets.DHAN_CLIENT_ID }}
+          DHAN_ACCESS_TOKEN:    ${{ secrets.DHAN_ACCESS_TOKEN }}
+          DHAN_TOKEN_STORE_KEY: ${{ secrets.DHAN_TOKEN_STORE_KEY }}
+          TURSO_DATABASE_URL:   ${{ secrets.TURSO_DATABASE_URL }}
+          TURSO_AUTH_TOKEN:     ${{ secrets.TURSO_AUTH_TOKEN }}
+          REPO_ADMIN_PAT:       ${{ secrets.REPO_ADMIN_PAT }}     # writes the DHAN_ACCESS_TOKEN secret
+          ACTIONS_READ_TOKEN:   ${{ secrets.GITHUB_TOKEN }}       # reads running workflow runs
+          TELEGRAM_BOT_TOKEN:   ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID:     ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python dhan_token_autorenew.py ${{ github.event.inputs.force == 'true' && '--force' || '' }}
+      - name: Upload encrypted rescue token (only if both saves failed)
+        if: always() && hashFiles('token_rescue.enc') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: token_rescue
+          path: token_rescue.enc
+          retention-days: 1

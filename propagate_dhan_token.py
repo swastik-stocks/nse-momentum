@@ -30,11 +30,22 @@ GITHUB_REPO ("owner/name") as environment variables when this script runs
 locally. Skipped with a warning (not a hard failure) if either is absent,
 since the other 2 destinations are still worth updating on their own.
 
+[2026-11-17] CLOUD AUTO-RENEWAL
+    Renewal now runs unattended in GitHub Actions (renew_dhan_token.yml /
+    dhan_token_autorenew.py, see docs/DHAN_TOKEN_AUTORENEW.md). Because
+    RenewToken expires the previous token, the laptop's .env copies go stale
+    on every cloud renewal -- the canonical copy is the encrypted Turso
+    token store (dhan_token_store.py), a 4th destination of propagate().
+    --pull copies it down to both .env files (an hourly Windows task does
+    this automatically: install_token_pull_task.ps1).
+
 Usage (run locally, from either E: or F: -- paths below are absolute so it
 doesn't matter which checkout invokes it):
-    python propagate_dhan_token.py --renew
-    python propagate_dhan_token.py --paste
+    python propagate_dhan_token.py --pull      # fetch the cloud-renewed token into both .env files
+    python propagate_dhan_token.py --paste     # after a lapse: one web.dhan.co login restarts the chain
+    python propagate_dhan_token.py --renew     # manual renewal (normally the cloud does this)
     python propagate_dhan_token.py --sync      # re-push the current prod token if a destination failed
+    python propagate_dhan_token.py --rescue token_rescue.enc   # recover from the CRITICAL alert's artifact
     python propagate_dhan_token.py --renew --dry-run   # shows what would happen, no writes/calls
 """
 import argparse
@@ -90,15 +101,99 @@ def _push_github(new_token: str, dry_run: bool = False) -> bool:
     return ok
 
 
+def _publish_store(new_token: str, dry_run: bool = False) -> bool:
+    """4th destination [2026-11-17]: the encrypted Turso token store the
+    cloud renewal and --pull read from. Newer-wins inside publish_token(),
+    so propagating an older token can never clobber a fresher cloud one."""
+    if dry_run:
+        log.info("  [dry-run] would publish to the encrypted Turso token store")
+        return True
+    try:
+        from dhan_token_store import publish_token
+        ok = publish_token(new_token, source="laptop-propagate")
+    except Exception as e:
+        log.warning(f"  Token store publish FAILED ({type(e).__name__}: {e}) -- the cloud "
+                    f"renewal self-heals it from the GitHub secret on its next run.")
+        return False
+    log.info("  Token store updated." if ok else "  Token store kept its NEWER token (see warning above).")
+    return ok
+
+
 def propagate(new_token: str, dry_run: bool = False) -> None:
-    log.info("Propagating token to all 3 destinations:")
+    log.info("Propagating token to all 4 destinations:")
     _write_token(PROD_ENV, new_token, dry_run)
     _write_token(DEV_ENV, new_token, dry_run)
+    _publish_store(new_token, dry_run)
     _push_github(new_token, dry_run)
     log.info("Done." if not dry_run else "Dry run complete -- nothing was actually written.")
 
 
+def _env_token(env_path: Path) -> str:
+    if not env_path.exists():
+        return ""
+    m = re.search(r"^DHAN_ACCESS_TOKEN=(.*)$", env_path.read_text(encoding="utf-8"), re.M)
+    return m.group(1).strip() if m else ""
+
+
+def mode_pull(dry_run: bool = False) -> int:
+    """Copy the cloud-renewed token from the Turso store into both .env
+    files -- only if it expires LATER than what each file already has.
+    Safe to run as often as you like (the hourly Windows task does)."""
+    load_dotenv(PROD_ENV)   # TURSO_* creds; must precede the turso_sync import
+    try:
+        from dhan_token_store import fetch_token
+        stored = fetch_token()
+    except Exception as e:
+        log.error(f"Could not read the token store: {type(e).__name__}: {e}")
+        return 1
+    if not stored:
+        log.error("Token store is empty -- run --renew or --paste once to seed it.")
+        return 1
+    st = dhan_token_status(stored["token"])
+    if st["expired"]:
+        log.error(f"Stored token EXPIRED at {stored['expiry']} -- the cloud chain is broken. "
+                  f"Run --paste after a web.dhan.co login.")
+        return 1
+    changed = 0
+    for env_path in (PROD_ENV, DEV_ENV):
+        local_exp = dhan_token_status(_env_token(env_path))["expiry"]
+        if local_exp is not None and local_exp >= stored["expiry"]:
+            continue
+        if _write_token(env_path, stored["token"], dry_run):
+            changed += 1
+    log.info(f"Pulled: token valid until {stored['expiry']} ({st['hours_remaining']:.1f}h left, "
+             f"renewed by {stored['source']}). {changed} .env file(s) updated.")
+    return 0
+
+
+def mode_rescue(path: str, dry_run: bool = False) -> int:
+    """Recover the token from the encrypted `token_rescue` artifact the
+    cloud run uploads when BOTH of its saves failed (CRITICAL alert)."""
+    load_dotenv(PROD_ENV)
+    from dhan_token_store import decrypt
+    token = decrypt(Path(path).read_text(encoding="utf-8").strip())
+    st = dhan_token_status(token)
+    if st["expired"] is not False:
+        log.error("Rescued token is expired or unreadable -- use --paste instead.")
+        return 1
+    log.info(f"Rescued token valid until {st['expiry']} ({st['hours_remaining']:.1f}h).")
+    propagate(token, dry_run)
+    return 0
+
+
+def _pull_quietly(dry_run: bool) -> None:
+    if dry_run:
+        return
+    try:
+        mode_pull()
+    except Exception as e:
+        log.warning(f"  (token store not checked: {e})")
+
+
 def mode_renew(dry_run: bool = False) -> int:
+    # [2026-11-17] The cloud renewal kills the token in the local .env; start
+    # from the newest copy in the token store, not a possibly-dead local one.
+    _pull_quietly(dry_run)
     load_dotenv(PROD_ENV, override=True)
     client_id = os.environ.get("DHAN_CLIENT_ID", "")
     access_token = os.environ.get("DHAN_ACCESS_TOKEN", "")
@@ -137,6 +232,9 @@ def mode_sync(dry_run: bool = False) -> int:
     but stale in CI. Re-running --renew to fix that needlessly mints another
     token and fails outright if api.dhan.co is unreachable. --sync is
     idempotent and safe to retry until every destination succeeds."""
+    # [2026-11-17] The cloud renewal kills the token in the local .env; start
+    # from the newest copy in the token store, not a possibly-dead local one.
+    _pull_quietly(dry_run)
     load_dotenv(PROD_ENV, override=True)
     token = os.environ.get("DHAN_ACCESS_TOKEN", "")
     if not token:
@@ -177,10 +275,23 @@ if __name__ == "__main__":
     mode.add_argument("--paste", action="store_true",
                        help="Post-lapse case: prompt once for a manually-generated token, propagate it everywhere")
     mode.add_argument("--sync", action="store_true",
-                       help="Retry case: push the token already in the prod .env to dev + GitHub (no Dhan call)")
+                       help="Retry case: push the token already in the prod .env to dev + store + GitHub (no Dhan call)")
+    mode.add_argument("--pull", action="store_true",
+                       help="Fetch the cloud-renewed token from the Turso store into both .env files")
+    mode.add_argument("--rescue", metavar="FILE",
+                       help="Recover a token from the encrypted token_rescue artifact, then propagate it")
     parser.add_argument("--dry-run", action="store_true", help="Show what would happen without writing/calling anything")
+    parser.add_argument("--log-file", help="Also append log lines here (used by the windowless scheduled --pull task)")
     args = parser.parse_args()
+    if args.log_file:
+        fh = logging.FileHandler(args.log_file, encoding="utf-8")
+        fh.setFormatter(logging.Formatter("%(asctime)s %(message)s"))
+        logging.getLogger().addHandler(fh)
 
     if args.renew:
         sys.exit(mode_renew(args.dry_run))
+    if args.pull:
+        sys.exit(mode_pull(args.dry_run))
+    if args.rescue:
+        sys.exit(mode_rescue(args.rescue, args.dry_run))
     sys.exit(mode_sync(args.dry_run) if args.sync else mode_paste(args.dry_run))

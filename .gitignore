@@ -39,3 +39,6 @@ section_*.txt
 
 # Scratch output that once contained a live Dhan token -- never commit (2026-11-07)
 triage_output.txt
+
+# Encrypted Dhan token rescue file (dhan_token_autorenew.py) -- never commit
+token_rescue.enc
