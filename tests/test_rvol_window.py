@@ -116,13 +116,14 @@ def test_drift_reference_price_is_exposed_for_the_email():
 
 
 def test_recheck_crons_are_labelled_and_not_final():
-    import yaml
+    # Plain-text checks: the CI test job doesn't install PyYAML.
+    import re
     from pathlib import Path
     wf_text = (Path(__file__).resolve().parents[1] / ".github/workflows/confirm.yml").read_text(encoding="utf-8")
-    wf = yaml.safe_load(wf_text)
-    crons = {c["cron"] for c in wf[True]["schedule"]}   # PyYAML parses `on:` as True
+    crons = set(re.findall(r"- cron: '([^']+)'", wf_text))
     assert crons == {"5 5 * * 1-5", "35 5 * * 1-5"}
     for cron, label in (("5 5 * * 1-5", "10:35"), ("35 5 * * 1-5", "11:05")):
         line = next(l for l in wf_text.splitlines() if f'"{cron}")' in l)
         assert f"label={label}" in line and 'final=" >>' in line
-    assert wf["concurrency"]["cancel-in-progress"] is False
+    assert re.search(r"^concurrency:\n\s+group: confirm-checkpoints\n\s+cancel-in-progress: false",
+                     wf_text, re.M)
