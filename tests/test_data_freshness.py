@@ -49,8 +49,10 @@ def test_dhan_nonempty_candles_compute_normally():
          "volume": 900, "open": 99.5, "high": 100.5, "low": 99, "close": 100},
     ]
 
+    # [2026-11-17] compute_rvol now makes ONE request spanning history+today
+    # (see dhan_rvol: single-day vs multi-day 09:15 bar mismatch).
     def fake_fetch(security_id, from_date, to_date, exchange_segment="NSE_EQ", interval="5"):
-        return today_candles if from_date == to_date == "2026-08-18" else hist_candles
+        return hist_candles + today_candles
 
     with patch.object(dhan_rvol, "_load_instrument_map", return_value={"RELIANCE": "1333"}), \
          patch.object(dhan_rvol, "_fetch_intraday_candles", side_effect=fake_fetch), \

@@ -1,5 +1,16 @@
 name: NSE Momentum - 10am Confirmation
 on:
+  # [2026-11-17] Late-morning volume RE-CHECKS (10:35 / 11:05 IST). The
+  # 09:16-10:05 checkpoints are fired by cron-job.org (workflow_dispatch);
+  # nothing re-checked BREAKOUT_NO_VOLUME after 10:05, so late institutional
+  # volume was never seen (17 Nov: YATHARTH printed 62,815 shares in the
+  # 10:05-10:10 bar, ~7x a normal bar, one minute after the last check).
+  # GitHub's scheduler can start late; that's acceptable here because RVOL
+  # is elapsed-matched, so a late re-check is still a valid reading.
+  # Non-trading days are skipped inside confirm_picks.py (NSE calendar).
+  schedule:
+    - cron: '5 5 * * 1-5'    # 10:35 IST
+    - cron: '35 5 * * 1-5'   # 11:05 IST
   workflow_dispatch:
     inputs:
       checkpoint_label:
@@ -25,6 +36,12 @@ on:
 permissions:
   actions: read
   contents: read
+# Serialize checkpoint runs: each one downloads the previous run's
+# confirm_state artifact, so two overlapping runs (e.g. a late GitHub-scheduled
+# re-check landing on top of a cron-job.org trigger) would race on it.
+concurrency:
+  group: confirm-checkpoints
+  cancel-in-progress: false
 jobs:
   confirm:
     runs-on: ubuntu-latest
@@ -37,7 +54,7 @@ jobs:
           python-version: '3.12'
       - name: Install dependencies
         run: |
-          pip install python-dotenv requests yfinance loguru
+          pip install python-dotenv requests yfinance loguru libsql_client
           pip install git+https://github.com/rongardF/tvdatafeed.git || echo "tvDatafeed install failed - RVOL will use yfinance fallback"
 
       - name: Find latest usable scan run
@@ -171,6 +188,8 @@ jobs:
               "50 3 * * 1-5") echo "label=09:20" >> "$GITHUB_OUTPUT"; echo "final=" >> "$GITHUB_OUTPUT" ;;
               "5 4 * * 1-5")  echo "label=09:35" >> "$GITHUB_OUTPUT"; echo "final=" >> "$GITHUB_OUTPUT" ;;
               "25 4 * * 1-5") echo "label=09:55" >> "$GITHUB_OUTPUT"; echo "final=--final" >> "$GITHUB_OUTPUT" ;;
+              "5 5 * * 1-5")  echo "label=10:35" >> "$GITHUB_OUTPUT"; echo "final=" >> "$GITHUB_OUTPUT" ;;
+              "35 5 * * 1-5") echo "label=11:05" >> "$GITHUB_OUTPUT"; echo "final=" >> "$GITHUB_OUTPUT" ;;
               *) echo "label=manual" >> "$GITHUB_OUTPUT"; echo "final=--final" >> "$GITHUB_OUTPUT" ;;
             esac
           fi
@@ -197,6 +216,9 @@ jobs:
           # (returns False, never raises) if these are unset.
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          # [2026-11-17] Mean-vs-median RVOL shadow log (turso_sync.publish_rvol_readings)
+          TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
+          TURSO_AUTH_TOKEN:   ${{ secrets.TURSO_AUTH_TOKEN }}
           PICKS_JSON_PATH: picks_latest.json
         run: python confirm_picks.py --checkpoint "${{ steps.checkpoint.outputs.label }}" ${{ steps.checkpoint.outputs.final }} ${{ steps.checkpoint.outputs.btst }}
 

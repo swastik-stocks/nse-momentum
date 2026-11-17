@@ -384,6 +384,77 @@ def publish_sector_history(sectors, scan_date: str = None, dry_run: bool = False
     return published
 
 
+RVOL_SHADOW_COLUMNS = (
+    "confirm_date", "checkpoint", "ticker", "status", "rvol_mean", "rvol_median",
+    "rvol_src", "window_minutes", "cmp", "pivot", "entry", "sl", "regime", "recorded_at",
+)
+
+
+def publish_rvol_readings(rows: list, dry_run: bool = False) -> int:
+    """
+    [2026-11-17, RCA fix 3] Shadow evidence for switching the RVOL baseline
+    from the 20-day MEAN (live gate) to the MEDIAN (robust to single event
+    days). One row per (confirm_date, checkpoint, ticker) for EVERY freshly
+    classified pick at every morning checkpoint -- not only terminal ones --
+    because the question to answer later is "on readings where mean and
+    median disagree across the 1.0x / 1.5x gates, which one did the stock's
+    subsequent price action agree with?" (forward returns are joined later
+    from price history; not stored here).
+
+    Turso, not the local SQLite DB: confirm.yml runs on a fresh GitHub
+    runner, so database.schema's confirmation_outcomes table never survives
+    a run there (same reason as publish_sector_history).
+
+    rows: dicts keyed by RVOL_SHADOW_COLUMNS (missing keys -> NULL).
+    Upserts; skipped on dry_run; never raises past the caller.
+    """
+    if not rows or dry_run:
+        return 0
+    try:
+        client = get_client()
+    except SystemExit as e:
+        print(f"  [turso_sync] publish_rvol_readings skipped — {e}")
+        return 0
+
+    published = 0
+    cols = ", ".join(RVOL_SHADOW_COLUMNS)
+    marks = ", ".join("?" for _ in RVOL_SHADOW_COLUMNS)
+    updates = ", ".join(f"{c}=excluded.{c}" for c in RVOL_SHADOW_COLUMNS[3:])
+    try:
+        client.execute("""
+            CREATE TABLE IF NOT EXISTS rvol_shadow_readings (
+                confirm_date    TEXT NOT NULL,
+                checkpoint      TEXT NOT NULL,
+                ticker          TEXT NOT NULL,
+                status          TEXT,
+                rvol_mean       REAL,
+                rvol_median     REAL,
+                rvol_src        TEXT,
+                window_minutes  REAL,
+                cmp             REAL,
+                pivot           REAL,
+                entry           REAL,
+                sl              REAL,
+                regime          TEXT,
+                recorded_at     TEXT,
+                PRIMARY KEY (confirm_date, checkpoint, ticker)
+            )
+        """)
+        for r in rows:
+            try:
+                client.execute(
+                    f"INSERT INTO rvol_shadow_readings ({cols}) VALUES ({marks}) "
+                    f"ON CONFLICT(confirm_date, checkpoint, ticker) DO UPDATE SET {updates}",
+                    [r.get(c) for c in RVOL_SHADOW_COLUMNS],
+                )
+                published += 1
+            except Exception as e:
+                print(f"  [turso_sync] Failed to publish RVOL reading {r.get('ticker')}: {e}")
+    finally:
+        client.close()
+    return published
+
+
 def get_recent_sectors(before_date: str, lookback_days: int):
     """
     Returns (prior_sectors: set[str], has_any_history: bool) for

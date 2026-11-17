@@ -2,8 +2,9 @@
 RVOL (Relative Volume) calculator using Dhan's historical intraday API.
 
 Replaces tvDatafeed entirely. Computes:
-    RVOL = today's first-45-min volume (09:15-10:00 IST) / 20-day average
-           of that same first-45-min window
+    RVOL = today's volume from 09:15 IST to the end of the last COMPLETED
+           5-min bar / mean of that same window over the last 20 trading
+           days (see rvol_window.py; median baseline is logged as a shadow)
 
 Requires the Dhan Data API subscription (₹499+GST/month) -- the free
 tier only provides live LTP, not historical intraday candles.
@@ -48,9 +49,8 @@ DHAN_HEADERS = {
     "client-id": DHAN_CLIENT_ID,
 }
 
-# First-45-minute window: market open 09:15 IST to 10:00 IST
+# Market open; the window END is elapsed-matched per run (rvol_window.py).
 WINDOW_START = "09:15"
-WINDOW_END = "10:00"
 
 # Reuse the same cached instrument map your Dhan integration already builds.
 # If your project already defines this elsewhere (e.g. confirm_picks.py),
@@ -200,35 +200,9 @@ def _check_candle_integrity(candles: list) -> list:
 # three RVOL sources are apples-to-apples regardless of what time a
 # checkpoint runs.
 MIN_ELAPSED_MINUTES = 5  # matches the "too early" guard used elsewhere
+DHAN_INTERVAL_MIN = 5    # _fetch_intraday_candles' default interval="5"
 
-
-def _elapsed_window(as_of: datetime, target_date: date) -> tuple:
-    """
-    Returns (window_start_dt, window_end_dt) for target_date, spanning from
-    market open to the SAME number of elapsed minutes as `as_of` is past
-    market open today. Used for both today and each historical day, so the
-    comparison is always minutes-elapsed vs minutes-elapsed, never a full
-    45-min historical window vs a partial today window.
-    """
-    market_open_time = datetime.strptime(WINDOW_START, "%H:%M").time()
-    open_dt_today     = datetime.combine(as_of.date(), market_open_time)
-    elapsed           = as_of - open_dt_today
-    if elapsed.total_seconds() < 0:
-        elapsed = timedelta(0)
-
-    window_start_dt = datetime.combine(target_date, market_open_time)
-    window_end_dt   = window_start_dt + elapsed
-    return window_start_dt, window_end_dt
-
-
-def _sum_elapsed_volume(candles: list, window_start_dt: datetime,
-                         window_end_dt: datetime) -> float:
-    """Sum volume for candles falling within [window_start_dt, window_end_dt]."""
-    total = 0.0
-    for c in candles:
-        if window_start_dt <= c["datetime"] <= window_end_dt:
-            total += c["volume"]
-    return total
+from rvol_window import completed_cutoff, in_window, rvol_mean_median, window_minutes
 
 
 def _get_trading_days_back(n: int) -> list:
@@ -291,21 +265,35 @@ def compute_rvol(symbol: str, security_id: str = None, exchange_segment: str = "
                 "error": f"only {elapsed_minutes:.0f}min elapsed since open -- "
                          f"too early for a meaningful RVOL"}
 
-    # Today's elapsed-window volume
-    today_candles = _fetch_intraday_candles(
+    # [2026-11-17] ONE request covering the 20 history days AND today, split
+    # by date afterwards. Previously today came from a single-day request and
+    # history from a multi-day request -- and Dhan builds the 09:15 bar
+    # differently for the two: verified live, KOTAKBANK 17 Nov 09:15 bar =
+    # 285,771 shares single-day vs 451,044 in a multi-day request (the
+    # multi-day bar evidently includes the pre-open auction print; for
+    # 16 Nov the single-day request omitted the 09:15 bar entirely). Today
+    # was therefore compared against a baseline that counted volume today's
+    # figure never could -- worst at the early checkpoints, where the
+    # opening bar is most of the window. Same request = same bar definition
+    # on both sides, and one API call per ticker instead of two.
+    trading_days = _get_trading_days_back(20)
+    oldest = min(trading_days)
+    all_candles = _fetch_intraday_candles(
         security_id,
-        from_date=today.strftime("%Y-%m-%d"),
+        from_date=oldest.strftime("%Y-%m-%d"),
         to_date=today.strftime("%Y-%m-%d"),
         exchange_segment=exchange_segment,
     )
+    today_candles = [c for c in all_candles if c["datetime"].date() == today]
+    hist_candles  = [c for c in all_candles if c["datetime"].date() != today]
+    time.sleep(0.25)  # stay under 5 req/sec
+
     # [2026-08-18, 4a] BUG FIX: an HTTP 200 with an EMPTY candle array (a
-    # real, documented Dhan failure mode) used to fall straight through to
-    # _sum_elapsed_volume([], ...) -> 0.0, and this function returned a
-    # SUCCESSFUL result with rvol=0.0 -- indistinguishable downstream from
-    # a genuine "no volume today" reading. That silent fabrication is
-    # exactly what caused a live incident on 2026-08-18 where a real
-    # volume surge (later confirmed independently at 6.24x) was masked at
-    # the point RVOL first got computed. Explicit error instead.
+    # real, documented Dhan failure mode) used to fall straight through to a
+    # 0.0 volume sum, and this function returned a SUCCESSFUL result with
+    # rvol=0.0 -- indistinguishable downstream from a genuine "no volume
+    # today" reading (live incident 2026-08-18: a real surge, later confirmed
+    # at 6.24x, was masked). Explicit error instead.
     if not today_candles:
         return {"symbol": symbol,
                 "error": f"Dhan returned 0 intraday candles for {today} -- cannot "
@@ -315,52 +303,50 @@ def compute_rvol(symbol: str, security_id: str = None, exchange_segment: str = "
         return {"symbol": symbol,
                 "error": f"today's candles failed integrity check: {'; '.join(today_violations[:3])}"}
 
-    today_start_dt, today_end_dt = _elapsed_window(as_of, today)
-    today_volume = _sum_elapsed_volume(today_candles, today_start_dt, today_end_dt)
-    time.sleep(0.25)  # stay under 5 req/sec
+    # [2026-11-17] Completed bars only, on BOTH sides -- see rvol_window.py.
+    # The old window counted the still-forming bar today against a complete
+    # bar on every historical day.
+    cutoff = completed_cutoff(as_of, DHAN_INTERVAL_MIN,
+                              [c["datetime"] for c in today_candles])
+    if cutoff is None:
+        return {"symbol": symbol,
+                "error": "no completed 5-min bar yet -- too early for a meaningful RVOL"}
+    today_volume = sum(c["volume"] for c in today_candles
+                       if in_window(c["datetime"].time(), cutoff))
 
-    # 20-day average of the SAME elapsed window on each historical day
-    trading_days = _get_trading_days_back(20)
-    oldest, newest = min(trading_days), max(trading_days)
-
-    hist_candles = _fetch_intraday_candles(
-        security_id,
-        from_date=oldest.strftime("%Y-%m-%d"),
-        to_date=newest.strftime("%Y-%m-%d"),
-        exchange_segment=exchange_segment,
-    )
-    # [5b-iv] Structural integrity on the historical range too -- monotonic/
-    # unique timestamps, sane OHLC relationships. Logged, not fatal (a
-    # partial historical range with SOME good days is still usable for a
-    # 20-day average, unlike today's window where ANY corruption means the
-    # single most important number is untrustworthy) -- surfaced in the
-    # returned dict so callers/logs can see it happened.
+    # [5b-iv] Structural integrity on the historical range too -- logged, not
+    # fatal (a partial range with SOME good days still gives a usable
+    # baseline, unlike today's window where ANY corruption is disqualifying).
     hist_violations = _check_candle_integrity(hist_candles)
     if hist_violations:
         print(f"WARNING dhan_rvol: {symbol} historical candles failed integrity "
               f"check ({len(hist_violations)} issue(s)): {hist_violations[0]}")
-    time.sleep(0.25)
 
-    daily_volumes = []
-    for d in trading_days:
-        d_start_dt, d_end_dt = _elapsed_window(as_of, d)
-        vol = _sum_elapsed_volume(hist_candles, d_start_dt, d_end_dt)
-        if vol > 0:
-            daily_volumes.append(vol)
+    by_day = {d: 0.0 for d in trading_days}
+    for c in hist_candles:
+        d = c["datetime"].date()
+        if d in by_day and in_window(c["datetime"].time(), cutoff):
+            by_day[d] += c["volume"]
+    # vol > 0 filter: a special session outside the morning window (e.g.
+    # Muhurat 18:00-19:00) or a feed gap contributes nothing, not a zero.
+    daily_volumes = [v for v in by_day.values() if v > 0]
 
     if not daily_volumes:
         return {"symbol": symbol, "error": "no historical volume data available"}
 
     avg_20d_volume = sum(daily_volumes) / len(daily_volumes)
-    rvol = (today_volume / avg_20d_volume) if avg_20d_volume > 0 else 0.0
+    rvol, rvol_median = rvol_mean_median(today_volume, daily_volumes)
 
     return {
         "symbol": symbol,
         "today_volume": today_volume,
         "avg_20d_volume": avg_20d_volume,
-        "rvol": round(rvol, 2),
+        "rvol": rvol if rvol is not None else 0.0,
+        "rvol_median": rvol_median,          # SHADOW only, not a gate
         "source": "dhan",
-        "elapsed_minutes": round(elapsed_minutes, 1),
+        # Minutes actually measured (completed bars), not wall-clock elapsed.
+        "elapsed_minutes": window_minutes(cutoff),
+        "window_end": cutoff.strftime("%H:%M"),
         "fetched_at": as_of,
         "hist_integrity_violations": len(hist_violations),
     }

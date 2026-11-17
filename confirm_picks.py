@@ -56,6 +56,7 @@ from market_calendar.staleness_check import (check_staleness, StaleDataError,
                                               verify_generation_consistency)
 from database.schema import get_connection, init_all_tables
 import dhan_rvol
+from rvol_window import completed_cutoff, rvol_mean_median, window_minutes
 from agents.intraday_vol_adjusted_agent import IntradayVolAdjustedAgent
 from telegram_alert import send_telegram_alert
 
@@ -170,10 +171,21 @@ def _load_cc_recipients() -> list:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# RVOL — real first-45min calculation
+# RVOL — elapsed-matched, completed bars only (rvol_window.py)
 # ─────────────────────────────────────────────────────────────────────────────
 
-def _rvol_tvdatafeed(ticker_nse: str, as_of: datetime = None) -> float:
+TV_INTERVAL_MIN = 15   # tvDatafeed is requested at Interval.in_15_minute below
+
+
+def _completed_cutoff_for_df(df, as_of: datetime, interval_min: int):
+    """rvol_window.completed_cutoff() for a tz-aware (IST) bar DataFrame."""
+    naive_as_of = as_of.astimezone(IST).replace(tzinfo=None) if as_of.tzinfo else as_of
+    today_starts = [ts.replace(tzinfo=None) for ts in df.index
+                    if ts.date() == naive_as_of.date()]
+    return completed_cutoff(naive_as_of, interval_min, today_starts)
+
+
+def _rvol_tvdatafeed(ticker_nse: str, as_of: datetime = None) -> tuple:
     """
     Primary RVOL source: tvDatafeed (TradingView 5-min bars).
 
@@ -183,7 +195,8 @@ def _rvol_tvdatafeed(ticker_nse: str, as_of: datetime = None) -> float:
     calendar slice. This makes RVOL meaningful at any checkpoint time,
     not just after a fixed 45/60-min mark has fully elapsed.
 
-    Returns RVOL float >= 0, or -1.0 on failure / insufficient elapsed time.
+    Returns (rvol, rvol_median_shadow): rvol >= 0, or (-1.0, None) on
+    failure / insufficient elapsed time.
     ALL failures are logged explicitly — no silent fallthrough.
     """
     as_of = as_of or datetime.now(IST)
@@ -192,7 +205,7 @@ def _rvol_tvdatafeed(ticker_nse: str, as_of: datetime = None) -> float:
         import pandas as pd
 
         symbol = ticker_nse.replace(".NS", "")
-        log.info(f"    [tvDatafeed] Requesting {symbol} 5-min bars...")
+        log.info(f"    [tvDatafeed] Requesting {symbol} {TV_INTERVAL_MIN}-min bars...")
 
         tv = TvDatafeed()
         df = tv.get_hist(
@@ -202,7 +215,7 @@ def _rvol_tvdatafeed(ticker_nse: str, as_of: datetime = None) -> float:
 
         if df is None:
             log.warning(f"    [tvDatafeed] {symbol}: get_hist returned None")
-            return -1.0
+            return -1.0, None
 
         log.info(f"    [tvDatafeed] {symbol}: got {df.shape[0]} bars, "
                  f"index range {df.index[0]} → {df.index[-1]}")
@@ -226,23 +239,25 @@ def _rvol_tvdatafeed(ticker_nse: str, as_of: datetime = None) -> float:
         # --- END FIX
 
         today = as_of.date()
-        elapsed_minutes = (as_of - datetime.combine(today, MARKET_OPEN_TIME, tzinfo=IST)).total_seconds() / 60
-        if elapsed_minutes < 5:
-            log.warning(f"    [tvDatafeed] {symbol}: only {elapsed_minutes:.0f}min elapsed "
-                        f"since open -- too early for a meaningful RVOL")
-            return -1.0
+        # [2026-11-17] Completed bars only, both sides -- see rvol_window.py.
+        cutoff = _completed_cutoff_for_df(df, as_of, TV_INTERVAL_MIN)
+        if cutoff is None:
+            log.warning(f"    [tvDatafeed] {symbol}: no completed {TV_INTERVAL_MIN}-min bar yet "
+                        f"-- too early for a meaningful RVOL")
+            return -1.0, None
+        elapsed_minutes = window_minutes(cutoff)
 
         today_window = df[
             (df.index.date == today) &
             (df.index.time >= MARKET_OPEN_TIME) &
-            (df.index.time <= as_of.time())
+            (df.index.time < cutoff)
         ]
 
         if today_window.empty:
             log.warning(f"    [tvDatafeed] {symbol}: no bars for today "
                         f"({today}) in 09:15-{as_of.strftime('%H:%M')} window. "
                         f"Latest bar date: {df.index[-1].date()}")
-            return -1.0
+            return -1.0, None
 
         today_vol = float(today_window["volume"].sum())
         log.info(f"    [tvDatafeed] {symbol}: today {elapsed_minutes:.0f}min vol = {today_vol:,.0f}")
@@ -253,7 +268,7 @@ def _rvol_tvdatafeed(ticker_nse: str, as_of: datetime = None) -> float:
             day_window = hist[
                 (hist.index.date == row_date) &
                 (hist.index.time >= MARKET_OPEN_TIME) &
-                (hist.index.time <= as_of.time())
+                (hist.index.time < cutoff)
             ]
             if not day_window.empty:
                 hist_by_day[row_date] = float(day_window["volume"].sum())
@@ -261,27 +276,28 @@ def _rvol_tvdatafeed(ticker_nse: str, as_of: datetime = None) -> float:
         if len(hist_by_day) < 3:
             log.warning(f"    [tvDatafeed] {symbol}: only {len(hist_by_day)} "
                         f"historical days — insufficient for avg")
-            return -1.0
+            return -1.0, None
 
-        avg_hist = sum(hist_by_day.values()) / len(hist_by_day)
-        rvol = round(today_vol / avg_hist, 2) if avg_hist > 0 else -1.0
-        log.info(f"    [tvDatafeed] {symbol}: RVOL = {rvol:.2f}x "
-                 f"(today {today_vol:,.0f} / avg {avg_hist:,.0f}, {elapsed_minutes:.0f}min elapsed)")
-        return rvol
+        rvol, rvol_median = rvol_mean_median(today_vol, list(hist_by_day.values()))
+        if rvol is None:
+            return -1.0, None
+        log.info(f"    [tvDatafeed] {symbol}: RVOL = {rvol:.2f}x (median-baseline shadow "
+                 f"{rvol_median}x, {elapsed_minutes:.0f}min of completed bars)")
+        return rvol, rvol_median
 
     except ImportError:
         log.warning("    [tvDatafeed] Not installed — pip install tvDatafeed")
-        return -1.0
+        return -1.0, None
     except Exception as e:
         log.warning(f"    [tvDatafeed] {ticker_nse}: FAILED — {type(e).__name__}: {e}")
-        return -1.0
+        return -1.0, None
 
 
-def _rvol_yfinance_fallback(ticker_nse: str, as_of: datetime = None) -> float:
+def _rvol_yfinance_fallback(ticker_nse: str, as_of: datetime = None) -> tuple:
     """
     Fallback RVOL: yfinance 1-min data. Same elapsed-time-matched window
     fix as _rvol_tvdatafeed -- see FIX-1 in module docstring.
-    Returns RVOL float >= 0, or -1.0 on failure.
+    Returns (rvol, rvol_median_shadow), or (-1.0, None) on failure.
     """
     as_of = as_of or datetime.now(IST)
     try:
@@ -294,7 +310,7 @@ def _rvol_yfinance_fallback(ticker_nse: str, as_of: datetime = None) -> float:
 
         if df_1m.empty:
             log.warning(f"    [yfinance-fallback] {t}: empty response")
-            return -1.0
+            return -1.0, None
 
         try:
             df_1m.index = df_1m.index.tz_convert("Asia/Kolkata")
@@ -302,20 +318,22 @@ def _rvol_yfinance_fallback(ticker_nse: str, as_of: datetime = None) -> float:
             pass
 
         today = as_of.date()
-        elapsed_minutes = (as_of - datetime.combine(today, MARKET_OPEN_TIME, tzinfo=IST)).total_seconds() / 60
-        if elapsed_minutes < 5:
-            log.warning(f"    [yfinance-fallback] {t}: only {elapsed_minutes:.0f}min elapsed "
-                        f"since open -- too early for a meaningful RVOL")
-            return -1.0
+        # [2026-11-17] Completed bars only, both sides -- see rvol_window.py.
+        cutoff = _completed_cutoff_for_df(df_1m, as_of, 1)
+        if cutoff is None or window_minutes(cutoff) < 5:
+            log.warning(f"    [yfinance-fallback] {t}: under 5min of completed bars "
+                        f"-- too early for a meaningful RVOL")
+            return -1.0, None
+        elapsed_minutes = window_minutes(cutoff)
 
         today_window = df_1m[
             (df_1m.index.date == today) &
             (df_1m.index.time >= MARKET_OPEN_TIME) &
-            (df_1m.index.time <= as_of.time())
+            (df_1m.index.time < cutoff)
         ]
         if today_window.empty:
             log.warning(f"    [yfinance-fallback] {t}: no bars for today in window")
-            return -1.0
+            return -1.0, None
 
         today_vol = float(today_window["Volume"].sum())
         hist = df_1m[df_1m.index.date < today]
@@ -324,28 +342,31 @@ def _rvol_yfinance_fallback(ticker_nse: str, as_of: datetime = None) -> float:
             day_window = hist[
                 (hist.index.date == row_date) &
                 (hist.index.time >= MARKET_OPEN_TIME) &
-                (hist.index.time <= as_of.time())
+                (hist.index.time < cutoff)
             ]
             if not day_window.empty:
                 hist_by_day[row_date] = float(day_window["Volume"].sum())
 
         if len(hist_by_day) < 3:
-            return -1.0
+            return -1.0, None
 
-        avg_hist = sum(hist_by_day.values()) / len(hist_by_day)
-        rvol = round(today_vol / avg_hist, 2) if avg_hist > 0 else -1.0
-        log.info(f"    [yfinance-fallback] {t}: RVOL = {rvol:.2f}x ({elapsed_minutes:.0f}min elapsed)")
-        return rvol
+        rvol, rvol_median = rvol_mean_median(today_vol, list(hist_by_day.values()))
+        if rvol is None:
+            return -1.0, None
+        log.info(f"    [yfinance-fallback] {t}: RVOL = {rvol:.2f}x (median-baseline shadow "
+                 f"{rvol_median}x, {elapsed_minutes:.0f}min of completed bars)")
+        return rvol, rvol_median
 
     except Exception as e:
         log.warning(f"    [yfinance-fallback] {ticker_nse}: FAILED — {e}")
-        return -1.0
+        return -1.0, None
 
 
 def _rvol_dhan(ticker_raw: str, as_of: datetime = None) -> tuple:
     """
     [NEW] Primary RVOL source — Dhan's paid Data API, elapsed-time-matched
-    (see dhan_rvol.py). Returns (rvol_float, elapsed_minutes_or_None); rvol
+    (see dhan_rvol.py). Returns (rvol_float, elapsed_minutes_or_None,
+    rvol_median_or_None [shadow, 2026-11-17]); rvol
     is -1.0 on any failure (too early in session, security_id not mapped,
     network/API error, no historical data, candle-integrity violation) so
     it slots into the same fallback chain as the tvDatafeed/yfinance
@@ -356,20 +377,23 @@ def _rvol_dhan(ticker_raw: str, as_of: datetime = None) -> tuple:
         result = dhan_rvol.compute_rvol(symbol, as_of=as_of)
     except Exception as e:
         log.warning(f"    [Dhan] {symbol}: RVOL call raised {type(e).__name__}: {e}")
-        return -1.0, None
+        return -1.0, None, None
 
     if "error" in result:
         log.info(f"    [Dhan] {symbol}: {result['error']}")
-        return -1.0, None
+        return -1.0, None, None
 
     log.info(f"    [Dhan] {symbol}: RVOL = {result['rvol']:.2f}x "
-             f"({result.get('elapsed_minutes', '?')}min elapsed)")
-    return result["rvol"], result.get("elapsed_minutes")
+             f"(median-baseline shadow {result.get('rvol_median')}x, completed bars "
+             f"09:15-{result.get('window_end', '?')} = {result.get('elapsed_minutes', '?')}min)")
+    return result["rvol"], result.get("elapsed_minutes"), result.get("rvol_median")
 
 
 def get_rvol(ticker: str, as_of: datetime = None) -> tuple:
     """
-    Returns (rvol_float, source_label, elapsed_minutes_or_None).
+    Returns (rvol_float, source_label, elapsed_minutes_or_None,
+    rvol_median_or_None). rvol_median is SHADOW ONLY [2026-11-17 fix 3] --
+    logged/persisted for evaluation, never used by classify().
     Tries Dhan first (paid, elapsed-time-matched, most reliable), falls
     back to tvDatafeed, then yfinance, then N/A. elapsed_minutes is only
     populated for the Dhan path today (tvDatafeed/yfinance fallbacks don't
@@ -378,22 +402,22 @@ def get_rvol(ticker: str, as_of: datetime = None) -> tuple:
     """
     ticker_raw = ticker if ticker.endswith(".NS") else ticker + ".NS"
 
-    rvol, elapsed = _rvol_dhan(ticker_raw, as_of=as_of)
+    rvol, elapsed, rvol_median = _rvol_dhan(ticker_raw, as_of=as_of)
     if rvol >= 0:
-        return rvol, "Dhan", elapsed
+        return rvol, "Dhan", elapsed, rvol_median
 
     log.info(f"    Dhan failed for {ticker_raw} — trying tvDatafeed fallback")
-    rvol = _rvol_tvdatafeed(ticker_raw, as_of=as_of)
+    rvol, rvol_median = _rvol_tvdatafeed(ticker_raw, as_of=as_of)
     if rvol >= 0:
-        return rvol, "tvDatafeed", None
+        return rvol, "tvDatafeed", None, rvol_median
 
     log.info(f"    tvDatafeed failed for {ticker_raw} — trying yfinance fallback")
-    rvol = _rvol_yfinance_fallback(ticker_raw, as_of=as_of)
+    rvol, rvol_median = _rvol_yfinance_fallback(ticker_raw, as_of=as_of)
     if rvol >= 0:
-        return rvol, "yfinance", None
+        return rvol, "yfinance", None, rvol_median
 
     log.warning(f"    All RVOL sources failed for {ticker_raw} — returning N/A")
-    return -1.0, "N/A", None
+    return -1.0, "N/A", None, None
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -742,7 +766,37 @@ def compute_intraday_diagnostic(ticker_nse: str, as_of: datetime = None) -> dict
         return None
 
 
+def _drift_anchor(pick: dict, opening_range: tuple) -> tuple:
+    """(anchor_pivot, anchor_entry, or_anchored) -- the reference prices
+    classify() measures chase/extension against. Shared with classify()'s
+    wrapper so the email can label the "vs entry" figure with the price it
+    was ACTUALLY measured against (2026-11-17: KOTAKBANK showed "-0.9% vs
+    entry" at CMP 492.7 vs a printed entry of 488.0 -- it was measured
+    against the opening-range high 497.1, which the email never said)."""
+    entry = pick["entry"]
+    pivot = pick.get("pivot", entry)
+    orh = opening_range[0] if opening_range else None
+    if orh is not None and orh > pivot:
+        return orh, max(entry, orh), True
+    return pivot, entry, False
+
+
 def classify(pick: dict, cmp: float | None, rvol: float, rvol_src: str,
+             max_entry_drift_pct: float = MAX_ENTRY_DRIFT_PCT,
+             max_pivot_extension_pct: float = MAX_PIVOT_EXTENSION_PCT,
+             opening_range: tuple = (None, None, None),
+             price_verified: bool = True, price_source: str = "unknown") -> dict:
+    """classify_core() plus the drift reference price for display."""
+    c = _classify_core(pick, cmp, rvol, rvol_src, max_entry_drift_pct,
+                       max_pivot_extension_pct, opening_range,
+                       price_verified, price_source)
+    _, anchor_entry, or_anchored = _drift_anchor(pick, opening_range)
+    c["drift_anchor"] = anchor_entry
+    c["drift_anchor_is_or"] = or_anchored
+    return c
+
+
+def _classify_core(pick: dict, cmp: float | None, rvol: float, rvol_src: str,
              max_entry_drift_pct: float = MAX_ENTRY_DRIFT_PCT,
              max_pivot_extension_pct: float = MAX_PIVOT_EXTENSION_PCT,
              opening_range: tuple = (None, None, None),
@@ -779,13 +833,7 @@ def classify(pick: dict, cmp: float | None, rvol: float, rvol_src: str,
     # number. entry/sl/t1 are NEVER changed by this — only the chase
     # tolerance's reference point is.
     orh, orl, or_src = opening_range if opening_range else (None, None, None)
-    anchor_pivot = pivot
-    anchor_entry = entry
-    or_anchored  = False
-    if orh is not None and orh > pivot:
-        anchor_pivot = orh
-        anchor_entry = max(entry, orh)
-        or_anchored  = True
+    anchor_pivot, anchor_entry, or_anchored = _drift_anchor(pick, opening_range)
 
     if cmp is not None and not price_verified:
         return {
@@ -1262,7 +1310,10 @@ def _fmt_rvol(rvol: float, src: str, elapsed_minutes: float = None) -> str:
         return "<span style='color:#9ca3af;'>N/A</span>"
     color = "#16a34a" if rvol >= 1.5 else "#ca8a04" if rvol >= 1.0 else "#dc2626"
     icon  = "✅" if rvol >= 1.5 else "⚠️" if rvol >= 1.0 else "❌"
-    provenance = f"{elapsed_minutes:.0f}min elapsed" if elapsed_minutes is not None else "elapsed time unknown"
+    # [2026-11-17] elapsed_minutes is now the COMPLETED-bar window actually
+    # measured (rvol_window.py), not wall-clock time since the open.
+    provenance = (f"09:15+{elapsed_minutes:.0f}min, done bars" if elapsed_minutes is not None
+                  else "window unknown")
     return (
         f"<span style='color:{color};font-weight:700;'>{icon} {rvol:.1f}x</span>"
         f"<br><span style='font-size:10px;color:#9ca3af;'>{src} · {provenance}</span>"
@@ -1302,15 +1353,25 @@ def _row(r: dict) -> str:
             ltp = f"{ltp}<br><span style='font-size:10px;color:#9ca3af;'>{ltp_prov}</span>"
     gap         = f"{c['gap_pct']:+.1f}%" if c.get("gap_pct") is not None else "N/A"
     drift_cell  = ""
+    # [2026-11-17] Name the reference price. When today's opening range
+    # already cleared the pivot, drift is measured vs the opening-range
+    # high, not the printed ENTRY -- say so instead of a bare "vs entry".
+    anchor = c.get("drift_anchor")
+    if c.get("drift_anchor_is_or") and anchor:
+        drift_ref = f"vs OR-high ₹{anchor:,.1f}"
+    elif anchor:
+        drift_ref = f"vs entry ₹{anchor:,.1f}"
+    else:
+        drift_ref = "vs entry"
     if c.get("is_chasing"):
         drift_cell = (
             f"<span style='color:#7c3aed;font-weight:700;font-size:10px;'>"
-            f"{c['drift_pct']:+.1f}% vs entry</span>"
+            f"{c['drift_pct']:+.1f}% {drift_ref}</span>"
         )
     elif c.get("drift_pct") is not None:
         drift_cell = (
             f"<span style='color:#9ca3af;font-size:10px;'>"
-            f"{c['drift_pct']:+.1f}% vs entry</span>"
+            f"{c['drift_pct']:+.1f}% {drift_ref}</span>"
         )
     tier = f"T{p.get('tier','?')}"
 
@@ -1742,7 +1803,7 @@ def build_html(results: list, scan_date: str, run_time: str, meta: dict = None) 
     {summary_html}
     &nbsp;&nbsp;
     <span style="color:#94a3b8;font-size:12px;">
-        {len(results)} picks checked · RVOL = first-45min vs 20-day avg</span>
+        {len(results)} picks checked · RVOL = volume since 09:15 (completed bars) vs same window, 20-day avg</span>
   </div>
 
   {action_box}
@@ -1762,7 +1823,7 @@ def build_html(results: list, scan_date: str, run_time: str, meta: dict = None) 
           <th style="padding:10px 8px;text-align:right;font-size:11px;color:#16a34a;letter-spacing:1px;text-transform:uppercase;">T1</th>
           <th style="padding:10px 8px;text-align:right;font-size:11px;color:#15803d;letter-spacing:1px;text-transform:uppercase;">T2</th>
           <th style="padding:10px 8px;text-align:right;font-size:11px;color:#1e40af;letter-spacing:1px;text-transform:uppercase;">R:R</th>
-          <th style="padding:10px 8px;text-align:right;font-size:11px;color:#6b7280;letter-spacing:1px;text-transform:uppercase;">vs Entry</th>
+          <th style="padding:10px 8px;text-align:right;font-size:11px;color:#6b7280;letter-spacing:1px;text-transform:uppercase;" title="Chase drift: CMP vs the planned entry, or vs the opening-range high when today's open already cleared the pivot (the reference price is named in each row)">Drift</th>
           <th style="padding:10px 8px;text-align:left;font-size:11px;color:#6b7280;letter-spacing:1px;text-transform:uppercase;">Action</th>
         </tr>
       </thead>
@@ -1974,6 +2035,21 @@ def _persist_confirmation_outcomes(today_iso: str, checkpoint_label: str,
                     f"{type(e).__name__}: {e}")
 
 
+def _publish_rvol_shadow(rows: list):
+    """[2026-11-17 fix 3] Best-effort Turso write of this checkpoint's
+    mean-vs-median RVOL readings (see turso_sync.publish_rvol_readings).
+    Lazy import: turso_sync needs libsql_client, which a local/ad-hoc run
+    may not have -- a missing client must never block the checkpoint."""
+    if not rows:
+        return
+    try:
+        import turso_sync
+        n = turso_sync.publish_rvol_readings(rows, dry_run=_NO_SEND)
+        log.info(f"  RVOL shadow: published {n}/{len(rows)} reading(s) to Turso")
+    except Exception as e:
+        log.warning(f"  RVOL shadow publish failed (non-fatal): {type(e).__name__}: {e}")
+
+
 def _persist_btst_outcomes(today_iso: str, checkpoint_label: str, results: list):
     """
     Durable counterpart to _persist_confirmation_outcomes(), for the
@@ -2117,7 +2193,7 @@ def run_btst_scan(today_iso: str, today_str: str, run_time: str):
 
         log.info(f"  Checking {ticker_key} for BTST...")
         cmp, cmp_fetched_at, _cmp_src, _cmp_suspect = get_live_price(ticker_raw)
-        rvol, rvol_src, rvol_elapsed = get_rvol(ticker_raw, as_of=now_ist)
+        rvol, rvol_src, rvol_elapsed, rvol_median = get_rvol(ticker_raw, as_of=now_ist)
         day_high, day_low, dh_src  = get_intraday_high_low(ticker_raw, as_of=now_ist)
         days_to_earnings           = days_to_next_earnings(ticker_raw, as_of=now_ist.date())
         # [2026-08-19, CAS] Closing price isn't trustworthy for an
@@ -2207,6 +2283,15 @@ def main():
 
     log.info(f"NSE Momentum v{VERSION} — Confirmation checkpoint [{checkpoint_label}] starting "
              f"({run_time} IST = {datetime.now(ZoneInfo('UTC')).strftime('%H:%M')} UTC)...")
+
+    # [2026-11-17] confirm.yml now also has GitHub `schedule` re-checks
+    # (10:35/11:05) that fire Mon-Fri with no NSE-holiday awareness, same as
+    # the cron-job.org triggers. No session today = nothing to confirm; exit
+    # quietly instead of emailing DATA_ERROR rows off a closed market.
+    from market_calendar.staleness_check import is_trading_day
+    if not is_trading_day(now_ist.date()):
+        log.info(f"  {today_iso} is not an NSE trading day — nothing to confirm. Done.")
+        return
 
     if not os.path.exists(PICKS_JSON_PATH):
         log.error(f"{PICKS_JSON_PATH} not found — evening scan must run first")
@@ -2331,6 +2416,7 @@ def main():
 
     results       = []
     newly_terminal = []
+    shadow_rows    = []   # [2026-11-17 fix 3] mean-vs-median RVOL evidence -> Turso
 
     for pick in picks:
         ticker_raw = pick.get("ticker_raw") or pick.get("ticker", "")
@@ -2388,7 +2474,7 @@ def main():
         log.info(f"  Checking {ticker_key}...")
         cmp, cmp_fetched_at, cmp_src, cmp_suspect = get_live_price(ticker_raw)
         price_prov     = verify_intraday_freshness(cmp_fetched_at, now_ist, source_name="live_price")
-        rvol, rvol_src, rvol_elapsed = get_rvol(ticker_raw, as_of=now_ist)
+        rvol, rvol_src, rvol_elapsed, rvol_median = get_rvol(ticker_raw, as_of=now_ist)
         orh, orl, or_src = get_opening_range(ticker_raw, as_of=now_ist)
         c              = classify(pick, cmp, rvol, rvol_src,
                                    max_entry_drift_pct=tolerance["max_entry_drift_pct"],
@@ -2399,6 +2485,7 @@ def main():
         c["price_source"]     = cmp_src
         c["price_suspect"]    = cmp_suspect
         c["rvol_elapsed_minutes"] = rvol_elapsed
+        c["rvol_median"] = rvol_median   # shadow only -- see get_rvol()
 
         # [2026-08-23] Volume-cross alert -- independent of price/pivot
         # classification, fires once per ticker per day the first time RVOL
@@ -2416,6 +2503,15 @@ def main():
         )
         entry = {"pick": pick, "classification": c}
         results.append(entry)
+        shadow_rows.append({
+            "confirm_date": today_iso, "checkpoint": checkpoint_label,
+            "ticker": ticker_key, "status": c["status"],
+            "rvol_mean": rvol if rvol >= 0 else None, "rvol_median": rvol_median,
+            "rvol_src": rvol_src, "window_minutes": rvol_elapsed, "cmp": cmp,
+            "pivot": pick.get("pivot", pick.get("entry")), "entry": pick.get("entry"),
+            "sl": pick.get("sl"), "regime": regime_code,
+            "recorded_at": now_ist.isoformat(),
+        })
 
         if c["status"] in TERMINAL_STATUSES:
             prior_state[ticker_key] = entry
@@ -2437,6 +2533,7 @@ def main():
     _save_state(state_path, prior_state)
     _save_state(volume_alert_path, volume_alert_state)
     _persist_confirmation_outcomes(today_iso, checkpoint_label, newly_terminal)
+    _publish_rvol_shadow(shadow_rows)
 
     # ── Decide whether/what to send ──────────────────────────────────────────
     # First checkpoint of the day: always send (baseline picture).
