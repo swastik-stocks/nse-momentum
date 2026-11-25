@@ -246,7 +246,8 @@ def send_email_report(tiers: dict):
                        macro_state, event_risk, t1_cap, dhan_status,
                        exit_alerts, trim_signals, add_on,
                        sector_concentration, holding_heat,
-                       signal_attribution, data_prov, track_record)
+                       signal_attribution, data_prov, track_record,
+                       tiers.get("regime_detail"))
 
     msg = MIMEMultipart("alternative")
     exit_subject_flag = f" - ⚠{len(exit_alerts)} EXIT ALERT" + ("S" if len(exit_alerts) != 1 else "") if exit_alerts else ""
@@ -381,6 +382,49 @@ def _heatmap_table(stocks: list, tier_label: str, accent_color: str) -> str:
   </table>
   </div>
 </div>"""
+
+
+# [2026-11-25] What breakout trades did historically in each regime, so the
+# letter carries its real stakes. Source: 2,166 Swing High Breakout / Cup &
+# Handle signals, 2016-02..2026-02, point-in-time NIFTY 500 universe, scored
+# with validation/trade_outcome.py (live stop/T1, 20-session exit, costs),
+# regime from the live RegimeClassifier. Separation held in both 2016-20 and
+# 2021-26. Re-derive after re-running pipeline_replay_deep.py.
+REGIME_HISTORY_AVG_PCT = {"A": 1.26, "B": 0.34, "C": -0.42, "D": -1.76, "E": -1.44}
+REGIME_POINTS_NEEDED = {"A": 9, "B": 7, "C": 4, "D": 2}
+
+
+def _regime_explainer(regime: str, detail) -> str:
+    """Plain-English breakdown of the regime score, or '' without detail."""
+    if not detail or not detail.get("components"):
+        return ""
+    c = detail["components"]
+    parts = []
+    n = c.get("nifty50") or {}
+    if "pts" in n:
+        label = n.get("label", "")
+        if n.get("e50") and n.get("e200") and n["e50"] <= n["e200"]:
+            label += f" (EMA50 {n['e50']:,.0f} still below EMA200 {n['e200']:,.0f})"
+        parts.append(f"Nifty trend {n['pts']:g}/4 - {label}")
+    b = c.get("banknifty") or {}
+    if "pts" in b:
+        parts.append(f"Bank Nifty {b['pts']:g}/2")
+    v = c.get("vix") or {}
+    if "value" in v:
+        parts.append(f"VIX {v['value']:.1f} ({v['pts']:+g})")
+    a = c.get("ad_ratio") or {}
+    if "value" in a:
+        parts.append(f"today's advance/decline {a['value']:.2f} ({a['pts']:+g})")
+    br = c.get("breadth") or {}
+    if br.get("score") is not None:
+        parts.append(f"breadth {br['score']:.1f}/10 ({br['adj']:+g})")
+    pts = detail.get("raw_pts")
+    better = {"B": "A", "C": "B", "D": "C", "E": "D"}.get(regime)
+    need = (f" {better} needs {REGIME_POINTS_NEEDED[better]}." if better else "")
+    hist = " · ".join(f"{k} {v:+.1f}%" for k, v in REGIME_HISTORY_AVG_PCT.items())
+    return (f'<div style="margin-top:6px;color:#55627A;font-size:11px">'
+            f'Why {regime}: {"; ".join(parts)} = {pts:g} pts.{need}<br>'
+            f'Average breakout trade by regime, 2016-2026: {hist}.</div>')
 
 
 def _track_record_note(track_record, tier: str) -> str:
@@ -1057,7 +1101,8 @@ def _build_html(t1, t2, t3, all_r, near_bo, defensive,
                 macro_state, event_risk, t1_cap, dhan_status=None,
                 exit_alerts=None, trim_signals=None, add_on=None,
                 sector_concentration=None, holding_heat=None,
-                signal_attribution=None, data_prov=None, track_record=None) -> str:
+                signal_attribution=None, data_prov=None, track_record=None,
+                regime_detail=None) -> str:
 
     mcol = MACRO_COLOR.get(macro_state, "#96690A")
     ecol = EVENT_COLOR.get(event_risk,  "#8895AA")
@@ -1329,6 +1374,7 @@ def _build_html(t1, t2, t3, all_r, near_bo, defensive,
               padding:10px 14px;margin-bottom:20px;font-size:12px;color:{rcol}">
     <strong>Regime {regime}:</strong> {rnote}
     {"" if penalty == 0 else f'<span style="color:#55627A"> - Score penalty: {penalty} pts applied.</span>'}
+    {_regime_explainer(regime, regime_detail)}
   </div>
   {dhan_banner}
   {prov_banner}

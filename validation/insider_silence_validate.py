@@ -181,7 +181,10 @@ def _forward_test_net(df: pd.DataFrame, signal_idx: int, entry: float, forward_b
     None = no trade (breakout entry never reached, or too little future
     data); callers must skip it. stop/target should be the live RiskAgent
     stop and T1, so the backtest scores the trade the email prints."""
-    return simulate_trade(df, signal_idx, entry, stop=stop, target=target,
+    # Callers pass i where the pattern saw window = df.iloc[:i], i.e. bars
+    # up to i-1. Orders therefore work from bar i; the old scorer started
+    # at i+1 and silently skipped the first tradeable bar (2026-11-25).
+    return simulate_trade(df, signal_idx - 1, entry, stop=stop, target=target,
                           forward_bars=forward_bars, cost_pct=ROUND_TRIP_COST_PCT,
                           require_full_window=True)
 

@@ -60,6 +60,10 @@ DD_WINDOW = 60                # bars, matches rs_agent's 12w leg approximately
 DEFENSIVE_SECTOR_TILT = {
     "FMCG":         +3,
     "Pharma":       +2,
+    # [2026-11-25] Hospitals/diagnostics were mislabelled "Pharma" in
+    # nse_universe.py and moved to "Healthcare"; same tilt keeps their
+    # defensive scoring unchanged.
+    "Healthcare":   +2,
     "Financials":    0,
     "IT":            0,
     "Energy":        0,

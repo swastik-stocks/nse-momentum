@@ -82,8 +82,15 @@ class RegimeClassifier:
         above_50_ema_pct: float = 50.0,
         breadth_confidence: str = "HIGH",
         macro_state: str = "MIXED",
+        trend_scoring: str = "stack",
     ):
         import pandas as pd
+        # [2026-11-25] "stack": the original all-or-nothing EMA ladder.
+        # "graded": each trend condition earns its own share of the same
+        # 0-4 points -- see _score_nifty50.
+        if trend_scoring not in ("stack", "graded"):
+            raise ValueError(f"trend_scoring must be 'stack' or 'graded', not {trend_scoring!r}")
+        self.trend_scoring = trend_scoring
         self.nifty50     = nifty50_data   if nifty50_data   is not None else pd.DataFrame()
         self.banknifty   = banknifty_data if banknifty_data is not None else pd.DataFrame()
         self.vix         = vix
@@ -205,6 +212,28 @@ class RegimeClassifier:
         hh      = float(recent.max())
         ll      = float(recent.min())
         hl_ok   = c > (hh + ll) / 2
+
+        if self.trend_scoring == "graded":
+            # The stack ladder is a cliff: on 23 Nov 2026 the Nifty was 5%
+            # above its 50-EMA after a 15% rally, but EMA50 sat 0.2% under
+            # EMA200 (a leftover of the October low), so it scored 2 of 4 --
+            # the same as a market barely above its 50-EMA. Graded scoring
+            # gives each condition its own weight, same 0-4 range:
+            e50_prev = float(close.ewm(span=50).mean().iloc[-11]) if len(close) > 11 else e50
+            parts = {
+                "close > EMA200": 1.0 if c > e200 else 0.0,
+                "close > EMA50": 1.0 if c > e50 else 0.0,
+                "close > EMA20 + upper half of 20d range": 1.0 if (c > e20 and hl_ok) else 0.0,
+                "EMA50 > EMA200": 0.5 if e50 > e200 else 0.0,
+                "EMA50 rising (10 sessions)": 0.5 if e50 > e50_prev else 0.0,
+            }
+            pts = sum(parts.values())
+            label = "Graded: " + ", ".join(k for k, v in parts.items() if v) if pts else                     "Graded: below all trend conditions"
+            return pts, {
+                "close": round(c, 1), "e20": round(e20, 1),
+                "e50": round(e50, 1), "e200": round(e200, 1),
+                "hl_ok": hl_ok, "pts": pts, "label": label,
+            }
 
         if c > e20 > e50 > e200 and hl_ok:
             pts, label = 4, "Full bull stack (price > EMA20 > 50 > 200 + HH/HL)"
@@ -387,7 +416,7 @@ class RegimeClassifier:
 ║  REGIME: {icon} {r} — {result['regime_label']:<25}     ║
 ╠══════════════════════════════════════════════════╣
 ║  {result['regime_desc']}
-║  Raw score pts : {result['raw_pts']:+d}
+║  Raw score pts : {result['raw_pts']:+g}
 ║  Penalty       : {result['penalty']} pts  (full={result['full_penalty']})
 ║  T1 cap        : {result['t1_cap']} picks
 ║  Confidence    : {conf_icon} {result['confidence']}

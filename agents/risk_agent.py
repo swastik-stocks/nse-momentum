@@ -1,8 +1,15 @@
 """
 NSE Momentum v5.1 - Risk Agent
 Entry: breakout zone.
-Stop:  Tightest of (EMA21 | 10-day low | ATR), capped at universe max.
-T1:    Nearest resistance, minimum reward floor per universe.
+Stop:  stop_mode="tightest" (default): the HIGHEST (closest to entry) of
+       EMA21 | 10-day low | ATR, then pushed DOWN to at least STOP_CAP below
+       entry. NB: despite its name STOP_CAP is a MINIMUM stop distance, not a
+       maximum (corrected 2026-11-25; the old text said "capped at universe
+       max"). stop_mode="loosest": the LOWEST of the three, same minimum.
+T1:    Nearest resistance, minimum reward floor per universe. With
+       respect_resistance=True the floor never lifts T1 above resistance,
+       and the R:R fallback can't re-target past it - the pick is rejected
+       instead.
 T2:    1.618x Fibonacci extension — always enforced > T1 * 1.05.
 
 Fixes in v5.1:
@@ -30,8 +37,15 @@ MIN_RRR      = {"LARGE": 1.5,  "MID": 1.8,  "SMALL": 2.0}
 class RiskAgent:
     def __init__(self, df: pd.DataFrame, breakout_level: float,
                  entry_low: float = 0.0, entry_high: float = 0.0,
-                 universe: str = "LARGE", bars_per_day: float = 1.0):
+                 universe: str = "LARGE", bars_per_day: float = 1.0,
+                 stop_mode: str = "tightest", respect_resistance: bool = False):
         self.df         = df
+        # [2026-11-25] Switchable so validation can compare rules on the same
+        # signals; defaults reproduce the original behaviour exactly.
+        if stop_mode not in ("tightest", "loosest"):
+            raise ValueError(f"stop_mode must be 'tightest' or 'loosest', not {stop_mode!r}")
+        self.stop_mode          = stop_mode
+        self.respect_resistance = respect_resistance
         self.bo         = breakout_level
         self.universe   = universe
         # [NEW] bars_per_day=1 (default) is exactly the original daily
@@ -105,9 +119,9 @@ class RiskAgent:
         if not candidates:
             self._reason = "No valid stop level below entry"
             return
-        stop = max(candidates)
+        stop = max(candidates) if self.stop_mode == "tightest" else min(candidates)
 
-        # Cap stop width
+        # Minimum stop distance (see module docstring: a floor, not a cap)
         cap  = STOP_CAP.get(self.universe, 0.03)
         stop = min(stop, entry * (1 - cap))
         stop = max(stop, 0.01)
@@ -129,7 +143,8 @@ class RiskAgent:
         floor = REWARD_FLOOR.get(self.universe, 1.06)
         if resistance_levels:
             target1 = min(raw_t1, resistance_levels[0] * 0.99)
-            target1 = max(target1, entry * floor)
+            if not self.respect_resistance:
+                target1 = max(target1, entry * floor)
         else:
             target1 = max(raw_t1, entry * floor)
 
@@ -156,6 +171,11 @@ class RiskAgent:
 
         if rrr < min_rrr:
             rrr_t2 = round((target2 - entry) / risk, 2)
+            if self.respect_resistance and resistance_levels:
+                # Re-targeting from pattern height would ignore the
+                # resistance T1 was just held under -- reject instead.
+                self._reason = f"R:R {rrr:.2f}x below min {min_rrr}x (T1 held under resistance)"
+                return
             if rrr_t2 >= min_rrr:
                 target1 = round(entry + pat_height * 0.75, 2)
                 target2 = max(round(entry + pat_height * 1.618, 2), target1 * 1.10)

@@ -111,6 +111,11 @@ def summarize(trades: pd.DataFrame) -> dict:
                 avg_return_pct=round(float(closed["ret"].mean() * 100), 2),
                 median_return_pct=round(float(closed["ret"].median() * 100), 2),
                 avg_r=round(float(closed["r"].mean()), 2),
+                # [2026-11-25] How often T1 is actually reached. The cards
+                # show R:R to T1, but in the 2016-2026 replay only ~10% of
+                # trades reached T1 within 20 sessions; most ended at the
+                # stop or the time exit. Shown next to the R:R as a reality check.
+                t1_hit_rate=round(float((closed["exit_reason"] == "TARGET").mean()), 3),
             )
             if "excess" in closed and closed["excess"].notna().any():
                 stats["avg_vs_nifty_pct"] = round(float(closed["excess"].mean() * 100), 2)
@@ -155,6 +160,8 @@ def describe_tier(track: dict | None, tier: str) -> str | None:
                 f"trades so far — too few to judge.")
     vs = s.get("avg_vs_nifty_pct")
     vs_txt = f", {vs:+.1f}% vs Nifty" if vs is not None else ""
+    t1 = s.get("t1_hit_rate")
+    t1_txt = f" T1 was reached in {t1:.0%} of them." if t1 is not None else ""
     return (f"Tier {tier} live record since {since}: {s['closed']} closed trades, "
             f"{s['win_rate']:.0%} winners, average {s['avg_return_pct']:+.1f}% per trade"
-            f"{vs_txt}.")
+            f"{vs_txt}.{t1_txt}")

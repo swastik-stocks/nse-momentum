@@ -500,6 +500,11 @@ class AgentOrchestrator:
         self.regime_penalty     = regime_result["penalty"]
         self.regime_confidence  = regime_result["confidence"]     # HIGH or LOW
         self.regime_sanity_flags= regime_result["sanity_flags"]   # list of contradictions
+        # [2026-11-25] Kept for the email's "why this regime" line -- the
+        # letter alone (e.g. "C" during a 15% rally) read as a bug when it
+        # was really a 4-of-7-points call driven by named inputs.
+        self.regime_detail = {"raw_pts": regime_result["raw_pts"],
+                              "components": regime_result["component_detail"]}
 
         if self.regime_confidence == "LOW":
             log.warning(
@@ -1583,6 +1588,7 @@ class AgentOrchestrator:
             "regime_name":        self.regime_name,
             "regime_confidence":  self.regime_confidence,
             "regime_sanity_flags": self.regime_sanity_flags,
+            "regime_detail":      getattr(self, "regime_detail", None),
             "breadth":            self.breadth_score,
             "breadth_detail":     self.breadth_detail,
             "breadth_source":     self.breadth_source,
@@ -1613,7 +1619,9 @@ class AgentOrchestrator:
             top = self.sector_agent.get_top_sectors(3)
             if r.sector in [s for s, _ in top]:
                 reasons.append(f"Sector leadership - {r.sector} top-3 in rotation")
-        if r.rsi_val > 0:
+        # [2026-11-25] RSI >= 80 is extended, not "constructive" -- it is
+        # listed under risk factors instead (_risk_factors).
+        if 50 <= r.rsi_val < 80:
             reasons.append(f"RSI(D) {r.rsi_val:.0f} - momentum constructive")
         if r.earnings_flag:
             reasons.append("Earnings acceleration within 14 days - catalyst-backed")
@@ -1632,8 +1640,11 @@ class AgentOrchestrator:
         missing.append(f"Score {r.total_score} - needs {gap} more pts for Tier 1")
         if r.rs_percentile < 60:
             missing.append(f"RS {r.rs_percentile:.0f}th pct - stronger RS needed")
-        if r.rvol < 1.3:
-            missing.append(f"Volume {r.rvol:.1f}x (EOD) - needs breakout volume >= 1.5x")
+        # [2026-11-25] Volume was listed here as if it were what kept the
+        # pick out of Tier 1, but Tier 1 doesn't require it at scan time
+        # either (picks are SETUP_READY, pre-breakout). The real volume gate
+        # is the morning checkpoint's >= 1.5x confirmation, which applies to
+        # every tier -- see _risk_factors.
         if r.regime in ["C", "D", "E"]:
             missing.append(f"Regime {r.regime} penalty applied")
         return missing[:3]
@@ -1642,7 +1653,8 @@ class AgentOrchestrator:
         triggers = []
         if r.breakout_level > 0:
             triggers.append(f"Close above Rs.{r.breakout_level:.1f} on 1.5x volume")
-        triggers.append("RS rank improves above 65th percentile")
+        if r.rs_percentile < 65:   # [2026-11-25] was shown even at the 99th pct
+            triggers.append(f"RS rank improves above 65th percentile (now {r.rs_percentile:.0f}th)")
         if r.regime in ["C", "D"]:
             triggers.append("Market regime shifts to B or better")
         triggers.append(f"Stop: Rs.{r.stop_loss:.1f} ({r.stop_pct:.1f}% risk)")
@@ -1652,6 +1664,11 @@ class AgentOrchestrator:
         risks = []
         if r.regime in ["D", "E"]:
             risks.append(f"Market {r.regime_name} - elevated breakout failure rate")
+        if r.rvol < 1.5:
+            risks.append(f"Volume {r.rvol:.1f}x today - enter only if the morning "
+                         f"check confirms >= 1.5x")
+        if r.rsi_val >= 80:
+            risks.append(f"RSI(D) {r.rsi_val:.0f} - extended; pullbacks more likely")
         if r.asymmetry_rr > 0 and r.asymmetry_rr < 2.5:
             risks.append(f"R:R {r.asymmetry_rr:.1f}x - size position accordingly")
         if r.vcp_penalty > 0:

@@ -183,7 +183,10 @@ def _forward_test(df: pd.DataFrame, signal_idx: int, entry: float):
             "is_win_net":   bool,  "net_gain":   float,  "net_r":   float,
         }
     """
-    t = simulate_trade(df, signal_idx, entry, forward_bars=FORWARD_BARS,
+    # Callers pass i where the pattern saw window = df.iloc[:i], i.e. bars
+    # up to i-1. Orders therefore work from bar i; the old scorer started
+    # at i+1 and silently skipped the first tradeable bar (2026-11-25).
+    t = simulate_trade(df, signal_idx - 1, entry, forward_bars=FORWARD_BARS,
                        cost_pct=ROUND_TRIP_COST_PCT)
     if t is None:
         return None
