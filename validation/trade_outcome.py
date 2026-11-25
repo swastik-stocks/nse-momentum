@@ -120,16 +120,16 @@ def simulate_trade(
     net_ret = gross_ret - cost_pct
     risk_pct = risk / fill
     return {
-        "is_win": net_ret > 0,
-        "net_r": round(net_ret / risk_pct, 3),
-        "gross_r": round(gross_ret / risk_pct, 3),
-        "net_return": round(net_ret, 5),
-        "gross_return": round(gross_ret, 5),
+        "is_win": bool(net_ret > 0),   # plain Python types: callers json.dumps this
+        "net_r": round(float(net_ret / risk_pct), 3),
+        "gross_r": round(float(gross_ret / risk_pct), 3),
+        "net_return": round(float(net_ret), 5),
+        "gross_return": round(float(gross_ret), 5),
         "fill_price": round(float(fill), 4),
         "exit_price": round(float(exit_px), 4),
-        "exit_reason": reason,
-        "bars_held": held,
-        "fill_offset": k,        # bars after the signal bar's next bar (0 = next bar)
-        "risk_pct": round(risk_pct, 5),
+        "exit_reason": str(reason),
+        "bars_held": int(held),
+        "fill_offset": int(k),        # bars after the signal bar's next bar (0 = next bar)
+        "risk_pct": round(float(risk_pct), 5),
         "filled": True,
     }

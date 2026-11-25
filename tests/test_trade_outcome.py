@@ -75,3 +75,15 @@ def test_defaults_when_no_stop_or_target():
 def test_require_full_window_returns_none_on_short_history():
     df = _df([SIGNAL, (99, 101, 99, 100)])
     assert simulate_trade(df, 0, entry=100, require_full_window=True) is None
+
+
+def test_result_is_json_serializable():
+    """The deep replay checkpoints results with json.dumps; numpy bools broke it."""
+    import json
+    import numpy as np
+    import pandas as pd
+    c = np.linspace(100, 120, 40)
+    df = pd.DataFrame({"Open": c, "High": c * 1.01, "Low": c * 0.99, "Close": c})
+    t = simulate_trade(df, 5, float(c[5]) * 1.002)
+    assert t is not None
+    json.dumps(t)
