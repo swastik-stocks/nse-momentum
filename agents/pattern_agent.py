@@ -1,6 +1,11 @@
 """
 NSE Momentum v6.3 — Pattern Agent
 
+[2026-11-25] RE-SCORE: the "strong, confirmed" edges claimed below for Cup &
+Handle (+1.06R) and Swing High Breakout (+0.67R) did not survive realistic
+exits. Re-run figures: -0.01R and +0.06R, neither significant. See the note
+above DEFAULT_WEIGHTS. Weights and selection logic are unchanged.
+
 CHANGES vs v6.2 (this rebuild, 2026-08-05):
   [PRUNE] VCP moved from DEFAULT_WEIGHTS to PRUNED_PATTERNS (weight 8 -> 0).
 
@@ -160,9 +165,22 @@ log = logging.getLogger(__name__)
 # PRUNED on 08-05 once a larger, 47-snapshot sample showed its edge
 # weakening (not strengthening) with more data — see docstring [PRUNE]
 # section. Only 2 patterns remain live as of v6.3.
+#
+# [2026-11-25] RE-SCORED — THE EVIDENCE BELOW NO LONGER HOLDS.
+# The 08-05 figures came from a replay that exited trades optimistically and
+# skipped the first tradeable bar after each signal. Re-run 2026-11-25 with
+# realistic path-dependent exits (validation/trade_outcome.py: buy-stop fill,
+# stop wins a same-bar tie, 20-session time exit, real costs), 4,528 pooled
+# gate-cleared trades:
+#     Cup & Handle         N=734   avg R -0.01  CI [-0.11, 0.09]  PF 0.99  p=0.92
+#     Swing High Breakout  N=1440  avg R +0.06  CI [-0.01, 0.14]  PF 1.11  p=0.44
+# Neither is distinguishable from a random gate-cleared trade. They stay live
+# because no alternative is proven better (see VCP below) and the live track
+# record is carried by regime and tier, not pattern: Tier 1 +1.6% vs Nifty,
+# Tier 2 -1.2% (live_track_record.py, Aug-Nov 2026). Weights unchanged.
 DEFAULT_WEIGHTS = {
-    "Cup & Handle":        20,   # N=1119, net avg R=1.06, PF=2.73, p=0.0000 — strong, confirmed 05 Aug
-    "Swing High Breakout": 16,   # N=1456, net avg R=0.67, PF=1.98, p=0.0000 — strong, confirmed 05 Aug
+    "Cup & Handle":        20,   # 11-25: N=734,  avg R -0.01, p=0.92 — no measurable edge (was 1.06 on 08-05)
+    "Swing High Breakout": 16,   # 11-25: N=1440, avg R +0.06, p=0.44 — no measurable edge (was 0.67 on 08-05)
 }
 
 # Pruned patterns — detected but weight=0 so never selected as best pattern.
@@ -172,6 +190,12 @@ DEFAULT_WEIGHTS = {
 # tested via Monte Carlo, did not clear significance. VCP moved here
 # 2026-08-05 — see docstring [PRUNE] section for the full evidence chain
 # (edge weakened, not strengthened, as sample size grew).
+#
+# [2026-11-25] Per-pattern numbers re-scored (realistic exits) are in
+# validation/monte_carlo_results.csv. Changes worth watching: VCP +0.45R,
+# p=0.02 (N=59 — the only p<0.05, but 1 of 17 tests, so not enough to
+# promote it); 3-Weeks-Tight +0.22R (was -0.35); Bull Flag +0.16R; High Base
+# +0.09R (was -0.46). Every other pattern is within about +/-0.1R of zero.
 #
 # All N-counts / p-values below are from the 2026-08-05 confirmation run
 # (validation/monte_carlo_significance.py --all-patterns, 47-snapshot
@@ -201,14 +225,22 @@ PRUNED_PATTERNS = {
 ALL_WEIGHTS = {**DEFAULT_WEIGHTS, **PRUNED_PATTERNS}
 
 # ── Evidence-based expectancy (v6.3) ────────────────────────────────────────
+# [2026-11-25] THESE VALUES ARE STALE ON PURPOSE. Re-scored with realistic
+# exits the live patterns are -0.01R and +0.06R (see DEFAULT_WEIGHTS). They
+# are kept at the old values only because this dict drives is_low_edge_pattern():
+# entering the real numbers would put both patterns below the 0.55 threshold
+# and push EVERY pick to Tier 2 — and the live record says Tier 1 does beat
+# Tier 2. Treat these as a gate setting, not as expectancy. Not shown in the
+# email for live patterns.
+#
 # Net avg R per trade (real NSE costs applied), from the 2026-08-05
 # confirmation run (pipeline_replay_deep.py + monte_carlo_significance.py).
 # Units are R-multiples (what pipeline_replay_deep.py and
 # monte_carlo_significance.py both report in). Only the 2 currently-live
 # patterns are listed — VCP removed here on 08-05 prune (see docstring).
 PATTERN_EXPECTANCY = {
-    "Cup & Handle":        1.06,   # p=0.0000 — statistically solid
-    "Swing High Breakout": 0.67,   # p=0.0000 — statistically solid
+    "Cup & Handle":        1.06,   # 08-05 figure; 11-25 re-score -0.01R, p=0.92 — NOT solid
+    "Swing High Breakout": 0.67,   # 08-05 figure; 11-25 re-score +0.06R, p=0.44 — NOT solid
 }
 # Threshold retained for any future pattern promoted at reduced conviction
 # (the role VCP briefly played 07-27 through 08-05). Both current live
@@ -221,9 +253,9 @@ def is_low_edge_pattern(pattern_name: str) -> bool:
     """
     True if this pattern's real, evidence-based net expectancy (from the
     2026-08-05 confirmation run) is below the high-conviction threshold.
-    As of v6.3, both live patterns (Cup & Handle, Swing High Breakout)
-    are p=0.0000 and comfortably above threshold — this currently flags
-    nothing. Kept for the next pattern that gets promoted at reduced
+    It currently flags neither live pattern, because PATTERN_EXPECTANCY
+    still holds their 08-05 values (see the note there: the 11-25 re-score
+    put both near zero). Kept for the next pattern that gets promoted at reduced
     conviction, the role VCP held until its 08-05 prune.
     """
     return PATTERN_EXPECTANCY.get(pattern_name, 1.0) < LOW_EDGE_EXPECTANCY_THRESHOLD

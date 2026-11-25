@@ -1610,7 +1610,9 @@ class AgentOrchestrator:
             reasons.append(f"RS Rank {r.rs_percentile:.0f}th - outperforming {r.rs_percentile:.0f}% of market")
         if r.pattern:
             bq = f" [{r.breakout_quality}]" if r.breakout_quality else ""
-            reasons.append(f"{r.pattern}{bq} - entry Rs.{r.entry_low:.1f}-{r.entry_high:.1f}")
+            # [2026-11-25] Phrased as the entry zone, not a strength: the
+            # deep replay found no live pattern with a measurable edge.
+            reasons.append(f"Entry zone Rs.{r.entry_low:.1f}-{r.entry_high:.1f} ({r.pattern} setup{bq})")
         if r.rvol >= 1.5:
             reasons.append(f"Volume {r.rvol:.1f}x avg (EOD) - institutional activity")
         if r.del_pct >= 50:

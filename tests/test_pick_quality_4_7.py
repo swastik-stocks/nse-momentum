@@ -133,3 +133,25 @@ def test_regime_explainer_names_the_inputs_and_the_stakes():
     assert "advance/decline 0.42 (-1)" in html
     assert "C -0.4%" in html                      # historical stakes shown
     assert _regime_explainer("C", None) == ""
+
+
+# ── Deep replay re-score (2026-11-25): pattern is not presented as the edge ──
+
+def test_email_says_pattern_is_not_the_edge():
+    from emailer import _pattern_edge_note
+    note = _pattern_edge_note()
+    assert "-0.01R" in note and "+0.06R" in note and "regime" in note
+
+
+def test_why_working_frames_pattern_as_entry_zone():
+    r = _r(entry_low=99.0, entry_high=101.0, rs_percentile=50, rvol=0.5, del_pct=10)
+    r.breakout_quality = "MAJOR"
+    reasons = AgentOrchestrator._why_working(SimpleNamespace(macro_state="MIXED"), r)
+    assert any(x.startswith("Entry zone Rs.99.0-101.0 (Swing High Breakout setup [MAJOR])") for x in reasons)
+
+
+def test_live_patterns_still_not_low_edge():
+    """Guard: the stale PATTERN_EXPECTANCY values are what keep Tier 1 alive."""
+    from agents.pattern_agent import is_low_edge_pattern
+    assert not is_low_edge_pattern("Cup & Handle")
+    assert not is_low_edge_pattern("Swing High Breakout")

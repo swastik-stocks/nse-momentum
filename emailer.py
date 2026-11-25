@@ -441,6 +441,28 @@ def _track_record_note(track_record, tier: str) -> str:
             f'margin-bottom:10px" title="{rules}">{text}</div>')
 
 
+# [2026-11-25] Pattern names describe the chart shape, not an edge. The
+# deep replay re-scored with realistic exits (validation/trade_outcome.py)
+# put both live patterns at roughly zero: Cup & Handle -0.01R (N=734),
+# Swing High Breakout +0.06R (N=1440), net of costs, 2016-2026 -- neither
+# distinct from a random gate-cleared trade. The old +1.06R / +0.67R came
+# from optimistic exits and an off-by-one. Regime and tier are what
+# separate outcomes, so the email says that instead of implying the
+# pattern is the reason to buy.
+PATTERN_EDGE_NOTE = (
+    "The pattern name describes the chart shape, not an edge: over 2016-2026, "
+    "Cup &amp; Handle averaged -0.01R and Swing High Breakout +0.06R per trade after "
+    "costs, no better than any stock passing the same filters. What has mattered "
+    "is the market regime and the tier."
+)
+
+
+def _pattern_edge_note() -> str:
+    return (f'<div style="font-size:11px;color:#55627A;background:#F7F9FC;'
+            f'border:1px solid #DFE5EE;border-radius:6px;padding:8px 12px;'
+            f'margin-bottom:10px">{PATTERN_EDGE_NOTE}</div>')
+
+
 def _tier_card(r, tier_label: str, tier_color: str) -> str:
     # MAJOR/MINOR/RECOVERY label
     bq      = getattr(r, "breakout_quality", "") or "MINOR"
@@ -1234,7 +1256,7 @@ def _build_html(t1, t2, t3, all_r, near_bo, defensive,
     # "trigger to act") presents it as something to buy. Tier 2/3 now
     # appear only in the Section 2 watchlist table, labelled as not a buy
     # signal. They are still computed, published and confirmed as before.
-    t1_record = _track_record_note(track_record, "1")
+    t1_record = _track_record_note(track_record, "1") + _pattern_edge_note()
 
     # Section 1a: Tier 1 at-a-glance heatmap -- sits above the Section 1
     # cards, doesn't replace them.
