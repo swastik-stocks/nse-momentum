@@ -74,6 +74,7 @@ from agents.ml_momentum_agent import (
 )
 from nse_universe import NSE_UNIVERSE, UNIVERSE_CONFIG
 from validation.backtest import ROUND_TRIP_COST_PCT, _print_cost_model
+from validation.trade_outcome import simulate_trade, FILL_WINDOW
 
 log = logging.getLogger(__name__)
 
@@ -194,20 +195,15 @@ def _regime_for_date(regime_map: dict, date_str: str) -> str:
     return regime_map[max(candidates)]
 
 
-def _forward_test_net(df: pd.DataFrame, signal_idx: int, entry: float):
-    future = df.iloc[signal_idx+1: signal_idx+1+FORWARD_BARS]
-    if len(future) < FORWARD_BARS:
-        return None
-    max_price = float(future["High"].max())
-    min_price = float(future["Low"].min())
-    gross_gain = (max_price - entry) / entry if entry > 0 else 0.0
-    net_gain = gross_gain - ROUND_TRIP_COST_PCT
-    is_win = net_gain >= WIN_THRESHOLD
-    if is_win:
-        net_r = round(net_gain / 0.05, 2)
-    else:
-        net_r = round(((min_price - entry) / entry - ROUND_TRIP_COST_PCT) / 0.05, 2)
-    return {"is_win": is_win, "net_r": net_r}
+def _forward_test_net(df: pd.DataFrame, signal_idx: int, entry: float,
+                      stop: float = None, target: float = None):
+    """Tradeable outcome of one signal - see validation/trade_outcome.py.
+    None = no trade (breakout entry never reached, or too little future
+    data); callers must skip it. stop/target should be the live RiskAgent
+    stop and T1, so the backtest scores the trade the email prints."""
+    return simulate_trade(df, signal_idx, entry, stop=stop, target=target,
+                          forward_bars=FORWARD_BARS, cost_pct=ROUND_TRIP_COST_PCT,
+                          require_full_window=True)
 
 
 def replay_ticker(ticker: str, tier: str, nifty_df: pd.DataFrame,
@@ -277,7 +273,7 @@ def replay_ticker(ticker: str, tier: str, nifty_df: pd.DataFrame,
 
         regime = _regime_for_date(regime_map, date_str)
         penalty = int(REGIME_PENALTIES.get(regime, -5) * cfg["regime_penalty_mult"])
-        out = _forward_test_net(df, i, entry)
+        out = _forward_test_net(df, i, entry, stop=risk.stop, target=risk.target1)
         if out is None:
             continue
 

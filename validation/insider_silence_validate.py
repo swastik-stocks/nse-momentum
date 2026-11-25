@@ -49,6 +49,7 @@ from agents.asymmetry_gate import AsymmetryGate
 from agents.vcp_gate import VCPContractionGate
 from nse_universe import NSE_UNIVERSE, UNIVERSE_CONFIG
 from validation.backtest import ROUND_TRIP_COST_PCT, _print_cost_model
+from validation.trade_outcome import simulate_trade, FILL_WINDOW
 
 log = logging.getLogger(__name__)
 
@@ -174,20 +175,15 @@ def _regime_for_date(regime_map: dict, date_str: str) -> str:
     return regime_map[max(candidates)]
 
 
-def _forward_test_net(df: pd.DataFrame, signal_idx: int, entry: float, forward_bars: int):
-    future = df.iloc[signal_idx+1: signal_idx+1+forward_bars]
-    if len(future) < forward_bars:
-        return None   # not enough future data — excluded, not zero-filled
-    max_price = float(future["High"].max())
-    min_price = float(future["Low"].min())
-    gross_gain = (max_price - entry) / entry if entry > 0 else 0.0
-    net_gain = gross_gain - ROUND_TRIP_COST_PCT
-    is_win = net_gain >= WIN_THRESHOLD
-    if is_win:
-        net_r = round(net_gain / 0.05, 2)
-    else:
-        net_r = round(((min_price - entry) / entry - ROUND_TRIP_COST_PCT) / 0.05, 2)
-    return {"is_win": is_win, "net_r": net_r}
+def _forward_test_net(df: pd.DataFrame, signal_idx: int, entry: float, forward_bars: int,
+                      stop: float = None, target: float = None):
+    """Tradeable outcome of one signal - see validation/trade_outcome.py.
+    None = no trade (breakout entry never reached, or too little future
+    data); callers must skip it. stop/target should be the live RiskAgent
+    stop and T1, so the backtest scores the trade the email prints."""
+    return simulate_trade(df, signal_idx, entry, stop=stop, target=target,
+                          forward_bars=forward_bars, cost_pct=ROUND_TRIP_COST_PCT,
+                          require_full_window=True)
 
 
 class DateIndexedRanks:
@@ -286,10 +282,10 @@ def replay_ticker(ticker: str, tier: str, nifty_df: pd.DataFrame,
         regime = _regime_for_date(regime_map, date_str)
         penalty = int(REGIME_PENALTIES.get(regime, -5) * cfg["regime_penalty_mult"])
 
-        out_short = _forward_test_net(df, i, entry, FORWARD_BARS_SHORT)
+        out_short = _forward_test_net(df, i, entry, FORWARD_BARS_SHORT, stop=risk.stop, target=risk.target1)
         if out_short is None:
             continue
-        out_long = _forward_test_net(df, i, entry, FORWARD_BARS_LONG)
+        out_long = _forward_test_net(df, i, entry, FORWARD_BARS_LONG, stop=risk.stop, target=risk.target1)
 
         result = {
             "date": date_str,

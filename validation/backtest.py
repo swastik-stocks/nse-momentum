@@ -87,6 +87,8 @@ logging.basicConfig(
 log.info(f"Log file: {_log_file}")
 
 # Forward-test window: 20 bars after pattern detection
+from validation.trade_outcome import simulate_trade  # noqa: E402
+
 FORWARD_BARS = 20
 # Win = NET price rise ≥ 5% within forward window (post-cost, see v6 note above)
 WIN_THRESHOLD = 0.05
@@ -167,44 +169,27 @@ def _load_price_history(ticker: str) -> pd.DataFrame:
     return df
 
 
-def _forward_test(df: pd.DataFrame, signal_idx: int, entry: float) -> dict:
+def _forward_test(df: pd.DataFrame, signal_idx: int, entry: float):
     """
-    Check if price rose >= WIN_THRESHOLD (NET of transaction costs) within
-    FORWARD_BARS after signal.
+    Tradeable outcome of one pattern signal - see validation/trade_outcome.py
+    (2026-11-25: replaces the old best-high / worst-low excursion scoring,
+    which booked winners at the top and losers at the bottom).
 
-    Returns dict with both gross and net figures so callers can report the
-    cost impact rather than only seeing the post-cost number:
+    This pattern-only backtest has no RiskAgent, so the stop is the fixed
+    5% (1R) unit and the target 2R. Returns None when the breakout entry
+    was never reached (no trade). Otherwise gross and net figures:
         {
             "is_win_gross": bool,  "gross_gain": float,  "gross_r": float,
             "is_win_net":   bool,  "net_gain":   float,  "net_r":   float,
         }
     """
-    future = df.iloc[signal_idx+1 : signal_idx+1+FORWARD_BARS]
-    if future.empty:
-        return {
-            "is_win_gross": False, "gross_gain": 0.0, "gross_r": 0.0,
-            "is_win_net":   False, "net_gain":   0.0, "net_r":   0.0,
-        }
-
-    max_price   = float(future["High"].max())
-    min_price   = float(future["Low"].min())
-    gross_gain  = (max_price - entry) / entry if entry > 0 else 0.0
-    net_gain    = gross_gain - ROUND_TRIP_COST_PCT
-
-    is_win_gross = gross_gain >= WIN_THRESHOLD
-    is_win_net   = net_gain   >= WIN_THRESHOLD
-
-    # R-multiple: on a win, use the favorable move; on a loss, use the
-    # adverse move (assuming a 5% stop) — same convention as before, just
-    # computed on both gross and net now.
-    gross_r = round(gross_gain / 0.05, 2) if is_win_gross else round(
-        (min_price - entry) / entry / 0.05, 2)
-    net_loss_gain = (min_price - entry) / entry - ROUND_TRIP_COST_PCT
-    net_r = round(net_gain / 0.05, 2) if is_win_net else round(net_loss_gain / 0.05, 2)
-
+    t = simulate_trade(df, signal_idx, entry, forward_bars=FORWARD_BARS,
+                       cost_pct=ROUND_TRIP_COST_PCT)
+    if t is None:
+        return None
     return {
-        "is_win_gross": is_win_gross, "gross_gain": gross_gain, "gross_r": gross_r,
-        "is_win_net":   is_win_net,   "net_gain":   net_gain,   "net_r":   net_r,
+        "is_win_gross": t["gross_return"] > 0, "gross_gain": t["gross_return"], "gross_r": t["gross_r"],
+        "is_win_net":   t["is_win"],           "net_gain":   t["net_return"],   "net_r":   t["net_r"],
     }
 
 
@@ -244,6 +229,8 @@ def backtest_ticker(ticker: str) -> dict:
 
         entry = float(pa.entry_high) if pa.entry_high > 0 else float(window["Close"].iloc[-1])
         result = _forward_test(df, i, entry)
+        if result is None:   # breakout never reached - no trade
+            continue
 
         pat = pa.pattern
         if pat not in pattern_results:

@@ -1680,8 +1680,39 @@ def build_stale_html(scan_date_str: str, today_iso: str, run_time: str, reason: 
 </body></html>"""
 
 
+_ENTRY_STATUSES = {"CONFIRMED", "CONFIRMED_LOW_VOL", "CONFIRMED_PENDING_RVOL"}
+
+
+def _as_watchlist(result: dict, meta: dict) -> dict:
+    """Display-only copy of a Tier 2 result whose status would read as an
+    entry call. [2026-11-25] Tier 2 is a watchlist, not a buy signal: every
+    published Tier 2 pick replayed against real prices since 3 Aug lost
+    money (34% winners, -2.7% average over 97 closed trades - see
+    live_track_record.py). The recorded classification/outcome is NOT
+    changed - only what the email tells the reader to do."""
+    cls = result["classification"]
+    if result["pick"].get("tier") != 2 or cls.get("status") not in _ENTRY_STATUSES:
+        return result
+    t2 = ((meta.get("live_track_record") or {}).get("tiers") or {}).get("2") or {}
+    record = (f" Tier 2 live record: {t2['win_rate']:.0%} winners, "
+              f"{t2['avg_return_pct']:+.1f}% average over {t2['closed']} trades."
+              if t2.get("enough_data") else "")
+    shown = dict(cls)
+    shown.update({
+        "status": "WATCHLIST",
+        "label":  "T2 WATCHLIST — NOT A BUY",
+        "action": (f"Broke above pivot ({cls.get('label', '')}), but Tier 2 is a "
+                   f"watchlist, not a buy signal.{record}"),
+        "color":  "#ffffff", "bg": "#6b7280",
+    })
+    return {**result, "classification": shown}
+
+
 def build_html(results: list, scan_date: str, run_time: str, meta: dict = None) -> str:
     meta = meta or {}
+    # Tier 2 breakouts are shown as watchlist, and therefore drop out of the
+    # CONFIRMED counts and the "ACTION REQUIRED - place orders" box below.
+    results = [_as_watchlist(r, meta) for r in results]
     # [2026-08-18] scan_date as passed in has historically been TODAY's
     # display date, not the picks' actual Bhavcopy vintage (which is
     # normally yesterday's trading day by design). Prefer the verified
@@ -1691,7 +1722,7 @@ def build_html(results: list, scan_date: str, run_time: str, meta: dict = None) 
     order = {
         "CONFIRMED": 0, "CONFIRMED_PENDING_RVOL": 1, "CONFIRMED_LOW_VOL": 2,
         "BREAKOUT_NO_VOLUME": 3, "PENDING": 4, "MISSED": 5, "BROKEN": 6,
-        "DATA_ERROR": 7
+        "DATA_ERROR": 7, "WATCHLIST": 8
     }
     results = sorted(results,
                      key=lambda r: order.get(r["classification"]["status"], 9))
@@ -1718,6 +1749,8 @@ def build_html(results: list, scan_date: str, run_time: str, meta: dict = None) 
     if missed_n:       summary_parts.append(f"<span style='color:#7c3aed;font-weight:700;'>{missed_n} MISSED</span>")
     if broken_n:       summary_parts.append(f"<span style='color:#dc2626;font-weight:700;'>{broken_n} BROKEN</span>")
     if error_n:        summary_parts.append(f"<span style='color:#9ca3af;font-weight:700;'>{error_n} DATA ERROR</span>")
+    watch_n = sum(1 for r in results if r["classification"]["status"] == "WATCHLIST")
+    if watch_n:        summary_parts.append(f"<span style='color:#6b7280;font-weight:700;'>{watch_n} T2 WATCHLIST BREAKOUT</span>")
     summary_html = " &nbsp;|&nbsp; ".join(summary_parts)
 
     # Action box
@@ -1775,7 +1808,7 @@ def build_html(results: list, scan_date: str, run_time: str, meta: dict = None) 
 
     rows_html = (
         _section(t1, "Tier 1 — Top Picks", "#0f172a") +
-        _section(t2, "Tier 2 — Aggressive", "#92400e")
+        _section(t2, "Tier 2 — Watchlist (not a buy signal)", "#6b7280")
     )
 
     return f"""<!DOCTYPE html>
@@ -2171,6 +2204,8 @@ def run_btst_scan(today_iso: str, today_str: str, run_time: str):
         (ticker, entry["pick"], entry["classification"]["status"])
         for ticker, entry in state.items()
         if entry["classification"]["status"] in ("CONFIRMED", "CONFIRMED_LOW_VOL")
+        # [2026-11-25] Tier 2 is a watchlist, not a buy -- no position to hold.
+        and entry["pick"].get("tier") != 2
     ]
     log.info(f"  BTST scan: {len(candidates)} position(s) were CONFIRMED today, "
              f"re-checking for closing strength...")
@@ -2516,7 +2551,9 @@ def main():
         if c["status"] in TERMINAL_STATUSES:
             prior_state[ticker_key] = entry
             newly_terminal.append(entry)
-            if c["status"] in ("CONFIRMED", "CONFIRMED_LOW_VOL"):
+            if c["status"] in ("CONFIRMED", "CONFIRMED_LOW_VOL") and pick.get("tier") != 2:
+                # [2026-11-25] Tier 2 excluded: it is a watchlist, not a buy
+                # signal (see _as_watchlist) -- no "CONFIRMED" push for it.
                 # [2026-08-21] Instant push alongside the email -- see
                 # telegram_alert.py. Only fires here (freshly classified this
                 # checkpoint), never on the cached/reused branches above, so
@@ -2553,9 +2590,11 @@ def main():
         log.info("  Done.")
         return
 
-    confirmed_n     = sum(1 for r in email_results if r["classification"]["status"] == "CONFIRMED")
-    pending_rvol_n  = sum(1 for r in email_results if r["classification"]["status"] == "CONFIRMED_PENDING_RVOL")
-    low_vol_n       = sum(1 for r in email_results if r["classification"]["status"] == "CONFIRMED_LOW_VOL")
+    # Subject counts use the same Tier-2-as-watchlist view as the email body.
+    _shown = [_as_watchlist(r, meta) for r in email_results]
+    confirmed_n     = sum(1 for r in _shown if r["classification"]["status"] == "CONFIRMED")
+    pending_rvol_n  = sum(1 for r in _shown if r["classification"]["status"] == "CONFIRMED_PENDING_RVOL")
+    low_vol_n       = sum(1 for r in _shown if r["classification"]["status"] == "CONFIRMED_LOW_VOL")
     no_vol_n        = sum(1 for r in email_results if r["classification"]["status"] == "BREAKOUT_NO_VOLUME")
     missed_n        = sum(1 for r in email_results if r["classification"]["status"] == "MISSED")
     broken_n        = sum(1 for r in email_results if r["classification"]["status"] == "BROKEN")

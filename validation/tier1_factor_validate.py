@@ -83,6 +83,7 @@ from agents.asymmetry_gate import AsymmetryGate
 from agents.vcp_gate import VCPContractionGate
 from nse_universe import NSE_UNIVERSE, UNIVERSE_CONFIG
 from validation.backtest import ROUND_TRIP_COST_PCT, _print_cost_model
+from validation.trade_outcome import simulate_trade, FILL_WINDOW
 
 log = logging.getLogger(__name__)
 
@@ -207,20 +208,15 @@ def _regime_for_date(regime_map: dict, date_str: str) -> str:
     return regime_map[max(candidates)]
 
 
-def _forward_test_net(df: pd.DataFrame, signal_idx: int, entry: float) -> dict:
-    future = df.iloc[signal_idx+1: signal_idx+1+FORWARD_BARS]
-    if future.empty:
-        return {"is_win": False, "net_r": 0.0}
-    max_price = float(future["High"].max())
-    min_price = float(future["Low"].min())
-    gross_gain = (max_price - entry) / entry if entry > 0 else 0.0
-    net_gain = gross_gain - ROUND_TRIP_COST_PCT
-    is_win = net_gain >= WIN_THRESHOLD
-    if is_win:
-        net_r = round(net_gain / 0.05, 2)
-    else:
-        net_r = round(((min_price - entry) / entry - ROUND_TRIP_COST_PCT) / 0.05, 2)
-    return {"is_win": is_win, "net_r": net_r}
+def _forward_test_net(df: pd.DataFrame, signal_idx: int, entry: float,
+                      stop: float = None, target: float = None):
+    """Tradeable outcome of one signal - see validation/trade_outcome.py.
+    None = no trade (breakout entry never reached, or too little future
+    data); callers must skip it. stop/target should be the live RiskAgent
+    stop and T1, so the backtest scores the trade the email prints."""
+    return simulate_trade(df, signal_idx, entry, stop=stop, target=target,
+                          forward_bars=FORWARD_BARS, cost_pct=ROUND_TRIP_COST_PCT,
+                          require_full_window=False)
 
 
 class DateIndexedRanks:
@@ -331,7 +327,9 @@ def replay_ticker(ticker: str, name: str, sector: str, tier: str,
         regime = _regime_for_date(regime_map, date_str)
         penalty = int(REGIME_PENALTIES.get(regime, -5) * cfg["regime_penalty_mult"])
 
-        outcome = _forward_test_net(df, i, entry)
+        outcome = _forward_test_net(df, i, entry, stop=risk.stop, target=risk.target1)
+        if outcome is None:   # breakout never reached - no trade
+            continue
         outcome.update({
             "date": date_str,
             "pattern": pa.pattern,

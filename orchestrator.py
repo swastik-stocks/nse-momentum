@@ -1485,6 +1485,20 @@ class AgentOrchestrator:
         # single_stock.py -- the real evening pipeline always has it).
         effective_scan_date = meta["bhavcopy_trading_date"] or _date.today().isoformat()
 
+        # Measured live record of previously published picks, per tier
+        # (2026-11-25) -- replaces the email's per-pick "Conf: x%", which was
+        # a hard-coded seed rate, never a measurement. Uses the OHLCV already
+        # in memory, so no extra fetches; build_track_record never raises and
+        # returns None if Turso is unreachable.
+        from live_track_record import build_track_record
+        track_record = build_track_record(stock_data, self.data.get("nifty50_data"))
+        meta["live_track_record"] = track_record
+        if track_record:
+            _t = track_record.get("tiers", {})
+            log.info("  Live track record: " + " | ".join(
+                f"T{k} {v.get('closed', 0)} closed, win {v.get('win_rate', 0):.0%}, "
+                f"avg {v.get('avg_return_pct', 0):+.1f}%" for k, v in sorted(_t.items())))
+
         # Flag sectors making their first appearance in picks in the last
         # sector_novelty.LOOKBACK_DAYS -- cosmetic-only email signal, so a
         # failure here must never take down the scan/email (same
@@ -1579,6 +1593,7 @@ class AgentOrchestrator:
             "sector_distribution": sector_gate.summary(),
             "dhan_status":        data_fetcher.get_dhan_status(),
             "data_provenance":    meta,   # [2026-08-18] threaded to emailer.py for header/footer rendering
+            "track_record":       track_record,   # [2026-11-25] measured per-tier live record
         }
 
     # ── narrative helpers (unchanged from v5.2) ──────────────────────────────

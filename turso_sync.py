@@ -455,6 +455,36 @@ def publish_rvol_readings(rows: list, dry_run: bool = False) -> int:
     return published
 
 
+def get_scanner_signals(since: str = None) -> list:
+    """
+    All published T1/T2 picks (scanner_signals), oldest first, as dicts with
+    ticker, scan_date, tier, entry_price, stop_loss, target1. Read by
+    live_track_record.py to measure what published picks actually did.
+
+    Returns [] if Turso is unreachable or the query fails. Never raises.
+    """
+    try:
+        client = get_client()
+    except SystemExit as e:
+        print(f"  [turso_sync] get_scanner_signals skipped — {e}")
+        return []
+    try:
+        sql = ("SELECT ticker, scan_date, tier, entry_price, stop_loss, target1 "
+               "FROM scanner_signals")
+        args = []
+        if since:
+            sql += " WHERE scan_date >= ?"
+            args.append(since)
+        rs = client.execute(sql + " ORDER BY scan_date, ticker", args)
+        cols = list(rs.columns)
+        return [dict(zip(cols, row)) for row in rs.rows]
+    except Exception as e:
+        print(f"  [turso_sync] get_scanner_signals query failed: {e}")
+        return []
+    finally:
+        client.close()
+
+
 def get_recent_sectors(before_date: str, lookback_days: int):
     """
     Returns (prior_sectors: set[str], has_any_history: bool) for

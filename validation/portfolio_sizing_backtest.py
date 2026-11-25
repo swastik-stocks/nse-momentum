@@ -248,13 +248,19 @@ def replay_ticker_for_sizing(ticker: str, name: str, sector: str, tier: str,
             continue
 
         regime = _regime_for_date(regime_map, date_str)
-        result = _forward_test_net(df, i, entry)
+        result = _forward_test_net(df, i, entry, stop=risk.stop, target=risk.target1)
+        if result is None:   # breakout never reached - no trade
+            continue
 
         out.append({
             "ticker": ticker, "date": date_str, "sector": sector, "tier": tier,
             "pattern": pa.pattern, "rs_score": rsa.score(),
             "entry": risk.entry, "stop": risk.stop, "target1": risk.target1,
-            "net_r": result["net_r"], "is_win": result["is_win"], "regime": regime,
+            # Stage 2 compounds cash by (1 + net_r * WIN_THRESHOLD), i.e. it
+            # treats net_r as a fixed-5%-unit R. trade_outcome's net_r is in
+            # units of each trade's OWN risk, so store the realised return
+            # re-expressed in the 5% unit to keep stage 2's arithmetic right.
+            "net_r": round(result["net_return"] / 0.05, 3), "is_win": result["is_win"], "regime": regime,
         })
 
     return out

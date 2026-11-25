@@ -80,9 +80,23 @@ def test_badge_helper_renders_full_and_compact_variants():
 # Trade card (Section 1)
 # ---------------------------------------------------------------------
 
+def _as_t1(r):
+    r.tier = 1
+    return r
+
+
+# [2026-11-25] Only Tier 1 gets trade cards now (Tier 2/3 moved to the
+# Section 2 watchlist table), so the full card badge is tested on a Tier 1
+# card and the Tier 3 case on its compact chip in the table.
 def test_new_sector_badge_appears_on_flagged_trade_card():
-    html = _render(t3=[_t3_pick_jswsteel(sector_is_new=True)])
+    html = _render(t1=[_as_t1(_t3_pick_jswsteel(sector_is_new=True))])
     assert "NEW SECTOR" in html
+
+
+def test_flagged_tier3_gets_compact_badge_in_watchlist_table():
+    html = _render(t3=[_t3_pick_jswsteel(sector_is_new=True)])
+    assert "JSWSTEEL" in html
+    assert ">NEW<" in html
 
 
 def test_no_badge_on_unflagged_trade_card():
@@ -95,8 +109,8 @@ def test_badge_does_not_leak_onto_other_cards_same_email():
     """The critical case: one flagged pick (JSWSTEEL) alongside one
     unflagged pick (IPCALAB) in the same email -- only JSWSTEEL's card
     gets the badge."""
-    html = _render(t1=[_t1_pick(sector_is_new=False)],
-                    t3=[_t3_pick_jswsteel(sector_is_new=True)])
+    html = _render(t1=[_t1_pick(sector_is_new=False),
+                       _as_t1(_t3_pick_jswsteel(sector_is_new=True))])
     assert html.count("NEW SECTOR") == 1
 
 

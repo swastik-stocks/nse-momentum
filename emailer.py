@@ -1,8 +1,10 @@
 ﻿"""
 NSE Momentum v6.2 - Email Reporter
 6-section HTML email:
-  Section 1: T1/T2/T3 evidence-based trade cards
-  Section 2: Top 20 watchlist table (no T1 duplicates)
+  Section 1: Tier 1 trade cards, with Tier 1's measured live record
+  Section 2: Tier 2/3 watchlist table - not a buy signal - with Tier 2's
+             measured live record (2026-11-25: Tier 2 cards removed, see
+             live_track_record.py)
   Section 3: Market intelligence (regime, breadth, macro, event)
   Section 4: Near-breakout watchlist (set alerts, do not buy yet)
   Section 5: Defensive / Relative-Strength watchlist (capital preservation
@@ -200,6 +202,7 @@ def send_email_report(tiers: dict):
     t1_cap       = tiers.get("t1_cap", 15)
     dhan_status  = tiers.get("dhan_status", {})   # [NEW] see data_fetcher.get_dhan_status()
     data_prov    = tiers.get("data_provenance", {})   # [2026-08-18] verified freshness/provenance, see market_calendar/staleness_check.py
+    track_record = tiers.get("track_record")          # [2026-11-25] measured live record per tier, see live_track_record.py
     # P2-07: position alerts on held stocks, from Phase 2 (P2-01/02/05/06)
     exit_alerts  = tiers.get("exit_alerts", [])
     trim_signals = tiers.get("trim_signals", [])
@@ -243,7 +246,7 @@ def send_email_report(tiers: dict):
                        macro_state, event_risk, t1_cap, dhan_status,
                        exit_alerts, trim_signals, add_on,
                        sector_concentration, holding_heat,
-                       signal_attribution, data_prov)
+                       signal_attribution, data_prov, track_record)
 
     msg = MIMEMultipart("alternative")
     exit_subject_flag = f" - ⚠{len(exit_alerts)} EXIT ALERT" + ("S" if len(exit_alerts) != 1 else "") if exit_alerts else ""
@@ -310,7 +313,8 @@ def _heatmap_table(stocks: list, tier_label: str, accent_color: str) -> str:
     rows so they can be scanned/compared in one view instead of reading
     each trade card in full, per the reasoning in the constants block
     above: colors are read from real pass/fail thresholds elsewhere in
-    the codebase, not invented for this table, and Score/Confidence/Entry/
+    the codebase, not invented for this table (the old Confidence column
+    was dropped 2026-11-25: it was a hard-coded seed rate), and Score/Entry/
     Risk-to-stop are shown plain rather than colored (composite-metric
     double-counting risk for the first two, an unverified stop-cap for
     the last -- see the comment above HEAT_MIN_RRR).
@@ -349,7 +353,6 @@ def _heatmap_table(stocks: list, tier_label: str, accent_color: str) -> str:
   <td style="padding:8px 10px;text-align:right;font-family:monospace">{_heat_cell(f"{rrr:.1f}x", rrr_kind)}</td>
   <td style="padding:8px 10px;text-align:right;font-family:monospace;color:#55627A">{r.stop_pct:.1f}%</td>
   <td style="padding:8px 10px;text-align:right;font-family:monospace;color:#55627A">{r.total_score}</td>
-  <td style="padding:8px 10px;text-align:right;font-family:monospace;color:#55627A">{r.confidence_pct:.0f}%</td>
   <td style="padding:8px 10px;font-size:11px;color:#8895AA">
     <b style="color:{accent_color};font-family:monospace">{n_green}</b>/4 green
   </td>
@@ -371,7 +374,6 @@ def _heatmap_table(stocks: list, tier_label: str, accent_color: str) -> str:
         <th style="padding:8px 10px;text-align:right;color:#8895AA;font-size:9px">R:R</th>
         <th style="padding:8px 10px;text-align:right;color:#8895AA;font-size:9px">RISK TO STOP</th>
         <th style="padding:8px 10px;text-align:right;color:#8895AA;font-size:9px">SCORE</th>
-        <th style="padding:8px 10px;text-align:right;color:#8895AA;font-size:9px">CONF.</th>
         <th style="padding:8px 10px;text-align:left;color:#8895AA;font-size:9px">READS</th>
       </tr>
     </thead>
@@ -379,6 +381,20 @@ def _heatmap_table(stocks: list, tier_label: str, accent_color: str) -> str:
   </table>
   </div>
 </div>"""
+
+
+def _track_record_note(track_record, tier: str) -> str:
+    """One-line measured live record for a tier (live_track_record.py), or ''
+    when Turso had no history / was unreachable. Replaces the old per-pick
+    "Conf: x%", which was a hard-coded seed rate, not a measurement."""
+    from live_track_record import describe_tier
+    text = describe_tier(track_record, tier)
+    if not text:
+        return ""
+    rules = (track_record or {}).get("rules", "")
+    return (f'<div style="font-size:11px;color:#55627A;background:#F7F9FC;'
+            f'border:1px solid #DFE5EE;border-radius:6px;padding:8px 12px;'
+            f'margin-bottom:10px" title="{rules}">{text}</div>')
 
 
 def _tier_card(r, tier_label: str, tier_color: str) -> str:
@@ -470,7 +486,6 @@ def _tier_card(r, tier_label: str, tier_color: str) -> str:
     <div style="text-align:right">
       <div style="font-family:monospace;font-size:22px;font-weight:700;color:{tier_color}">{r.total_score}</div>
       <div style="font-family:monospace;font-size:9px;color:#8895AA">/ 100 pts</div>
-      <div style="font-size:10px;color:#55627A;margin-top:2px">Conf: {r.confidence_pct:.0f}%</div>
     </div>
   </div>
 
@@ -1042,7 +1057,7 @@ def _build_html(t1, t2, t3, all_r, near_bo, defensive,
                 macro_state, event_risk, t1_cap, dhan_status=None,
                 exit_alerts=None, trim_signals=None, add_on=None,
                 sector_concentration=None, holding_heat=None,
-                signal_attribution=None, data_prov=None) -> str:
+                signal_attribution=None, data_prov=None, track_record=None) -> str:
 
     mcol = MACRO_COLOR.get(macro_state, "#96690A")
     ecol = EVENT_COLOR.get(event_risk,  "#8895AA")
@@ -1167,20 +1182,18 @@ def _build_html(t1, t2, t3, all_r, near_bo, defensive,
   <span style="color:#96690A">Stay in cash. Capital preservation is the priority.</span>
 </div>"""
 
-    if t2:
-        for r in t2:
-            tier_cards += _tier_card(r, "TIER 2 - AGGRESSIVE", "#A8680E")
-    if t3:
-        for r in t3[:2]:
-            tier_cards += _tier_card(r, "TIER 3 - WATCHLIST", "#2A5FB0")
+    # [2026-11-25] Tier 2/3 no longer get trade cards. Replaying every
+    # published pick since 3 Aug against real prices (live_track_record.py)
+    # showed Tier 2 losing money -- 34% winners, -2.7% average, -1.2% vs
+    # Nifty over 97 closed trades -- while a full trade card (entry/SL/T1,
+    # "trigger to act") presents it as something to buy. Tier 2/3 now
+    # appear only in the Section 2 watchlist table, labelled as not a buy
+    # signal. They are still computed, published and confirmed as before.
+    t1_record = _track_record_note(track_record, "1")
 
-    # Section 1a: Tier 1/2 at-a-glance heatmap -- sits above the existing
-    # Section 1 cards, doesn't replace them. Tier 3 excluded: those are
-    # setup-forming watchlist names, not gate-cleared/one-condition-missing
-    # picks, so ranking them on the same pass/fail columns wouldn't mean
-    # the same thing.
-    heatmap_html = (_heatmap_table(t1, "TIER 1 - TOP PICK",   "#0E8F63")
-                     + _heatmap_table(t2, "TIER 2 - AGGRESSIVE", "#A8680E"))
+    # Section 1a: Tier 1 at-a-glance heatmap -- sits above the Section 1
+    # cards, doesn't replace them.
+    heatmap_html = _heatmap_table(t1, "TIER 1 - TOP PICK", "#0E8F63")
 
     # Section 2: watchlist table — EXCLUDE T1 tickers to avoid duplicates
     t1_tickers = {r.ticker for r in t1}
@@ -1324,14 +1337,16 @@ def _build_html(t1, t2, t3, all_r, near_bo, defensive,
 
   <div style="font-family:monospace;font-size:9px;letter-spacing:0.2em;color:#8895AA;
               text-transform:uppercase;margin-bottom:10px">
-    Section 1 - Evidence-Based Trade Cards
+    Section 1 - Tier 1 Trade Cards
   </div>
+  {t1_record}
   {tier_cards}
 
   <div style="font-family:monospace;font-size:9px;letter-spacing:0.2em;color:#8895AA;
               text-transform:uppercase;margin:24px 0 10px">
-    Section 2 - Top 20 Watchlist (T2/T3 only - T1 picks shown above)
+    Section 2 - Watchlist (Tier 2/3) - not a buy signal
   </div>
+  {_track_record_note(track_record, "2")}
   <div style="overflow-x:auto">
   <table style="width:100%;border-collapse:collapse;font-size:12px">
     <thead>
