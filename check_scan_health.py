@@ -16,7 +16,24 @@ from email.mime.text import MIMEText
 
 import libsql_client
 
-from market_calendar.staleness_check import is_trading_day
+from market_calendar.staleness_check import is_trading_day, previous_trading_day
+
+IST = dt.timezone(dt.timedelta(hours=5, minutes=30))
+# Before this IST hour, tonight's scan isn't due yet, so check the previous
+# trading day's scan instead. GitHub cron can start this workflow many hours
+# late (25 Nov: the 21:15 IST run started 05:38 IST the next morning), and
+# runners use UTC, so date.today() would point at a scan that isn't due yet.
+EVENING_SCAN_DUE_HOUR_IST = 21
+
+
+def expected_scan_date(now_ist: dt.datetime) -> dt.date | None:
+    """The trading date whose evening scan should already exist at now_ist,
+    or None if there is nothing to check (today isn't a trading day and the
+    check is running in its normal evening slot)."""
+    today = now_ist.date()
+    if now_ist.hour >= EVENING_SCAN_DUE_HOUR_IST:
+        return today if is_trading_day(today) else None
+    return previous_trading_day(today)
 
 TURSO_URL = os.environ.get("TURSO_DATABASE_URL")
 TURSO_TOKEN = os.environ.get("TURSO_AUTH_TOKEN")
@@ -39,10 +56,12 @@ def _alert(subject: str, body: str):
 
 
 def main() -> int:
-    today = dt.date.today()
-    if not is_trading_day(today):
-        print(f"{today} is not a trading day — nothing to check.")
+    now_ist = dt.datetime.now(IST)
+    today = expected_scan_date(now_ist)
+    if today is None:
+        print(f"{now_ist.date()} is not a trading day — nothing to check.")
         return 0
+    print(f"Running at {now_ist:%Y-%m-%d %H:%M} IST; checking scan for {today}.")
 
     if not TURSO_URL or not TURSO_TOKEN:
         _alert(
